@@ -100,11 +100,11 @@ public final class MainActivity extends Activity {
         ImageView backgroundArt = new ImageView(this);
         backgroundArt.setImageResource(R.drawable.god_trading_art);
         backgroundArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        backgroundArt.setAlpha(0.24f);
+        backgroundArt.setAlpha(0.40f);
         root.addView(backgroundArt, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         View overlay = new View(this);
-        overlay.setBackgroundColor(0xB9090909);
+        overlay.setBackgroundColor(0x85090909);
         root.addView(overlay, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
@@ -126,7 +126,7 @@ public final class MainActivity extends Activity {
         TextView title = label("GOD OF TRADING", 25, 0xFFFFD36A, true);
         title.setShadowLayer(10, 0, 0, 0xFFFFA000);
         TextView subtitle = label("СИЛА В АНАЛИЗЕ", 12, 0xFFFFD45A, true);
-        TextView sloganTop = label("TRADE SMART. RULE THE MARKET.", 10, 0xFFE7E7E7, true);
+        TextView sloganTop = label("Торгуй грамотно, управляй рынком", 11, 0xFFE7E7E7, true);
         brand.addView(title);
         brand.addView(subtitle);
         brand.addView(sloganTop);
@@ -145,8 +145,8 @@ public final class MainActivity extends Activity {
         modeRow.setOrientation(LinearLayout.HORIZONTAL);
         Button demoMode = makeModeButton("♟  ДЕМО", "Учебный режим", 0xFF168BFF);
         Button realMode = makeModeButton("▤  РЕАЛЬНЫЙ СЧЁТ", "Только сигналы", 0xFFFF3434);
-        modeRow.addView(demoMode, new LinearLayout.LayoutParams(0, dp(84), 1f));
-        LinearLayout.LayoutParams realModeParams = new LinearLayout.LayoutParams(0, dp(84), 1f);
+        modeRow.addView(demoMode, new LinearLayout.LayoutParams(0, dp(76), 1f));
+        LinearLayout.LayoutParams realModeParams = new LinearLayout.LayoutParams(0, dp(76), 1f);
         realModeParams.leftMargin = dp(7);
         modeRow.addView(realMode, realModeParams);
         page.addView(modeRow);
@@ -193,10 +193,10 @@ public final class MainActivity extends Activity {
         signalButtons.setOrientation(LinearLayout.HORIZONTAL);
         Button upSignal = makeSignalButton("⬆  ВВЕРХ", 0xFF00D83A);
         Button downSignal = makeSignalButton("⬇  ВНИЗ", 0xFFFF2525);
-        upSignal.setTextSize(23);
-        downSignal.setTextSize(23);
-        signalButtons.addView(upSignal, new LinearLayout.LayoutParams(0, dp(78), 1f));
-        LinearLayout.LayoutParams downParams = new LinearLayout.LayoutParams(0, dp(78), 1f);
+        upSignal.setTextSize(20);
+        downSignal.setTextSize(20);
+        signalButtons.addView(upSignal, new LinearLayout.LayoutParams(0, dp(70), 1f));
+        LinearLayout.LayoutParams downParams = new LinearLayout.LayoutParams(0, dp(70), 1f);
         downParams.leftMargin = dp(8);
         signalButtons.addView(downSignal, downParams);
         LinearLayout.LayoutParams signalButtonsParams = new LinearLayout.LayoutParams(
@@ -275,22 +275,22 @@ public final class MainActivity extends Activity {
         LinearLayout platformNav = new LinearLayout(this);
         platformNav.setOrientation(LinearLayout.HORIZONTAL);
         platformTabs = new Button[3];
-        String[] tabNames = {"◉  Pocket Option", "◢  Binarium", "◎  Универсальный"};
+        String[] tabNames = {"◉ Pocket Option", "◢ Binarium", "◎ Универсальный"};
         for (int i = 0; i < tabNames.length; i++) {
             final int index = i;
             LinearLayout item = new LinearLayout(this);
             item.setOrientation(LinearLayout.VERTICAL);
             item.setGravity(android.view.Gravity.CENTER);
             Button tab = makePlatformButton(tabNames[i]);
-            tab.setTextSize(i == 2 ? 10 : 11);
+            tab.setTextSize(i == 2 ? 9 : 10);
             tab.setOnClickListener(v -> platformInput.setSelection(index));
             platformTabs[i] = tab;
             item.addView(tab, new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, dp(62)));
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(56)));
             Button help = makeTinyHelp(i == 0 ? "Pocket Option" : i == 1 ? "Binarium" : "Универсальный",
                     "Выбор площадки меняет только профиль интерфейса и ссылку открытия. Приложение не подключается к аккаунту и не отправляет сделки.");
             item.addView(help, new LinearLayout.LayoutParams(dp(30), dp(26)));
-            LinearLayout.LayoutParams itemParams = new LinearLayout.LayoutParams(0, dp(92), 1f);
+            LinearLayout.LayoutParams itemParams = new LinearLayout.LayoutParams(0, dp(84), 1f);
             if (i > 0) itemParams.leftMargin = dp(6);
             platformNav.addView(item, itemParams);
         }
@@ -303,15 +303,42 @@ public final class MainActivity extends Activity {
         mainSettingsButton.setTextSize(14);
         mainSettingsButton.setOnClickListener(v -> showToolSettings(settings));
         LinearLayout.LayoutParams mainSettingsParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(52));
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
         mainSettingsParams.topMargin = dp(8);
         page.addView(mainSettingsButton, mainSettingsParams);
 
         LinearLayout.LayoutParams platformParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        platformParams.topMargin = dp(18);
+        platformParams.topMargin = dp(10);
         page.addView(platformNav, platformParams);
         refreshPlatformTabs(platformInput.getSelectedItemPosition());
+
+        LinearLayout bottomNav = new LinearLayout(this);
+        bottomNav.setOrientation(LinearLayout.HORIZONTAL);
+        bottomNav.setGravity(android.view.Gravity.CENTER);
+        String[] bottomLabels = {"АНАЛИТИКА", "НАСТРОЙКИ", "ИНФО", "ОБНОВЛЕНИЕ"};
+        for (int i = 0; i < bottomLabels.length; i++) {
+            final int action = i;
+            Button nav = makeNavButton(bottomLabels[i]);
+            nav.setTextSize(9);
+            nav.setPadding(dp(2), dp(2), dp(2), dp(2));
+            LinearLayout.LayoutParams navParams = new LinearLayout.LayoutParams(0, dp(44), 1f);
+            if (i > 0) navParams.leftMargin = dp(4);
+            bottomNav.addView(nav, navParams);
+            nav.setOnClickListener(v -> {
+                if (action == 0) showFeatureMenu(settings);
+                else if (action == 1) showToolSettings(settings);
+                else if (action == 2) new AlertDialog.Builder(this)
+                        .setTitle("GOD OF TRADING")
+                        .setMessage("Помощник для анализа рынка и тестирования стратегий. Приложение показывает аналитические сигналы и не подключается к торговому аккаунту и не совершает сделки.")
+                        .setPositiveButton("Понятно", null).show();
+                else checkForUpdate();
+            });
+        }
+        LinearLayout.LayoutParams bottomNavParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
+        bottomNavParams.topMargin = dp(8);
+        page.addView(bottomNav, bottomNavParams);
 
         TextView versionLabel = label("v" + BuildConfig.VERSION_NAME, 9, 0xFF777777, false);
         versionLabel.setGravity(android.view.Gravity.CENTER);
@@ -537,7 +564,7 @@ public final class MainActivity extends Activity {
 
     private Button makeModeButton(String title, String subtitle, int accent) {
         Button button = new Button(this);
-        button.setText(title + "\\n" + subtitle);
+        button.setText(title + "\n" + subtitle);
         button.setAllCaps(false);
         button.setTextSize(15);
         button.setTypeface(null, Typeface.BOLD);
