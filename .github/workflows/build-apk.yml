@@ -110,8 +110,7 @@ jobs:
           profile: pixel_2
           disable-animations: true
           script: |
-            APK_PATH=app/build/outputs/apk/release/app-release.apk
-            adb install "$APK_PATH"
+            adb install app/build/outputs/apk/release/app-release.apk
             adb shell am force-stop com.potraderbot || true
             adb shell am start -n com.potraderbot/.MainActivity
             sleep 12
