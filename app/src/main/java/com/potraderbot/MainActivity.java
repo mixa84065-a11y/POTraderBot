@@ -46,6 +46,7 @@ public final class MainActivity extends Activity {
     private EditText symbolInput;
     private EditText apiKeyInput;
     private Spinner platformInput;
+    private Spinner modeInput;
     private TextView status;
     private TextView details;
     private Button analyzeButton;
@@ -111,6 +112,34 @@ public final class MainActivity extends Activity {
         apiKeyInput = editField("Вставьте личный API-ключ");
         apiKeyInput.setInputType(0x00000081);
         page.addView(apiKeyInput);
+
+        page.addView(label("Режим торговли", 14, 0xFF344054, true));
+        modeInput = new Spinner(this);
+        String[] modes = {"Демо — виртуальные сделки", "Реальный — только сигналы"};
+        ArrayAdapter<String> modeAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, modes);
+        modeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        int savedMode = preferences.getInt("trading_mode", 0);
+        modeInput.setAdapter(modeAdapter);
+        modeInput.setSelection(Math.max(0, Math.min(savedMode, modes.length - 1)));
+        modeInput.setBackgroundTintList(ColorStateList.valueOf(0xFF64748B));
+        page.addView(modeInput);
+        modeInput.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                preferences.edit().putInt("trading_mode", position).apply();
+                if (position == 1 && paperAutoEnabled) {
+                    paperAutoEnabled = false;
+                    autoRefreshEnabled = false;
+                    handler.removeCallbacks(refreshRunnable);
+                    paperButton.setText("АВТОСИМУЛЯЦИЯ ДОСТУПНА ТОЛЬКО В ДЕМО");
+                    autoButton.setText("ВКЛЮЧИТЬ АВТООБНОВЛЕНИЕ (10 СЕК.)");
+                    status.setText("РЕАЛЬНЫЙ РЕЖИМ: ТОЛЬКО СИГНАЛЫ");
+                    status.setTextColor(0xFFFFC857);
+                } else if (position == 0 && paperButton != null) {
+                    paperButton.setText("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ СДЕЛОК");
+                }
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        });
 
         status = label("СТАТУС: ОЖИДАНИЕ", 20, 0xFFFFC857, true);
         status.setPadding(0, 24, 0, 12);
@@ -228,6 +257,11 @@ public final class MainActivity extends Activity {
     }
 
     private void togglePaperAuto() {
+        if (modeInput != null && modeInput.getSelectedItemPosition() == 1) {
+            status.setText("РЕАЛЬНЫЙ РЕЖИМ: АВТООРДЕРА НЕ ПОДДЕРЖИВАЮТСЯ");
+            status.setTextColor(0xFFFFC857);
+            return;
+        }
         paperAutoEnabled = !paperAutoEnabled;
         if (paperAutoEnabled) {
             paperButton.setText("ОСТАНОВИТЬ АВТОСИМУЛЯЦИЮ");
@@ -269,6 +303,7 @@ public final class MainActivity extends Activity {
         final String symbol = symbolInput.getText().toString().trim();
         final String key = apiKeyInput.getText().toString().trim();
         final String platform = platformInput.getSelectedItem().toString();
+        final String mode = modeInput.getSelectedItem().toString();
         if (key.isEmpty()) {
             status.setText("СТАТУС: НУЖЕН API-КЛЮЧ");
             status.setTextColor(0xFFFFC857);
@@ -296,7 +331,7 @@ public final class MainActivity extends Activity {
                     status.setText((autoRefreshEnabled ? "АВТО • " : "") + "СИГНАЛ: " + result.signal);
                     status.setTextColor(result.signal == MarketAnalyzer.Signal.WAIT ? 0xFFFFC857 : 0xFF70D6A5);
                     String analysisText = String.format(Locale.US,
-                            "Платформа в интерфейсе: %s\nИсточник котировок: Twelve Data\nПара: %s\nЗакрытых свечей: %d\nПоследняя свеча UTC: %tF %tR\nЦена закрытия: %.5f\n\nEMA 9: %.5f\nEMA 21: %.5f\nRSI 14: %.2f\n\n%s\n\nЭто аналитический сигнал, а не команда на сделку.",
+                            "Режим: %s\\nПлощадка в интерфейсе: %s\\nИсточник котировок: Twelve Data\nПара: %s\nЗакрытых свечей: %d\nПоследняя свеча UTC: %tF %tR\nЦена закрытия: %.5f\n\nEMA 9: %.5f\nEMA 21: %.5f\nRSI 14: %.2f\n\n%s\n\nЭто аналитический сигнал, а не команда на сделку.",
                             platform, symbol.toUpperCase(Locale.US), candles.size(), last.time, last.time,
                             last.close, result.ema9, result.ema21, result.rsi14, result.explanation);
                     if (paperAutoEnabled) paperTrading.process(candles, result.signal);
