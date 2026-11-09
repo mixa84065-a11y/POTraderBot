@@ -259,6 +259,7 @@ public final class MainActivity extends Activity {
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
         });
+        updateModeStyle.run();
         platformInput.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
                 preferences.edit().putInt("platform_index", position).apply();
@@ -347,8 +348,13 @@ public final class MainActivity extends Activity {
                             else if (which == 4) new AlertDialog.Builder(this).setTitle("Аналитика через трансляцию")
                                     .setMessage("Режим анализа трансляции экрана пока находится в разработке.")
                                     .setPositiveButton("Понятно", null).show();
-                            else if (which == 5) new AlertDialog.Builder(this).setTitle("Настройки инструмента")
-                                    .setView(settings).setPositiveButton("Готово", null).show();
+                            else if (which == 5) {
+                                settings.setVisibility(View.VISIBLE);
+                                new AlertDialog.Builder(this).setTitle("Настройки инструмента")
+                                        .setView(settings).setPositiveButton("Готово", (d, w) ->
+                                                settings.setVisibility(View.GONE))
+                                        .setOnCancelListener(d -> settings.setVisibility(View.GONE)).show();
+                            }
                             else if (which == 6) toggleAutoRefresh();
                             else checkForUpdate();
                         }).show());
