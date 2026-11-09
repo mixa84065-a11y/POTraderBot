@@ -148,6 +148,7 @@ public final class MainActivity extends Activity {
         TextView modeCaption = label("РЕЖИМ РАБОТЫ", 12, 0xFFB9C5D5, true);
         modeRow.addView(modeCaption, new LinearLayout.LayoutParams(0, 42, 1f));
         Button modeButton = makeAccentButton("ДЕМО  ▾");
+        modeButton.setText((preferences.getInt("trading_mode", 0) == 0 ? "ДЕМО" : "РЕАЛЬНЫЕ СИГНАЛЫ") + "  ▾");
         modeButton.setOnClickListener(v -> new AlertDialog.Builder(this)
                 .setTitle("Режим")
                 .setItems(new String[]{"Демо", "Реальный — только сигналы"}, (dialog, which) -> {
@@ -182,10 +183,10 @@ public final class MainActivity extends Activity {
         TextView signalHeading = label("АНАЛИЗ РЫНКА", 14, 0xFFB9C5D5, true);
         signalHeading.setGravity(android.view.Gravity.CENTER);
         signalCard.addView(signalHeading);
-        TextView signalDisplay = label("ЖДАТЬ  ◷", 34, 0xFFFFC857, true);
-        signalDisplay.setGravity(android.view.Gravity.CENTER);
-        signalDisplay.setPadding(0, 8, 0, 8);
-        signalCard.addView(signalDisplay);
+        signalDisplayView = label("ЖДАТЬ  ◷", 34, 0xFFFFC857, true);
+        signalDisplayView.setGravity(android.view.Gravity.CENTER);
+        signalDisplayView.setPadding(0, 8, 0, 8);
+        signalCard.addView(signalDisplayView);
         TextView signalHint = label("EMA 9/21  •  RSI 14  •  ФИЛЬТР ТРЕНДА", 11, 0xFFB9C5D5, false);
         signalHint.setGravity(android.view.Gravity.CENTER);
         signalCard.addView(signalHint);
@@ -257,7 +258,7 @@ public final class MainActivity extends Activity {
                 settings.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE));
 
         platformInput = new Spinner(this);
-        String[] platforms = {"Binarium", "Pocket Option", "Универсальный"};
+        String[] platforms = {"Pocket Option", "Binarium", "Универсальный"};
         ArrayAdapter<String> platformAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, platforms);
         platformAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         platformInput.setAdapter(platformAdapter);
@@ -332,6 +333,7 @@ public final class MainActivity extends Activity {
     }
 
     private TextView waitSignalView;
+    private TextView signalDisplayView;
 
     private LinearLayout panel() {
         LinearLayout box = new LinearLayout(this);
@@ -453,13 +455,13 @@ public final class MainActivity extends Activity {
                     .setTitle("Выберите торговую площадку")
                     .setItems(new String[]{"Binarium", "Pocket Option"}, (dialog, which) ->
                             openPlatformUrl(which == 0
-                                    ? "https://binarium.com/"
-                                    : "https://pocketoption.com/"))
+                                    ? "https://pocketoption.com/"
+                                    : "https://binarium.com/"))
                     .setNegativeButton("Отмена", null)
                     .show();
             return;
         }
-        openPlatformUrl(selected == 0 ? "https://binarium.com/" : "https://pocketoption.com/");
+        openPlatformUrl(selected == 0 ? "https://pocketoption.com/" : "https://binarium.com/");
     }
 
     private void openPlatformUrl(String address) {
