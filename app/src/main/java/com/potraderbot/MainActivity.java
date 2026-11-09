@@ -305,12 +305,45 @@ public final class MainActivity extends Activity {
         disclaimer.setPadding(dp(2), dp(14), dp(2), dp(8));
         page.addView(disclaimer);
 
+        Button mainSettingsButton = makeNavButton("⚙  НАСТРОЙКИ ИНСТРУМЕНТА");
+        mainSettingsButton.setTextSize(14);
+        mainSettingsButton.setOnClickListener(v -> showToolSettings(settings));
+        LinearLayout.LayoutParams mainSettingsParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(52));
+        mainSettingsParams.topMargin = dp(8);
+        page.addView(mainSettingsButton, mainSettingsParams);
+
         updateButton = makeNavButton("⟳  ПРОВЕРИТЬ ОБНОВЛЕНИЯ");
         updateButton.setOnClickListener(v -> checkForUpdate());
         menuButton.setOnClickListener(v -> showFeatureMenu(settings));
         setContentView(root);
     }
 
+
+    private void showToolSettings(LinearLayout settings) {
+        android.view.ViewParent parent = settings.getParent();
+        android.view.ViewGroup settingsParent = parent instanceof android.view.ViewGroup
+                ? (android.view.ViewGroup) parent : null;
+        int settingsIndex = settingsParent == null ? -1 : settingsParent.indexOfChild(settings);
+        android.view.ViewGroup.LayoutParams settingsParams = settings.getLayoutParams();
+        if (settingsParent != null) settingsParent.removeView(settings);
+
+        AlertDialog settingsDialog = new AlertDialog.Builder(this)
+                .setTitle("Настройки инструмента")
+                .setView(settings)
+                .setPositiveButton("Сохранить", null)
+                .setNegativeButton("Закрыть", null)
+                .create();
+        settingsDialog.setOnDismissListener(d -> {
+            settings.setVisibility(View.GONE);
+            if (settingsParent != null && settings.getParent() == null) {
+                int insertAt = Math.max(0, Math.min(settingsIndex, settingsParent.getChildCount()));
+                settingsParent.addView(settings, insertAt, settingsParams);
+            }
+        });
+        settings.setVisibility(View.VISIBLE);
+        settingsDialog.show();
+    }
 
     private void showFeatureMenu(LinearLayout settings) {
         final String[] names = {
@@ -381,30 +414,6 @@ public final class MainActivity extends Activity {
             }
         });
         container.addView(collapse);
-        Button settingsButton = makeNavButton("НАСТРОЙКИ ИНСТРУМЕНТА");
-        settingsButton.setOnClickListener(v -> {
-            android.view.ViewGroup settingsParent = (android.view.ViewGroup) settings.getParent();
-            int settingsIndex = settingsParent == null ? -1 : settingsParent.indexOfChild(settings);
-            android.view.ViewGroup.LayoutParams settingsParams = settings.getLayoutParams();
-            if (settingsParent != null) settingsParent.removeView(settings);
-
-            AlertDialog settingsDialog = new AlertDialog.Builder(this)
-                    .setTitle("Настройки инструмента")
-                    .setView(settings)
-                    .setPositiveButton("Готово", null)
-                    .create();
-            settingsDialog.setOnDismissListener(d -> {
-                settings.setVisibility(View.GONE);
-                if (settingsParent != null && settings.getParent() == null) {
-                    int insertAt = Math.max(0, Math.min(settingsIndex, settingsParent.getChildCount()));
-                    settingsParent.addView(settings, insertAt, settingsParams);
-                }
-            });
-            settings.setVisibility(View.VISIBLE);
-            settingsDialog.show();
-            dialog.dismiss();
-        });
-        container.addView(settingsButton);
         Button update = makeNavButton("ПРОВЕРИТЬ ОБНОВЛЕНИЯ");
         update.setOnClickListener(v -> { dialog.dismiss(); checkForUpdate(); });
         container.addView(update);
