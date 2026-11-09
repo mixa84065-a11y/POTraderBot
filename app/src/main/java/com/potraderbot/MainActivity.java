@@ -331,11 +331,11 @@ public final class MainActivity extends Activity {
                     status.setText((autoRefreshEnabled ? "АВТО • " : "") + "СИГНАЛ: " + result.signal);
                     status.setTextColor(result.signal == MarketAnalyzer.Signal.WAIT ? 0xFFFFC857 : 0xFF70D6A5);
                     String analysisText = String.format(Locale.US,
-                            "Режим: %s\\nПлощадка в интерфейсе: %s\\nИсточник котировок: Twelve Data\nПара: %s\nЗакрытых свечей: %d\nПоследняя свеча UTC: %tF %tR\nЦена закрытия: %.5f\n\nEMA 9: %.5f\nEMA 21: %.5f\nRSI 14: %.2f\n\n%s\n\nЭто аналитический сигнал, а не команда на сделку.",
+                            "Режим: %s\nПлощадка в интерфейсе: %s\nИсточник котировок: Twelve Data\nПара: %s\nЗакрытых свечей: %d\nПоследняя свеча UTC: %tF %tR\nЦена закрытия: %.5f\n\nEMA 9: %.5f\nEMA 21: %.5f\nRSI 14: %.2f\n\n%s\n\nЭто аналитический сигнал, а не команда на сделку.",
                             platform, symbol.toUpperCase(Locale.US), candles.size(), last.time, last.time,
                             last.close, result.ema9, result.ema21, result.rsi14, result.explanation);
                     if (paperAutoEnabled) paperTrading.process(candles, result.signal);
-                    details.setText(analysisText + (paperAutoEnabled ? "\\n\\n" + paperTrading.getSummary() : ""));
+                    details.setText(analysisText + (paperAutoEnabled ? "\n\n" + paperTrading.getSummary() : ""));
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
