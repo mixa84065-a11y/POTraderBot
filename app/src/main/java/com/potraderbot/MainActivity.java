@@ -134,8 +134,8 @@ public final class MainActivity extends Activity {
                     autoButton.setText("ВКЛЮЧИТЬ АВТООБНОВЛЕНИЕ (10 СЕК.)");
                     status.setText("РЕАЛЬНЫЙ РЕЖИМ: ТОЛЬКО СИГНАЛЫ");
                     status.setTextColor(0xFFFFC857);
-                } else if (position == 0 && paperButton != null) {
-                    paperButton.setText("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ СДЕЛОК");
+                } else if (paperButton != null) {
+                    paperButton.setText(position == 0 ? "ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ СДЕЛОК" : "АВТОСИМУЛЯЦИЯ ТОЛЬКО В ДЕМО");
                 }
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
