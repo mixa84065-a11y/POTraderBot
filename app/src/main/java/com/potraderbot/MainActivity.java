@@ -212,6 +212,14 @@ public final class MainActivity extends Activity {
         setContentView(root);
     }
 
+    private String signalLabel(MarketAnalyzer.Signal signal) {
+        switch (signal) {
+            case CALL: return "ВВЕРХ";
+            case PUT: return "ВНИЗ";
+            default: return "ЖДАТЬ";
+        }
+    }
+
     private Button makeButton(String text) {
         Button button = new Button(this);
         button.setText(text);
@@ -328,7 +336,7 @@ public final class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     requestInProgress = false;
                     analyzeButton.setEnabled(true);
-                    status.setText((autoRefreshEnabled ? "АВТО • " : "") + "СИГНАЛ: " + result.signal);
+                    status.setText((autoRefreshEnabled ? "АВТО • " : "") + "СИГНАЛ: " + signalLabel(result.signal));
                     status.setTextColor(result.signal == MarketAnalyzer.Signal.WAIT ? 0xFFFFC857 : 0xFF70D6A5);
                     String analysisText = String.format(Locale.US,
                             "Режим: %s\nПлощадка в интерфейсе: %s\nИсточник котировок: Twelve Data\nПара: %s\nЗакрытых свечей: %d\nПоследняя свеча UTC: %tF %tR\nЦена закрытия: %.5f\n\nEMA 9: %.5f\nEMA 21: %.5f\nRSI 14: %.2f\n\n%s\n\nЭто аналитический сигнал, а не команда на сделку.",
