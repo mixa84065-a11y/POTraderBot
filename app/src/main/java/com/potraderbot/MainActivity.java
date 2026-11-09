@@ -334,35 +334,197 @@ public final class MainActivity extends Activity {
 
         updateButton = makeNavButton("⟳  ПРОВЕРИТЬ ОБНОВЛЕНИЯ");
         updateButton.setOnClickListener(v -> checkForUpdate());
-        menuButton.setOnClickListener(v -> new AlertDialog.Builder(this)
-                .setTitle("GOD OF TRADING")
-                .setItems(new String[]{"График и анализ", "Риск-менеджмент", "Уведомления",
-                        "Журнал сделок и статистика", "Аналитика через трансляцию",
-                        "Настройки инструмента", "Автообновление", "Проверить обновления"},
-                        (dialog, which) -> {
-                            if (which == 0) loadAndAnalyze(false);
-                            else if (which == 1) new AlertDialog.Builder(this).setTitle("Риск-менеджмент")
-                                    .setMessage("Настройки риск-менеджмента будут добавлены отдельным обновлением.")
-                                    .setPositiveButton("Понятно", null).show();
-                            else if (which == 2) new AlertDialog.Builder(this).setTitle("Уведомления")
-                                    .setMessage("Настройки уведомлений будут добавлены отдельным обновлением.")
-                                    .setPositiveButton("Понятно", null).show();
-                            else if (which == 3) new AlertDialog.Builder(this).setTitle("Журнал и статистика")
-                                    .setMessage(paperTrading.getSummary()).setPositiveButton("Закрыть", null).show();
-                            else if (which == 4) new AlertDialog.Builder(this).setTitle("Аналитика через трансляцию")
-                                    .setMessage("Режим анализа трансляции экрана пока находится в разработке.")
-                                    .setPositiveButton("Понятно", null).show();
-                            else if (which == 5) {
-                                settings.setVisibility(View.VISIBLE);
-                                new AlertDialog.Builder(this).setTitle("Настройки инструмента")
-                                        .setView(settings).setPositiveButton("Готово", (d, w) ->
-                                                settings.setVisibility(View.GONE))
-                                        .setOnCancelListener(d -> settings.setVisibility(View.GONE)).show();
-                            }
-                            else if (which == 6) toggleAutoRefresh();
-                            else checkForUpdate();
-                        }).show());
+        menuButton.setOnClickListener(v -> showFeatureMenu(settings));
         setContentView(root);
+    }
+
+
+    private void showFeatureMenu(LinearLayout settings) {
+        final String[] names = {
+                "График и анализ", "Риск-менеджмент и блокировка", "Уведомления",
+                "Журнал сделок и статистика", "Аналитика через трансляцию",
+                "Индикатор силы сигнала", "Объяснение сигнала", "Калькулятор риска",
+                "Часы торговых сессий", "Умный журнал"
+        };
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(dp(10), dp(8), dp(10), dp(8));
+        container.setBackgroundColor(0xFF090909);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(false);
+        scroll.addView(container);
+
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("GOD OF TRADING • МЕНЮ")
+                .setView(scroll)
+                .setNegativeButton("Закрыть", null)
+                .create();
+
+        for (int i = 0; i < names.length; i++) {
+            final int index = i;
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dp(10), dp(5), dp(10), dp(5));
+            android.graphics.drawable.GradientDrawable cardBg = new android.graphics.drawable.GradientDrawable();
+            cardBg.setColor(0xFF151515);
+            cardBg.setCornerRadius(dp(12));
+            cardBg.setStroke(dp(1), 0xFF80652D);
+            card.setBackground(cardBg);
+
+            TextView heading = label("＋  " + names[i], 14, 0xFFFFD45A, true);
+            heading.setPadding(dp(8), dp(10), dp(8), dp(10));
+            card.addView(heading);
+            LinearLayout content = new LinearLayout(this);
+            content.setOrientation(LinearLayout.VERTICAL);
+            content.setPadding(dp(8), dp(4), dp(8), dp(10));
+            content.setVisibility(View.GONE);
+            content.addView(featureContent(index));
+            card.addView(content);
+            heading.setOnClickListener(v -> {
+                boolean opening = content.getVisibility() != View.VISIBLE;
+                content.setVisibility(opening ? View.VISIBLE : View.GONE);
+                heading.setText((opening ? "−  " : "＋  ") + names[index]);
+            });
+            LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            cardParams.bottomMargin = dp(7);
+            container.addView(card, cardParams);
+        }
+
+        Button collapse = makeNavButton("СВЕРНУТЬ ВСЕ РАЗДЕЛЫ");
+        collapse.setOnClickListener(v -> {
+            for (int i = 0; i < container.getChildCount(); i++) {
+                View child = container.getChildAt(i);
+                if (child instanceof LinearLayout) {
+                    LinearLayout card = (LinearLayout) child;
+                    if (card.getChildCount() > 1) {
+                        card.getChildAt(1).setVisibility(View.GONE);
+                        if (card.getChildAt(0) instanceof TextView) {
+                            TextView heading = (TextView) card.getChildAt(0);
+                            heading.setText(heading.getText().toString().replace("−  ", "＋  "));
+                        }
+                    }
+                }
+            }
+        });
+        container.addView(collapse);
+        Button settingsButton = makeNavButton("НАСТРОЙКИ ИНСТРУМЕНТА");
+        settingsButton.setOnClickListener(v -> {
+            settings.setVisibility(View.VISIBLE);
+            new AlertDialog.Builder(this).setTitle("Настройки инструмента")
+                    .setView(settings)
+                    .setPositiveButton("Готово", (d, w) -> settings.setVisibility(View.GONE))
+                    .setOnCancelListener(d -> settings.setVisibility(View.GONE)).show();
+            dialog.dismiss();
+        });
+        container.addView(settingsButton);
+        Button update = makeNavButton("ПРОВЕРИТЬ ОБНОВЛЕНИЯ");
+        update.setOnClickListener(v -> { dialog.dismiss(); checkForUpdate(); });
+        container.addView(update);
+        dialog.show();
+    }
+
+    private View featureContent(int index) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(4), dp(4), dp(4), dp(4));
+        TextView info;
+        switch (index) {
+            case 0:
+                info = label("Текущий анализ и котировки. Источник данных: Twelve Data.", 12, 0xFFE0E0E0, false);
+                box.addView(info);
+                Button analyze = makeNavButton("ЗАПУСТИТЬ АНАЛИЗ");
+                analyze.setOnClickListener(v -> loadAndAnalyze(false));
+                box.addView(analyze);
+                break;
+            case 1:
+                info = label("Контроль риска и лимитов. Пока это информационный раздел: автоматическая блокировка сделок не подключена.", 12, 0xFFE0E0E0, false);
+                box.addView(info);
+                Button risk = makeNavButton("ОТКРЫТЬ КАЛЬКУЛЯТОР РИСКА");
+                risk.setOnClickListener(v -> openRiskCalculator());
+                box.addView(risk);
+                break;
+            case 2:
+                info = label("Раздел уведомлений подготовлен в интерфейсе. Push-уведомления о сигналах ещё не подключены.", 12, 0xFFE0E0E0, false);
+                box.addView(info);
+                break;
+            case 3:
+            case 9:
+                info = label(paperTrading == null ? "Журнал пока пуст." : paperTrading.getSummary(), 12, 0xFFE0E0E0, false);
+                box.addView(info);
+                box.addView(label("Статистика относится к бумажной симуляции и не является результатом реальной торговли.", 11, 0xFFFFD45A, false));
+                break;
+            case 4:
+                info = label("Анализ трансляции экрана пока в разработке. Для него потребуется отдельное разрешение Android на захват экрана; сейчас трансляция не записывается и не анализируется.", 12, 0xFFE0E0E0, false);
+                box.addView(info);
+                break;
+            case 5:
+                String strength = signalDisplayView == null ? "Ожидание данных" : signalDisplayView.getText().toString();
+                info = label("Текущий сигнал: " + strength + "\nОценка силы будет рассчитываться после получения и проверки рыночных данных. Само направление не гарантирует результат.", 12, 0xFFE0E0E0, false);
+                box.addView(info);
+                break;
+            case 6:
+                info = label(waitSignalView == null ? "Сначала запустите анализ." : waitSignalView.getText().toString(), 12, 0xFFE0E0E0, false);
+                box.addView(info);
+                break;
+            case 7:
+                info = label("Рассчитайте ориентировочный размер риска для учебной сделки. Расчёт не отправляет ордера.", 12, 0xFFE0E0E0, false);
+                box.addView(info);
+                Button calculator = makeNavButton("РАССЧИТАТЬ РИСК");
+                calculator.setOnClickListener(v -> openRiskCalculator());
+                box.addView(calculator);
+                break;
+            case 8:
+                java.text.SimpleDateFormat clock = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
+                java.util.Date now = new java.util.Date();
+                clock.setTimeZone(java.util.TimeZone.getTimeZone("Asia/Tokyo"));
+                String asia = clock.format(now);
+                clock.setTimeZone(java.util.TimeZone.getTimeZone("Europe/London"));
+                String london = clock.format(now);
+                clock.setTimeZone(java.util.TimeZone.getTimeZone("America/New_York"));
+                String newYork = clock.format(now);
+                info = label("АЗИЯ  •  Токио: " + asia + "\nЛОНДОН: " + london + "\nНЬЮ-ЙОРК: " + newYork + "\nВремя указано по часовым поясам городов.", 12, 0xFFE0E0E0, false);
+                box.addView(info);
+                break;
+            default:
+                info = label("Раздел готовится.", 12, 0xFFE0E0E0, false);
+                box.addView(info);
+        }
+        return box;
+    }
+
+    private void openRiskCalculator() {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(16), dp(8), dp(16), dp(4));
+        EditText balance = editField("Размер счёта, например 20000");
+        balance.setInputType(8194);
+        balance.setText("20000");
+        EditText percent = editField("Риск в процентах, например 1");
+        percent.setInputType(8194);
+        percent.setText("1");
+        form.addView(label("Размер счёта", 12, 0xFFFFD45A, true));
+        form.addView(balance);
+        form.addView(label("Допустимый риск (%)", 12, 0xFFFFD45A, true));
+        form.addView(percent);
+        new AlertDialog.Builder(this).setTitle("Калькулятор риска")
+                .setView(form)
+                .setPositiveButton("Рассчитать", (d, w) -> {
+                    try {
+                        double amount = Double.parseDouble(balance.getText().toString().replace(',', '.'));
+                        double rate = Double.parseDouble(percent.getText().toString().replace(',', '.'));
+                        if (amount <= 0 || rate <= 0 || rate > 100) throw new NumberFormatException();
+                        double risk = amount * rate / 100.0;
+                        new AlertDialog.Builder(this).setTitle("Расчёт риска")
+                                .setMessage(String.format(java.util.Locale.US,
+                                        "Ориентировочный лимит риска: %.2f\nЭто расчёт для планирования, не гарантия ограничения убытка.", risk))
+                                .setPositiveButton("Понятно", null).show();
+                    } catch (Exception e) {
+                        new AlertDialog.Builder(this).setTitle("Проверьте значения")
+                                .setMessage("Введите положительную сумму и риск от 0 до 100%.")
+                                .setPositiveButton("Понятно", null).show();
+                    }
+                }).setNegativeButton("Отмена", null).show();
     }
 
     private TextView waitSignalView;
