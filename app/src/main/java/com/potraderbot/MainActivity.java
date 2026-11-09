@@ -15,6 +15,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.ScrollView;
 import android.widget.Spinner;
@@ -87,19 +88,31 @@ public final class MainActivity extends Activity {
         SharedPreferences preferences = getSharedPreferences("po_trader_settings", MODE_PRIVATE);
         paperTrading = new PaperTradingEngine(preferences);
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
+        FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(0xFF080808);
+
+        ImageView backgroundArt = new ImageView(this);
+        backgroundArt.setImageResource(R.drawable.dedgod_logo);
+        backgroundArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        backgroundArt.setAlpha(0.24f);
+        root.addView(backgroundArt, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
+        View darkOverlay = new View(this);
+        darkOverlay.setBackgroundColor(0xA8000000);
+        root.addView(darkOverlay, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
+        scroll.setBackgroundColor(0x00000000);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(18, 18, 18, 18);
-        page.setBackgroundColor(0xFF080808);
+        page.setBackgroundColor(0x00000000);
         scroll.addView(page);
-        root.addView(scroll, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        root.addView(scroll, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
         TextView crown = label("♛", 34, 0xFFFFC72C, true);
         crown.setGravity(android.view.Gravity.CENTER);
@@ -144,9 +157,9 @@ public final class MainActivity extends Activity {
         Button hideSafety = makeNavButton("СКРЫТЬ ПРАВИЛО БЕЗОПАСНОСТИ");
         safetyPanel.addView(hideSafety);
         page.addView(safetyPanel);
-        boolean safetyHidden = preferences.getBoolean("hide_safety_rule", false);
+        boolean safetyHidden = preferences.getBoolean("hide_safety_rule", true);
         safetyPanel.setVisibility(safetyHidden ? View.GONE : View.VISIBLE);
-        Button showSafety = makeNavButton("ПОКАЗАТЬ ПРАВИЛО БЕЗОПАСНОСТИ");
+        Button showSafety = makeNavButton("ⓘ ПРАВИЛО БЕЗОПАСНОСТИ");
         showSafety.setVisibility(safetyHidden ? View.VISIBLE : View.GONE);
         page.addView(showSafety);
         hideSafety.setOnClickListener(v -> {
@@ -180,7 +193,7 @@ public final class MainActivity extends Activity {
         paperButton = makeButton("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ");
         paperButton.setOnClickListener(v -> togglePaperAuto());
         addButtonWithHelp(page, paperButton, "Автосимуляция",
-                "Виртуальные сделки доступны только в демо-режиме. Реальные ордера приложение не размещает.");
+                "Автосимуляция использует реальные котировки выбранного графика, но открывает только виртуальные сделки и не отправляет ордера брокеру. Можно включать и при режиме «Реальный — сигналы».");
 
         details = label("Сначала укажите API-ключ Twelve Data в настройках и нажмите «Новый анализ».",
                 14, 0xFFE8E0CF, false);
