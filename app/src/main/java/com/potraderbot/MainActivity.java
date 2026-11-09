@@ -52,6 +52,9 @@ public final class MainActivity extends Activity {
     private Button autoButton;
     private Button updateButton;
     private Button platformButton;
+    private Button paperButton;
+    private PaperTradingEngine paperTrading;
+    private boolean paperAutoEnabled = false;
     private boolean autoRefreshEnabled = false;
     private boolean requestInProgress = false;
     private String updateUrl;
@@ -98,6 +101,7 @@ public final class MainActivity extends Activity {
         page.addView(label("Рыночный анализ • 1-минутные свечи • тестовая экспирация 3 минуты", 14, 0xFF667085, false));
 
         SharedPreferences preferences = getSharedPreferences("po_trader_settings", MODE_PRIVATE);
+        paperTrading = new PaperTradingEngine(preferences);
         page.addView(label("Валютная пара", 14, 0xFFFFFFFF, true));
         symbolInput = editField("EUR/USD");
         symbolInput.setText("EUR/USD");
@@ -119,6 +123,10 @@ public final class MainActivity extends Activity {
         autoButton = makeButton("ВКЛЮЧИТЬ АВТООБНОВЛЕНИЕ (10 СЕК.)");
         autoButton.setOnClickListener(v -> toggleAutoRefresh());
         page.addView(autoButton);
+
+        paperButton = makeButton("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ СДЕЛОК");
+        paperButton.setOnClickListener(v -> togglePaperAuto());
+        page.addView(paperButton);
 
         details = label("Нажмите кнопку, чтобы получить последние закрытые минутные свечи.\n\nAPI-ключ вводится только в приложении и не сохраняется.", 15, 0xFF344054, false);
         details.setPadding(0, 20, 0, 20);
@@ -219,6 +227,27 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void togglePaperAuto() {
+        paperAutoEnabled = !paperAutoEnabled;
+        if (paperAutoEnabled) {
+            paperButton.setText("ОСТАНОВИТЬ АВТОСИМУЛЯЦИЮ");
+            autoRefreshEnabled = true;
+            autoButton.setText("ВЫКЛЮЧИТЬ АВТООБНОВЛЕНИЕ");
+            status.setText("АВТОСИМУЛЯЦИЯ: ВКЛЮЧЕНА");
+            status.setTextColor(0xFF80BFFF);
+            loadAndAnalyze(true);
+            handler.removeCallbacks(refreshRunnable);
+            handler.postDelayed(refreshRunnable, AUTO_REFRESH_MS);
+        } else {
+            autoRefreshEnabled = false;
+            handler.removeCallbacks(refreshRunnable);
+            paperButton.setText("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ СДЕЛОК");
+            autoButton.setText("ВКЛЮЧИТЬ АВТООБНОВЛЕНИЕ (10 СЕК.)");
+            status.setText("АВТОСИМУЛЯЦИЯ: ОСТАНОВЛЕНА");
+            status.setTextColor(0xFFFFC857);
+        }
+    }
+
     private void toggleAutoRefresh() {
         autoRefreshEnabled = !autoRefreshEnabled;
         if (autoRefreshEnabled) {
@@ -266,10 +295,12 @@ public final class MainActivity extends Activity {
                     analyzeButton.setEnabled(true);
                     status.setText((autoRefreshEnabled ? "АВТО • " : "") + "СИГНАЛ: " + result.signal);
                     status.setTextColor(result.signal == MarketAnalyzer.Signal.WAIT ? 0xFFFFC857 : 0xFF70D6A5);
-                    details.setText(String.format(Locale.US,
+                    String analysisText = String.format(Locale.US,
                             "Платформа в интерфейсе: %s\nИсточник котировок: Twelve Data\nПара: %s\nЗакрытых свечей: %d\nПоследняя свеча UTC: %tF %tR\nЦена закрытия: %.5f\n\nEMA 9: %.5f\nEMA 21: %.5f\nRSI 14: %.2f\n\n%s\n\nЭто аналитический сигнал, а не команда на сделку.",
                             platform, symbol.toUpperCase(Locale.US), candles.size(), last.time, last.time,
-                            last.close, result.ema9, result.ema21, result.rsi14, result.explanation));
+                            last.close, result.ema9, result.ema21, result.rsi14, result.explanation);
+                    if (paperAutoEnabled) paperTrading.process(candles, result.signal);
+                    details.setText(analysisText + (paperAutoEnabled ? "\\n\\n" + paperTrading.getSummary() : ""));
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
@@ -396,8 +427,10 @@ public final class MainActivity extends Activity {
 
     @Override protected void onPause() {
         autoRefreshEnabled = false;
+        paperAutoEnabled = false;
         handler.removeCallbacks(refreshRunnable);
         if (autoButton != null) autoButton.setText("ВКЛЮЧИТЬ АВТООБНОВЛЕНИЕ (10 СЕК.)");
+        if (paperButton != null) paperButton.setText("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ СДЕЛОК");
         super.onPause();
     }
 
