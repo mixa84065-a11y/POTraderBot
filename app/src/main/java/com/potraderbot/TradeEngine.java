@@ -1,9 +1,9 @@
 package com.potraderbot;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Calendar;
 
 /** Risk guard and paper-trade ledger only. It never sends broker orders. */
 public final class TradeEngine {
@@ -11,12 +11,12 @@ public final class TradeEngine {
     public static final int MAX_CONSECUTIVE_LOSSES = 2;
 
     public static final class Result {
-        public final LocalDate date;
+        public final int dayKey;
         public final boolean win;
-        Result(LocalDate date, boolean win) { this.date = date; this.win = win; }
+        Result(int dayKey, boolean win) { this.dayKey = dayKey; this.win = win; }
     }
 
-    private LocalDate day = LocalDate.now();
+    private int day = currentDayKey();
     private int tradesToday;
     private int consecutiveLosses;
     private int wins;
@@ -49,11 +49,16 @@ public final class TradeEngine {
     public synchronized List<Result> getHistory() { return Collections.unmodifiableList(new ArrayList<>(history)); }
 
     private void refreshDay() {
-        LocalDate today = LocalDate.now();
-        if (!today.equals(day)) {
+        int today = currentDayKey();
+        if (today != day) {
             day = today;
             tradesToday = 0;
             consecutiveLosses = 0;
         }
+    }
+
+    private static int currentDayKey() {
+        Calendar c = Calendar.getInstance();
+        return c.get(Calendar.YEAR) * 1000 + c.get(Calendar.DAY_OF_YEAR);
     }
 }
