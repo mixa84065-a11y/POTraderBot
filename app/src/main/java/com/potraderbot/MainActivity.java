@@ -300,33 +300,6 @@ public final class MainActivity extends Activity {
         page.addView(platformNav, platformParams);
         refreshPlatformTabs(platformInput.getSelectedItemPosition());
 
-        LinearLayout bottomNav = new LinearLayout(this);
-        bottomNav.setOrientation(LinearLayout.HORIZONTAL);
-        String[] bottomNames = {"▥\nАнализ", "⬡\nРиски", "♟\nУведомления", "▤\nСтатистика"};
-        for (int i = 0; i < bottomNames.length; i++) {
-            final int item = i;
-            Button nav = makeNavButton(bottomNames[i]);
-            nav.setTextSize(11);
-            nav.setMinHeight(dp(66));
-            nav.setOnClickListener(v -> {
-                if (item == 0) loadAndAnalyze(false);
-                else if (item == 1) new AlertDialog.Builder(this).setTitle("Риск-менеджмент")
-                        .setMessage("Автоматическое ограничение риска пока не подключено. Используйте демо-режим и не воспринимайте сигнал как гарантию результата.")
-                        .setPositiveButton("Понятно", null).show();
-                else if (item == 2) new AlertDialog.Builder(this).setTitle("Уведомления")
-                        .setMessage("Уведомления о сигналах будут добавлены отдельным обновлением.")
-                        .setPositiveButton("Понятно", null).show();
-                else new AlertDialog.Builder(this).setTitle("Статистика симуляции")
-                        .setMessage(paperTrading == null ? "Пока нет данных." : paperTrading.getSummary())
-                        .setPositiveButton("Закрыть", null).show();
-            });
-            bottomNav.addView(nav, new LinearLayout.LayoutParams(0, dp(72), 1f));
-        }
-        LinearLayout.LayoutParams bottomParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        bottomParams.topMargin = dp(12);
-        page.addView(bottomNav, bottomParams);
-
         TextView disclaimer = label("ТОРГУЙ ГРАМОТНО, УПРАВЛЯЙ РЫНКОМ", 17, 0xFFFFC72C, true);
         disclaimer.setGravity(android.view.Gravity.CENTER);
         disclaimer.setPadding(dp(2), dp(14), dp(2), dp(8));
@@ -410,11 +383,25 @@ public final class MainActivity extends Activity {
         container.addView(collapse);
         Button settingsButton = makeNavButton("НАСТРОЙКИ ИНСТРУМЕНТА");
         settingsButton.setOnClickListener(v -> {
-            settings.setVisibility(View.VISIBLE);
-            new AlertDialog.Builder(this).setTitle("Настройки инструмента")
+            android.view.ViewGroup settingsParent = (android.view.ViewGroup) settings.getParent();
+            int settingsIndex = settingsParent == null ? -1 : settingsParent.indexOfChild(settings);
+            android.view.ViewGroup.LayoutParams settingsParams = settings.getLayoutParams();
+            if (settingsParent != null) settingsParent.removeView(settings);
+
+            AlertDialog settingsDialog = new AlertDialog.Builder(this)
+                    .setTitle("Настройки инструмента")
                     .setView(settings)
-                    .setPositiveButton("Готово", (d, w) -> settings.setVisibility(View.GONE))
-                    .setOnCancelListener(d -> settings.setVisibility(View.GONE)).show();
+                    .setPositiveButton("Готово", null)
+                    .create();
+            settingsDialog.setOnDismissListener(d -> {
+                settings.setVisibility(View.GONE);
+                if (settingsParent != null && settings.getParent() == null) {
+                    int insertAt = Math.max(0, Math.min(settingsIndex, settingsParent.getChildCount()));
+                    settingsParent.addView(settings, insertAt, settingsParams);
+                }
+            });
+            settings.setVisibility(View.VISIBLE);
+            settingsDialog.show();
             dialog.dismiss();
         });
         container.addView(settingsButton);
