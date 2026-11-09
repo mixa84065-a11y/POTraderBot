@@ -34,7 +34,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class MainActivity extends Activity {
-    private static final int BG = 0xFF25282E;
+    private static final int BG = 0xFFF1F3F6;
     private static final int AUTO_REFRESH_MS = 10_000;
     private static final long UPDATE_CHECK_MS = 6L * 60L * 60L * 1000L;
     private static final String RELEASES_API = "https://api.github.com/repos/mixa84065-a11y/POTraderBot/releases/latest";
@@ -78,47 +78,26 @@ public final class MainActivity extends Activity {
     }
 
     private void buildScreen() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(BG);
+
         ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
         scroll.setBackgroundColor(BG);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(32, 36, 32, 32);
+        page.setPadding(32, 28, 32, 24);
         page.setBackgroundColor(BG);
-        scroll.addView(page);
+        scroll.addView(page, new ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
+        root.addView(scroll, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        page.addView(label("PO TRADER BOT", 26, 0xFFFFFFFF, true));
-        page.addView(label("Рыночный анализ • 1-минутные свечи • тестовая экспирация 3 минуты", 14, 0xFFCDD2DA, false));
+        page.addView(label("PO TRADER BOT", 26, 0xFF1D2939, true));
+        page.addView(label("Рыночный анализ • 1-минутные свечи • тестовая экспирация 3 минуты", 14, 0xFF667085, false));
 
-        page.addView(label("Торговая платформа", 14, 0xFFFFFFFF, true));
-        platformInput = new Spinner(this);
-        String[] platforms = {"Binarium", "Pocket Option", "Универсальный режим"};
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, platforms);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        platformInput.setAdapter(adapter);
         SharedPreferences preferences = getSharedPreferences("po_trader_settings", MODE_PRIVATE);
-        int savedPlatform = preferences.getInt("platform_index", 0);
-        platformInput.setSelection(Math.max(0, Math.min(savedPlatform, platforms.length - 1)));
-        platformInput.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
-                preferences.edit().putInt("platform_index", position).apply();
-            }
-            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
-        });
-        platformInput.setBackgroundTintList(ColorStateList.valueOf(0xFFB8C0CC));
-        page.addView(platformInput);
-
-        platformButton = makeButton("ОТКРЫТЬ BINARIUM");
-        platformButton.setOnClickListener(v -> openSelectedPlatform());
-        page.addView(platformButton);
-        platformInput.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
-                preferences.edit().putInt("platform_index", position).apply();
-                platformButton.setText(position == 0 ? "ОТКРЫТЬ BINARIUM"
-                        : position == 1 ? "ОТКРЫТЬ POCKET OPTION" : "ВЫБРАТЬ ПЛОЩАДКУ");
-            }
-            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
-        });
-
         page.addView(label("Валютная пара", 14, 0xFFFFFFFF, true));
         symbolInput = editField("EUR/USD");
         symbolInput.setText("EUR/USD");
@@ -141,7 +120,7 @@ public final class MainActivity extends Activity {
         autoButton.setOnClickListener(v -> toggleAutoRefresh());
         page.addView(autoButton);
 
-        details = label("Нажмите кнопку, чтобы получить последние закрытые минутные свечи.\n\nAPI-ключ вводится только в приложении и не сохраняется.", 15, 0xFFE5E8ED, false);
+        details = label("Нажмите кнопку, чтобы получить последние закрытые минутные свечи.\n\nAPI-ключ вводится только в приложении и не сохраняется.", 15, 0xFF344054, false);
         details.setPadding(0, 20, 0, 20);
         page.addView(details);
 
@@ -156,8 +135,44 @@ public final class MainActivity extends Activity {
                 + "• Котировки во всех режимах загружаются из Twelve Data, а не из терминала брокера.\n"
                 + "• Автоматическое исполнение ордеров не реализовано: публичная официальная API-документация Binarium для выставления сделок не обнаружена. Не вводите пароль от брокера в приложение.\n"
                 + "• Сигнал не гарантирует результат; сначала проверяйте стратегию на демо.\n"
-                + "• Новая версия скачивается только из GitHub Releases; установку Android нужно подтвердить вручную.", 14, 0xFFFFC857, false));
-        setContentView(scroll);
+                + "• Новая версия скачивается только из GitHub Releases; установку Android нужно подтвердить вручную.", 14, 0xFF8A5A00, false));
+        LinearLayout bottomBar = new LinearLayout(this);
+        bottomBar.setOrientation(LinearLayout.HORIZONTAL);
+        bottomBar.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        bottomBar.setPadding(16, 8, 16, 8);
+        bottomBar.setBackgroundColor(0xFFE1E6ED);
+
+        TextView platformLabel = label("Площадка", 13, 0xFF263445, true);
+        bottomBar.addView(platformLabel, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.8f));
+
+        platformInput = new Spinner(this);
+        String[] platforms = {"Binarium", "Pocket Option", "Универсальный"};
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, platforms);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        platformInput.setAdapter(adapter);
+        int savedPlatform = preferences.getInt("platform_index", 0);
+        platformInput.setSelection(Math.max(0, Math.min(savedPlatform, platforms.length - 1)));
+        platformInput.setBackgroundTintList(ColorStateList.valueOf(0xFF64748B));
+        bottomBar.addView(platformInput, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.7f));
+
+        platformButton = makeButton("ОТКРЫТЬ");
+        platformButton.setTextSize(12);
+        platformButton.setOnClickListener(v -> openSelectedPlatform());
+        bottomBar.addView(platformButton, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        platformInput.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                preferences.edit().putInt("platform_index", position).apply();
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        });
+
+        root.addView(bottomBar, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        setContentView(root);
     }
 
     private Button makeButton(String text) {
@@ -165,7 +180,7 @@ public final class MainActivity extends Activity {
         button.setText(text);
         button.setAllCaps(false);
         button.setTextColor(0xFFFFFFFF);
-        button.setBackgroundTintList(ColorStateList.valueOf(0xFF465568));
+        button.setBackgroundTintList(ColorStateList.valueOf(0xFF315A82));
         return button;
     }
 
@@ -173,9 +188,9 @@ public final class MainActivity extends Activity {
         EditText field = new EditText(this);
         field.setSingleLine(true);
         field.setHint(hint);
-        field.setTextColor(0xFFFFFFFF);
-        field.setHintTextColor(0xFFB8C0CC);
-        field.setBackgroundTintList(ColorStateList.valueOf(0xFF9AA4B2));
+        field.setTextColor(0xFF1D2939);
+        field.setHintTextColor(0xFF98A2B3);
+        field.setBackgroundTintList(ColorStateList.valueOf(0xFF98A2B3));
         return field;
     }
 
