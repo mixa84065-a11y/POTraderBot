@@ -542,9 +542,13 @@ public final class MainActivity extends Activity {
                     analyzeButton.setEnabled(true);
                     status.setText((autoRefreshEnabled ? "АВТО • " : "") + "СИГНАЛ: " + signalLabel(result.signal));
                     status.setTextColor(result.signal == MarketAnalyzer.Signal.WAIT ? 0xFFFFC857 : 0xFF70D6A5);
+                    signalDisplayView.setText(signalLabel(result.signal) + (result.signal == MarketAnalyzer.Signal.CALL ? "  ▲" : result.signal == MarketAnalyzer.Signal.PUT ? "  ▼" : "  ◷"));
+                    signalDisplayView.setTextColor(result.signal == MarketAnalyzer.Signal.WAIT ? 0xFFFFC857
+                            : result.signal == MarketAnalyzer.Signal.CALL ? 0xFF00E676 : 0xFFFF5252);
+                    waitSignalView.setText(result.explanation);
                     String analysisText = String.format(Locale.US,
-                            "Режим: %s\nПлощадка в интерфейсе: %s\nИсточник котировок: Twelve Data\nПара: %s\nЗакрытых свечей: %d\nПоследняя свеча UTC: %tF %tR\nЦена закрытия: %.5f\n\nEMA 9: %.5f\nEMA 21: %.5f\nRSI 14: %.2f\n\n%s\n\nЭто аналитический сигнал, а не команда на сделку.",
-                            platform, symbol.toUpperCase(Locale.US), candles.size(), last.time, last.time,
+                            "Режим: %s\\nПлощадка в интерфейсе: %s\\nИсточник котировок: Twelve Data\\nПара: %s\\nЗакрытых свечей: %d\\nПоследняя свеча UTC: %tF %tR\\nЦена закрытия: %.5f\\n\\nEMA 9: %.5f\\nEMA 21: %.5f\\nRSI 14: %.2f\\n\\n%s\\n\\nЭто аналитический сигнал, а не команда на сделку.",
+                            mode, platform, symbol.toUpperCase(Locale.US), candles.size(), last.time, last.time,
                             last.close, result.ema9, result.ema21, result.rsi14, result.explanation);
                     if (paperAutoEnabled) paperTrading.process(candles, result.signal);
                     details.setText(analysisText + (paperAutoEnabled ? "\n\n" + paperTrading.getSummary() : ""));
