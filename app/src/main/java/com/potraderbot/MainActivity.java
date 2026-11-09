@@ -131,6 +131,35 @@ public final class MainActivity extends Activity {
         status.setPadding(0, 10, 0, 12);
         page.addView(status);
 
+        LinearLayout safetyPanel = new LinearLayout(this);
+        safetyPanel.setOrientation(LinearLayout.VERTICAL);
+        safetyPanel.setPadding(12, 10, 12, 10);
+        android.graphics.drawable.GradientDrawable safetyBg = new android.graphics.drawable.GradientDrawable();
+        safetyBg.setColor(0xFF17130A);
+        safetyBg.setCornerRadius(14);
+        safetyBg.setStroke(1, 0xFF80652D);
+        safetyPanel.setBackground(safetyBg);
+        TextView safetyText = label("ПРАВИЛО БЕЗОПАСНОСТИ\\nСигналы и автосимуляция не гарантируют прибыль. Симуляция виртуальная и не размещает реальные ордера.", 12, 0xFFFFDFA0, false);
+        safetyPanel.addView(safetyText);
+        Button hideSafety = makeNavButton("СКРЫТЬ ПРАВИЛО БЕЗОПАСНОСТИ");
+        safetyPanel.addView(hideSafety);
+        page.addView(safetyPanel);
+        boolean safetyHidden = preferences.getBoolean("hide_safety_rule", false);
+        safetyPanel.setVisibility(safetyHidden ? View.GONE : View.VISIBLE);
+        Button showSafety = makeNavButton("ПОКАЗАТЬ ПРАВИЛО БЕЗОПАСНОСТИ");
+        showSafety.setVisibility(safetyHidden ? View.VISIBLE : View.GONE);
+        page.addView(showSafety);
+        hideSafety.setOnClickListener(v -> {
+            preferences.edit().putBoolean("hide_safety_rule", true).apply();
+            safetyPanel.setVisibility(View.GONE);
+            showSafety.setVisibility(View.VISIBLE);
+        });
+        showSafety.setOnClickListener(v -> {
+            preferences.edit().putBoolean("hide_safety_rule", false).apply();
+            safetyPanel.setVisibility(View.VISIBLE);
+            showSafety.setVisibility(View.GONE);
+        });
+
         Button upSignal = makeSignalButton("↑     ВВЕРХ", 0xFF00D94A);
         Button downSignal = makeSignalButton("↓     ВНИЗ", 0xFFFF2424);
         Button waitSignal = makeSignalButton("◷     ЖДАТЬ", 0xFFE6E6E6);
@@ -211,16 +240,9 @@ public final class MainActivity extends Activity {
         modeInput.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
                 preferences.edit().putInt("trading_mode", position).apply();
-                if (position == 1 && paperAutoEnabled) {
-                    paperAutoEnabled = false;
-                    autoRefreshEnabled = false;
-                    handler.removeCallbacks(refreshRunnable);
-                    paperButton.setText("АВТОСИМУЛЯЦИЯ ДОСТУПНА ТОЛЬКО В ДЕМО");
-                    autoButton.setText("ВКЛЮЧИТЬ АВТООБНОВЛЕНИЕ");
-                    status.setText("РЕАЛЬНЫЙ РЕЖИМ: ТОЛЬКО СИГНАЛЫ");
-                    status.setTextColor(0xFFFFC72C);
-                } else if (paperButton != null) {
-                    paperButton.setText(position == 0 ? "ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ" : "АВТОСИМУЛЯЦИЯ ТОЛЬКО В ДЕМО");
+                if (paperButton != null && !paperAutoEnabled) {
+                    paperButton.setText(position == 0 ? "ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ"
+                            : "АВТОСИМУЛЯЦИЯ (ВИРТУАЛЬНО, НА РЕАЛЬНОМ ГРАФИКЕ)");
                 }
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
@@ -360,11 +382,6 @@ public final class MainActivity extends Activity {
     }
 
     private void togglePaperAuto() {
-        if (modeInput != null && modeInput.getSelectedItemPosition() == 1) {
-            status.setText("РЕАЛЬНЫЙ РЕЖИМ: АВТООРДЕРА НЕ ПОДДЕРЖИВАЮТСЯ");
-            status.setTextColor(0xFFFFC857);
-            return;
-        }
         paperAutoEnabled = !paperAutoEnabled;
         if (paperAutoEnabled) {
             paperButton.setText("ОСТАНОВИТЬ АВТОСИМУЛЯЦИЮ");
@@ -378,7 +395,7 @@ public final class MainActivity extends Activity {
         } else {
             autoRefreshEnabled = false;
             handler.removeCallbacks(refreshRunnable);
-            paperButton.setText("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ СДЕЛОК");
+            paperButton.setText("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ");
             autoButton.setText("ВКЛЮЧИТЬ АВТООБНОВЛЕНИЕ (10 СЕК.)");
             status.setText("АВТОСИМУЛЯЦИЯ: ОСТАНОВЛЕНА");
             status.setTextColor(0xFFFFC857);
