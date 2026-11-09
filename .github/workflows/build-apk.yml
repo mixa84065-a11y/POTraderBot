@@ -101,26 +101,3 @@ jobs:
           overwrite_files: true
           make_latest: true
           generate_release_notes: true
-
-      - name: Capture app screen on Android emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          profile: pixel_2
-          disable-animations: true
-          script: |
-            adb install app/build/outputs/apk/release/app-release.apk
-            adb shell am force-stop com.potraderbot || true
-            adb shell am start -n com.potraderbot/.MainActivity
-            sleep 12
-            adb shell screencap -p /sdcard/god-of-trading.png
-            adb pull /sdcard/god-of-trading.png ./god-of-trading.png
-
-      - name: Upload emulator screenshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: GOD-OF-TRADING-emulator-screenshot
-          path: god-of-trading.png
-          if-no-files-found: error
-          retention-days: 14
