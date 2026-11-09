@@ -309,16 +309,16 @@ public final class MainActivity extends Activity {
         Button button = new Button(this);
         button.setText(text);
         button.setAllCaps(false);
-        button.setTextSize(25);
+        button.setTextSize(27);
         button.setTypeface(null, Typeface.BOLD);
-        button.setTextColor(color);
+        button.setTextColor(0xFFFFF3D6);
         android.graphics.drawable.GradientDrawable border = new android.graphics.drawable.GradientDrawable();
         border.setColor(0xFF050505);
         border.setCornerRadius(28);
         border.setStroke(4, color);
         button.setBackground(border);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 76);
+                LinearLayout.LayoutParams.MATCH_PARENT, 88);
         params.topMargin = 7;
         params.bottomMargin = 7;
         button.setLayoutParams(params);
@@ -607,7 +607,7 @@ public final class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        TextView heading = label(title, 15, 0xFF344054, true);
+        TextView heading = label(title, 15, 0xFFE8E0CF, true);
         row.addView(heading, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         Button help = new Button(this);
         help.setText("?");
