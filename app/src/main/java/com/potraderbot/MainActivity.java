@@ -15,6 +15,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ImageView;
 import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -76,6 +77,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        applyImmersiveMode();
         buildScreen();
         checkForUpdate();
         handler.postDelayed(updateCheckRunnable, UPDATE_CHECK_MS);
@@ -98,22 +100,29 @@ public final class MainActivity extends Activity {
         root.addView(scroll, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
+        ImageView brandImage = new ImageView(this);
+        brandImage.setImageResource(R.drawable.dedgod_logo);
+        brandImage.setAdjustViewBounds(true);
+        brandImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        LinearLayout.LayoutParams brandParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 190);
+        brandParams.bottomMargin = 8;
+        page.addView(brandImage, brandParams);
         page.addView(label("DeD_GoD", 26, 0xFF1D2939, true));
         page.addView(label("Рыночный анализ • 1-минутные свечи • тестовая экспирация 3 минуты", 14, 0xFF667085, false));
 
         SharedPreferences preferences = getSharedPreferences("po_trader_settings", MODE_PRIVATE);
         paperTrading = new PaperTradingEngine(preferences);
-        page.addView(label("Валютная пара", 14, 0xFFFFFFFF, true));
+        addHelpTitle(page, "Валютная пара", "Укажите валютную пару в формате EUR/USD. Анализ строится по минутным свечам.");
         symbolInput = editField("EUR/USD");
         symbolInput.setText("EUR/USD");
         page.addView(symbolInput);
 
-        page.addView(label("API-ключ Twelve Data", 14, 0xFFFFFFFF, true));
+        addHelpTitle(page, "API-ключ Twelve Data", "Ключ нужен для загрузки котировок. Не отправляйте его другим людям и не вводите пароль от брокера.");
         apiKeyInput = editField("Вставьте личный API-ключ");
         apiKeyInput.setInputType(0x00000081);
         page.addView(apiKeyInput);
 
-        page.addView(label("Режим торговли", 14, 0xFF344054, true));
+        addHelpTitle(page, "Режим торговли", "Демо использует виртуальные сделки. Реальный режим показывает только аналитические сигналы и не размещает ордера.");
         modeInput = new Spinner(this);
         String[] modes = {"Демо — виртуальные сделки", "Реальный — только сигналы"};
         ArrayAdapter<String> modeAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, modes);
@@ -161,12 +170,12 @@ public final class MainActivity extends Activity {
         details.setPadding(0, 20, 0, 20);
         page.addView(details);
 
-        page.addView(label("Обновление приложения", 17, 0xFFFFFFFF, true));
+        addHelpTitle(page, "Обновление приложения", "Проверяет GitHub Releases и предлагает скачать новую версию. Установку APK необходимо подтвердить в Android.");
         updateButton = makeButton("ПРОВЕРИТЬ ОБНОВЛЕНИЕ");
         updateButton.setOnClickListener(v -> checkForUpdate());
         page.addView(updateButton);
 
-        page.addView(label("Правила безопасности", 17, 0xFFFFFFFF, true));
+        addHelpTitle(page, "Правила безопасности", "Прочитайте ограничения анализа и используйте демо для проверки стратегии. Сигналы не гарантируют прибыль.");
         page.addView(label("• Автообновление запрашивает новые котировки и пересчитывает EMA/RSI каждые 10 секунд, пока приложение открыто.\n"
                 + "• Выбор площадки меняет адрес кнопки «Открыть площадку»; вход выполняется на официальном сайте.\n"
                 + "• Котировки во всех режимах загружаются из Twelve Data, а не из терминала брокера.\n"
@@ -457,6 +466,44 @@ public final class MainActivity extends Activity {
             while ((line = reader.readLine()) != null) result.append(line);
         }
         return result.toString();
+    }
+
+
+    private void addHelpTitle(LinearLayout parent, String title, String explanation) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView heading = label(title, 15, 0xFF344054, true);
+        row.addView(heading, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        Button help = new Button(this);
+        help.setText("?");
+        help.setAllCaps(false);
+        help.setTextSize(13);
+        help.setMinWidth(38);
+        help.setMinimumWidth(38);
+        help.setPadding(0, 0, 0, 0);
+        help.setTextColor(0xFFFFFFFF);
+        help.setBackgroundTintList(ColorStateList.valueOf(0xFF64748B));
+        help.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle(title).setMessage(explanation)
+                .setPositiveButton("Понятно", null).show());
+        row.addView(help, new LinearLayout.LayoutParams(40, 40));
+        parent.addView(row);
+    }
+
+    private void applyImmersiveMode() {
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+    }
+
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) applyImmersiveMode();
     }
 
     private TextView label(String value, int size, int color, boolean bold) {
