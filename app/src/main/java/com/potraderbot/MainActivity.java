@@ -86,7 +86,11 @@ public final class MainActivity extends Activity {
 
     private Button[] platformTabs;
 
-    private int dp(float value) {\n        return Math.round(value * getResources().getDisplayMetrics().density);\n    }\n\n    private void buildScreen() {
+    private int dp(float value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private void buildScreen() {
         SharedPreferences preferences = getSharedPreferences("po_trader_settings", MODE_PRIVATE);
         paperTrading = new PaperTradingEngine(preferences);
 
