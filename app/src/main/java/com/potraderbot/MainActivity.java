@@ -313,6 +313,14 @@ public final class MainActivity extends Activity {
         page.addView(platformNav, platformParams);
         refreshPlatformTabs(platformInput.getSelectedItemPosition());
 
+        TextView versionLabel = label("v" + BuildConfig.VERSION_NAME, 9, 0xFF777777, false);
+        versionLabel.setGravity(android.view.Gravity.CENTER);
+        versionLabel.setAlpha(0.48f);
+        LinearLayout.LayoutParams versionParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(20));
+        versionParams.topMargin = dp(2);
+        page.addView(versionLabel, versionParams);
+
         updateButton = makeNavButton("⟳  ПРОВЕРИТЬ ОБНОВЛЕНИЯ");
         updateButton.setOnClickListener(v -> checkForUpdate());
         menuButton.setOnClickListener(v -> showFeatureMenu(settings));
