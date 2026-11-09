@@ -98,7 +98,7 @@ public final class MainActivity extends Activity {
         root.addView(scroll, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        page.addView(label("PO TRADER BOT", 26, 0xFF1D2939, true));
+        page.addView(label("DeD_GoD", 26, 0xFF1D2939, true));
         page.addView(label("Рыночный анализ • 1-минутные свечи • тестовая экспирация 3 минуты", 14, 0xFF667085, false));
 
         SharedPreferences preferences = getSharedPreferences("po_trader_settings", MODE_PRIVATE);
