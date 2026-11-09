@@ -294,12 +294,6 @@ public final class MainActivity extends Activity {
             if (i > 0) itemParams.leftMargin = dp(6);
             platformNav.addView(item, itemParams);
         }
-        LinearLayout.LayoutParams platformParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        platformParams.topMargin = dp(12);
-        page.addView(platformNav, platformParams);
-        refreshPlatformTabs(platformInput.getSelectedItemPosition());
-
         TextView disclaimer = label("ТОРГУЙ ГРАМОТНО, УПРАВЛЯЙ РЫНКОМ", 17, 0xFFFFC72C, true);
         disclaimer.setGravity(android.view.Gravity.CENTER);
         disclaimer.setPadding(dp(2), dp(14), dp(2), dp(8));
@@ -312,6 +306,12 @@ public final class MainActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(52));
         mainSettingsParams.topMargin = dp(8);
         page.addView(mainSettingsButton, mainSettingsParams);
+
+        LinearLayout.LayoutParams platformParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        platformParams.topMargin = dp(18);
+        page.addView(platformNav, platformParams);
+        refreshPlatformTabs(platformInput.getSelectedItemPosition());
 
         updateButton = makeNavButton("⟳  ПРОВЕРИТЬ ОБНОВЛЕНИЯ");
         updateButton.setOnClickListener(v -> checkForUpdate());
