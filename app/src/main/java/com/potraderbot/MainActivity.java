@@ -92,14 +92,14 @@ public final class MainActivity extends Activity {
         root.setBackgroundColor(0xFF080808);
 
         ImageView backgroundArt = new ImageView(this);
-        backgroundArt.setImageResource(R.drawable.dedgod_logo);
+        backgroundArt.setImageResource(R.drawable.god_trading_art);
         backgroundArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        backgroundArt.setAlpha(0.24f);
+        backgroundArt.setAlpha(0.72f);
         root.addView(backgroundArt, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
         View darkOverlay = new View(this);
-        darkOverlay.setBackgroundColor(0xA8000000);
+        darkOverlay.setBackgroundColor(0x78000000);
         root.addView(darkOverlay, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
@@ -123,16 +123,6 @@ public final class MainActivity extends Activity {
         TextView subtitle = label("ТОРГОВЫЙ ПОМОЩНИК", 14, 0xFFFFD76A, true);
         subtitle.setGravity(android.view.Gravity.CENTER);
         page.addView(subtitle);
-
-        ImageView brandImage = new ImageView(this);
-        brandImage.setImageResource(R.drawable.dedgod_logo);
-        brandImage.setAdjustViewBounds(true);
-        brandImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        LinearLayout.LayoutParams brandParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 245);
-        brandParams.topMargin = 8;
-        brandParams.bottomMargin = 4;
-        page.addView(brandImage, brandParams);
 
         TextView ribbon = label("★  GOD OF TRADING  ★", 20, 0xFFFFD45A, true);
         ribbon.setGravity(android.view.Gravity.CENTER);

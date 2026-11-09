@@ -3,7 +3,7 @@
     <application
         android:allowBackup="false"
         android:label="GOD OF TRADING"
-        android:icon="@drawable/dedgod_logo"
+        android:icon="@drawable/god_trading_icon"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
         <activity
