@@ -156,15 +156,15 @@ public final class MainActivity extends Activity {
 
         analyzeButton = makeButton("ЗАГРУЗИТЬ КОТИРОВКИ И АНАЛИЗИРОВАТЬ");
         analyzeButton.setOnClickListener(v -> loadAndAnalyze(false));
-        page.addView(analyzeButton);
+        addButtonWithHelp(page, analyzeButton, "Анализ", "Загружает последние закрытые минутные свечи и рассчитывает EMA 9, EMA 21 и RSI 14. Сигнал не гарантирует результат.");
 
         autoButton = makeButton("ВКЛЮЧИТЬ АВТООБНОВЛЕНИЕ (10 СЕК.)");
         autoButton.setOnClickListener(v -> toggleAutoRefresh());
-        page.addView(autoButton);
+        addButtonWithHelp(page, autoButton, "Автообновление", "Повторно загружает котировки и обновляет сигнал каждые 10 секунд, пока приложение открыто.");
 
         paperButton = makeButton("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ СДЕЛОК");
         paperButton.setOnClickListener(v -> togglePaperAuto());
-        page.addView(paperButton);
+        addButtonWithHelp(page, paperButton, "Автосимуляция", "В демо-режиме моделирует виртуальные сделки по сигналам. Реальные деньги не используются.");
 
         details = label("Нажмите кнопку, чтобы получить последние закрытые минутные свечи.\n\nAPI-ключ вводится только в приложении и не сохраняется.", 15, 0xFF344054, false);
         details.setPadding(0, 20, 0, 20);
@@ -173,7 +173,7 @@ public final class MainActivity extends Activity {
         addHelpTitle(page, "Обновление приложения", "Проверяет GitHub Releases и предлагает скачать новую версию. Установку APK необходимо подтвердить в Android.");
         updateButton = makeButton("ПРОВЕРИТЬ ОБНОВЛЕНИЕ");
         updateButton.setOnClickListener(v -> checkForUpdate());
-        page.addView(updateButton);
+        addButtonWithHelp(page, updateButton, "Проверка обновлений", "Ищет последнюю версию DeD_GoD в GitHub Releases. Скачивание и установку нужно подтвердить самостоятельно.");
 
         addHelpTitle(page, "Правила безопасности", "Прочитайте ограничения анализа и используйте демо для проверки стратегии. Сигналы не гарантируют прибыль.");
         page.addView(label("• Автообновление запрашивает новые котировки и пересчитывает EMA/RSI каждые 10 секунд, пока приложение открыто.\n"
@@ -468,6 +468,24 @@ public final class MainActivity extends Activity {
         return result.toString();
     }
 
+
+
+    private void addButtonWithHelp(LinearLayout parent, Button action, String title, String explanation) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.addView(action, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        Button help = new Button(this);
+        help.setText("?");
+        help.setAllCaps(false);
+        help.setTextColor(0xFFFFFFFF);
+        help.setBackgroundTintList(ColorStateList.valueOf(0xFF64748B));
+        help.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle(title).setMessage(explanation)
+                .setPositiveButton("Понятно", null).show());
+        row.addView(help, new LinearLayout.LayoutParams(44, 48));
+        parent.addView(row);
+    }
 
     private void addHelpTitle(LinearLayout parent, String title, String explanation) {
         LinearLayout row = new LinearLayout(this);
