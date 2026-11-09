@@ -108,7 +108,7 @@ public final class MainActivity extends Activity {
         scroll.setFillViewport(true);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(10, 10, 10, 14);
+        page.setPadding(dp(10), dp(10), dp(10), dp(14));
         scroll.addView(page);
         root.addView(scroll, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
@@ -116,7 +116,7 @@ public final class MainActivity extends Activity {
         LinearLayout header = new LinearLayout(this);
         header.setGravity(android.view.Gravity.CENTER_VERTICAL);
         TextView crown = label("♛", 42, 0xFFFFC72C, true);
-        header.addView(crown, new LinearLayout.LayoutParams(54, LinearLayout.LayoutParams.WRAP_CONTENT));
+        header.addView(crown, new LinearLayout.LayoutParams(dp(54), LinearLayout.LayoutParams.WRAP_CONTENT));
         LinearLayout brand = new LinearLayout(this);
         brand.setOrientation(LinearLayout.VERTICAL);
         TextView title = label("GOD OF TRADING", 25, 0xFFFFD36A, true);
@@ -129,21 +129,21 @@ public final class MainActivity extends Activity {
         header.addView(brand, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         Button menuButton = makeNavButton("⋮");
         menuButton.setTextSize(28);
-        header.addView(menuButton, new LinearLayout.LayoutParams(48, 52));
+        header.addView(menuButton, new LinearLayout.LayoutParams(dp(48), dp(52)));
         page.addView(header);
 
         status = label("●  ОЖИДАНИЕ ДАННЫХ", 12, 0xFFFFC857, true);
         status.setGravity(android.view.Gravity.CENTER);
-        status.setPadding(8, 6, 8, 6);
+        status.setPadding(dp(8), dp(6), dp(8), dp(6));
         page.addView(status);
 
         LinearLayout modeRow = new LinearLayout(this);
         modeRow.setOrientation(LinearLayout.HORIZONTAL);
         Button demoMode = makeModeButton("♟  ДЕМО", "Учебный режим", 0xFF168BFF);
         Button realMode = makeModeButton("▤  РЕАЛЬНЫЙ СЧЁТ", "Только сигналы", 0xFFFF3434);
-        modeRow.addView(demoMode, new LinearLayout.LayoutParams(0, 84, 1f));
-        LinearLayout.LayoutParams realModeParams = new LinearLayout.LayoutParams(0, 84, 1f);
-        realModeParams.leftMargin = 7;
+        modeRow.addView(demoMode, new LinearLayout.LayoutParams(0, dp(84), 1f));
+        LinearLayout.LayoutParams realModeParams = new LinearLayout.LayoutParams(0, dp(84), 1f);
+        realModeParams.leftMargin = dp(7);
         modeRow.addView(realMode, realModeParams);
         page.addView(modeRow);
         Runnable updateModeStyle = () -> {
@@ -158,14 +158,14 @@ public final class MainActivity extends Activity {
         assetRow.setOrientation(LinearLayout.HORIZONTAL);
         assetRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
         TextView assetCaption = label("Выбор актива:", 14, 0xFFF4F4F4, true);
-        assetRow.addView(assetCaption, new LinearLayout.LayoutParams(0, 54, 1f));
+        assetRow.addView(assetCaption, new LinearLayout.LayoutParams(0, dp(54), 1f));
         Button assetButton = makeNavButton("EUR/USD  ▾");
         assetButton.setTextSize(16);
-        assetRow.addView(assetButton, new LinearLayout.LayoutParams(130, 54));
+        assetRow.addView(assetButton, new LinearLayout.LayoutParams(dp(130), dp(54)));
         TextView quoteView = label("—", 20, 0xFF00E676, true);
         quoteView.setGravity(android.view.Gravity.CENTER);
-        LinearLayout.LayoutParams quoteParams = new LinearLayout.LayoutParams(92, 54);
-        quoteParams.leftMargin = 6;
+        LinearLayout.LayoutParams quoteParams = new LinearLayout.LayoutParams(dp(92), dp(54));
+        quoteParams.leftMargin = dp(6);
         assetRow.addView(quoteView, quoteParams);
         assetButton.setOnClickListener(v -> {
             EditText input = editField("Например, EUR/USD");
@@ -182,7 +182,7 @@ public final class MainActivity extends Activity {
         });
         LinearLayout.LayoutParams assetParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        assetParams.topMargin = 10;
+        assetParams.topMargin = dp(10);
         page.addView(assetRow, assetParams);
 
         LinearLayout signalButtons = new LinearLayout(this);
@@ -191,21 +191,21 @@ public final class MainActivity extends Activity {
         Button downSignal = makeSignalButton("⬇  ВНИЗ", 0xFFFF2525);
         upSignal.setTextSize(23);
         downSignal.setTextSize(23);
-        signalButtons.addView(upSignal, new LinearLayout.LayoutParams(0, 78, 1f));
-        LinearLayout.LayoutParams downParams = new LinearLayout.LayoutParams(0, 78, 1f);
-        downParams.leftMargin = 8;
+        signalButtons.addView(upSignal, new LinearLayout.LayoutParams(0, dp(78), 1f));
+        LinearLayout.LayoutParams downParams = new LinearLayout.LayoutParams(0, dp(78), 1f);
+        downParams.leftMargin = dp(8);
         signalButtons.addView(downSignal, downParams);
         LinearLayout.LayoutParams signalButtonsParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        signalButtonsParams.topMargin = 10;
+        signalButtonsParams.topMargin = dp(10);
         page.addView(signalButtons, signalButtonsParams);
         signalDisplayView = label("ЖДАТЬ  ◷", 20, 0xFFFFC857, true);
         signalDisplayView.setGravity(android.view.Gravity.CENTER);
-        signalDisplayView.setPadding(0, 6, 0, 2);
+        signalDisplayView.setPadding(dp(0), dp(6), dp(0), dp(2));
         page.addView(signalDisplayView);
         waitSignalView = label("EMA 9/21  •  RSI 14  •  ФИЛЬТР ТРЕНДА", 11, 0xFFD8D8D8, false);
         waitSignalView.setGravity(android.view.Gravity.CENTER);
-        waitSignalView.setPadding(4, 2, 4, 6);
+        waitSignalView.setPadding(dp(4), dp(2), dp(4), dp(6));
         page.addView(waitSignalView);
 
         analyzeButton = makeAccentButton("⟳  НОВЫЙ АНАЛИЗ");
@@ -216,14 +216,14 @@ public final class MainActivity extends Activity {
         paperButton.setOnClickListener(v -> togglePaperAuto());
 
         details = label("Укажите API-ключ Twelve Data через меню ⋮ и запустите анализ.", 12, 0xFFE1E8F0, false);
-        details.setPadding(10, 8, 10, 8);
+        details.setPadding(dp(10), dp(8), dp(10), dp(8));
         LinearLayout detailsCard = panel();
         detailsCard.addView(details);
         page.addView(detailsCard);
 
         LinearLayout settings = new LinearLayout(this);
         settings.setOrientation(LinearLayout.VERTICAL);
-        settings.setPadding(10, 8, 10, 8);
+        settings.setPadding(dp(10), dp(8), dp(10), dp(8));
         settings.addView(label("ВАЛЮТНАЯ ПАРА", 12, 0xFFFFD45A, true));
         symbolInput = editField("EUR/USD");
         symbolInput.setText("EUR/USD");
@@ -282,17 +282,17 @@ public final class MainActivity extends Activity {
             tab.setOnClickListener(v -> platformInput.setSelection(index));
             platformTabs[i] = tab;
             item.addView(tab, new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, 62));
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(62)));
             Button help = makeTinyHelp(i == 0 ? "Pocket Option" : i == 1 ? "Binarium" : "Универсальный",
                     "Выбор площадки меняет только профиль интерфейса и ссылку открытия. Приложение не подключается к аккаунту и не отправляет сделки.");
-            item.addView(help, new LinearLayout.LayoutParams(30, 26));
-            LinearLayout.LayoutParams itemParams = new LinearLayout.LayoutParams(0, 92, 1f);
-            if (i > 0) itemParams.leftMargin = 6;
+            item.addView(help, new LinearLayout.LayoutParams(dp(30), dp(26)));
+            LinearLayout.LayoutParams itemParams = new LinearLayout.LayoutParams(0, dp(92), 1f);
+            if (i > 0) itemParams.leftMargin = dp(6);
             platformNav.addView(item, itemParams);
         }
         LinearLayout.LayoutParams platformParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        platformParams.topMargin = 12;
+        platformParams.topMargin = dp(12);
         page.addView(platformNav, platformParams);
         refreshPlatformTabs(platformInput.getSelectedItemPosition());
 
@@ -303,7 +303,7 @@ public final class MainActivity extends Activity {
             final int item = i;
             Button nav = makeNavButton(bottomNames[i]);
             nav.setTextSize(11);
-            nav.setMinHeight(66);
+            nav.setMinHeight(dp(66));
             nav.setOnClickListener(v -> {
                 if (item == 0) loadAndAnalyze(false);
                 else if (item == 1) new AlertDialog.Builder(this).setTitle("Риск-менеджмент")
@@ -316,16 +316,16 @@ public final class MainActivity extends Activity {
                         .setMessage(paperTrading == null ? "Пока нет данных." : paperTrading.getSummary())
                         .setPositiveButton("Закрыть", null).show();
             });
-            bottomNav.addView(nav, new LinearLayout.LayoutParams(0, 72, 1f));
+            bottomNav.addView(nav, new LinearLayout.LayoutParams(0, dp(72), 1f));
         }
         LinearLayout.LayoutParams bottomParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        bottomParams.topMargin = 12;
+        bottomParams.topMargin = dp(12);
         page.addView(bottomNav, bottomParams);
 
         TextView disclaimer = label("ТОРГУЙ ГРАМОТНО, УПРАВЛЯЙ РЫНКОМ", 17, 0xFFFFC72C, true);
         disclaimer.setGravity(android.view.Gravity.CENTER);
-        disclaimer.setPadding(2, 14, 2, 8);
+        disclaimer.setPadding(dp(2), dp(14), dp(2), dp(8));
         page.addView(disclaimer);
 
         updateButton = makeNavButton("⟳  ПРОВЕРИТЬ ОБНОВЛЕНИЯ");
@@ -407,7 +407,7 @@ public final class MainActivity extends Activity {
         help.setAllCaps(false);
         help.setTextSize(12);
         help.setMinWidth(0);
-        help.setPadding(0, 0, 0, 0);
+        help.setPadding(dp(0), dp(0), dp(0), dp(0));
         help.setTextColor(0xFFFFD45A);
         help.setBackgroundTintList(ColorStateList.valueOf(0xFF252019));
         help.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle(title)
@@ -418,7 +418,7 @@ public final class MainActivity extends Activity {
     private LinearLayout panel() {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(12, 10, 12, 10);
+        box.setPadding(dp(12), dp(10), dp(12), dp(10));
         android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
         bg.setColor(0xE8111721);
         bg.setCornerRadius(18);
@@ -453,7 +453,7 @@ public final class MainActivity extends Activity {
     private LinearLayout selectorBox(String caption) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(10, 8, 10, 8);
+        box.setPadding(dp(10), dp(8), dp(10), dp(8));
         android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
         bg.setColor(0xFF111111);
         bg.setCornerRadius(16);
@@ -477,7 +477,7 @@ public final class MainActivity extends Activity {
         border.setStroke(4, color);
         button.setBackground(border);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 88);
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(88));
         params.topMargin = 7;
         params.bottomMargin = 7;
         button.setLayoutParams(params);
@@ -762,7 +762,7 @@ public final class MainActivity extends Activity {
         help.setOnClickListener(v -> new AlertDialog.Builder(this)
                 .setTitle(title).setMessage(explanation)
                 .setPositiveButton("Понятно", null).show());
-        row.addView(help, new LinearLayout.LayoutParams(44, 48));
+        row.addView(help, new LinearLayout.LayoutParams(dp(44), dp(48)));
         parent.addView(row);
     }
 
@@ -778,13 +778,13 @@ public final class MainActivity extends Activity {
         help.setTextSize(13);
         help.setMinWidth(38);
         help.setMinimumWidth(38);
-        help.setPadding(0, 0, 0, 0);
+        help.setPadding(dp(0), dp(0), dp(0), dp(0));
         help.setTextColor(0xFFFFFFFF);
         help.setBackgroundTintList(ColorStateList.valueOf(0xFF64748B));
         help.setOnClickListener(v -> new AlertDialog.Builder(this)
                 .setTitle(title).setMessage(explanation)
                 .setPositiveButton("Понятно", null).show());
-        row.addView(help, new LinearLayout.LayoutParams(40, 40));
+        row.addView(help, new LinearLayout.LayoutParams(dp(40), dp(40)));
         parent.addView(row);
     }
 
