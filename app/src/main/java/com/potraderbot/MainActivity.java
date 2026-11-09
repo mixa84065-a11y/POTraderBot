@@ -453,7 +453,7 @@ public final class MainActivity extends Activity {
         if (selected == 2) {
             new AlertDialog.Builder(this)
                     .setTitle("Выберите торговую площадку")
-                    .setItems(new String[]{"Binarium", "Pocket Option"}, (dialog, which) ->
+                    .setItems(new String[]{"Pocket Option", "Binarium"}, (dialog, which) ->
                             openPlatformUrl(which == 0
                                     ? "https://pocketoption.com/"
                                     : "https://binarium.com/"))
@@ -547,7 +547,7 @@ public final class MainActivity extends Activity {
                             : result.signal == MarketAnalyzer.Signal.CALL ? 0xFF00E676 : 0xFFFF5252);
                     waitSignalView.setText(result.explanation);
                     String analysisText = String.format(Locale.US,
-                            "Режим: %s\\nПлощадка в интерфейсе: %s\\nИсточник котировок: Twelve Data\\nПара: %s\\nЗакрытых свечей: %d\\nПоследняя свеча UTC: %tF %tR\\nЦена закрытия: %.5f\\n\\nEMA 9: %.5f\\nEMA 21: %.5f\\nRSI 14: %.2f\\n\\n%s\\n\\nЭто аналитический сигнал, а не команда на сделку.",
+                            "Режим: %s\nПлощадка в интерфейсе: %s\nИсточник котировок: Twelve Data\nПара: %s\nЗакрытых свечей: %d\nПоследняя свеча UTC: %tF %tR\nЦена закрытия: %.5f\n\nEMA 9: %.5f\nEMA 21: %.5f\nRSI 14: %.2f\n\n%s\n\nЭто аналитический сигнал, а не команда на сделку.",
                             mode, platform, symbol.toUpperCase(Locale.US), candles.size(), last.time, last.time,
                             last.close, result.ema9, result.ema21, result.rsi14, result.explanation);
                     if (paperAutoEnabled) paperTrading.process(candles, result.signal);
