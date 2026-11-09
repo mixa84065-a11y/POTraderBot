@@ -117,7 +117,7 @@ public final class MainActivity extends Activity {
         TextView crown = label("♛", 34, 0xFFFFC72C, true);
         crown.setGravity(android.view.Gravity.CENTER);
         page.addView(crown);
-        TextView title = label("DeD_GoD", 34, 0xFFFFC72C, true);
+        TextView title = label("GOD OF TRADING", 28, 0xFFFFC72C, true);
         title.setGravity(android.view.Gravity.CENTER);
         page.addView(title);
         TextView subtitle = label("ТОРГОВЫЙ ПОМОЩНИК", 14, 0xFFFFD76A, true);
@@ -134,7 +134,7 @@ public final class MainActivity extends Activity {
         brandParams.bottomMargin = 4;
         page.addView(brandImage, brandParams);
 
-        TextView ribbon = label("★  DeD_GoD  ★", 23, 0xFFFFD45A, true);
+        TextView ribbon = label("★  GOD OF TRADING  ★", 20, 0xFFFFD45A, true);
         ribbon.setGravity(android.view.Gravity.CENTER);
         ribbon.setPadding(0, 4, 0, 16);
         page.addView(ribbon);
@@ -273,7 +273,7 @@ public final class MainActivity extends Activity {
                 .setMessage(paperTrading == null ? "Пока нет данных." : paperTrading.getSummary())
                 .setPositiveButton("Закрыть", null).show());
         Button about = makeNavButton("ⓘ\nО программе");
-        about.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("DeD_GoD")
+        about.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("GOD OF TRADING")
                 .setMessage("Торговый помощник для анализа минутных свечей. Сигналы не гарантируют прибыль. Автоматическое размещение реальных ордеров не поддерживается.")
                 .setPositiveButton("Понятно", null).show());
         updateButton = makeNavButton("⟳\nОбновить");
@@ -283,7 +283,7 @@ public final class MainActivity extends Activity {
         nav.addView(updateButton, new LinearLayout.LayoutParams(0, 66, 1f));
         page.addView(nav);
 
-        TextView slogan = label("ПРИНИМАЙ РЕШЕНИЯ УВЕРЕННО!", 15, 0xFFFFC72C, true);
+        TextView slogan = label("TRADE SMART. RULE THE MARKET.", 15, 0xFFFFC72C, true);
         slogan.setGravity(android.view.Gravity.CENTER);
         slogan.setPadding(0, 12, 0, 18);
         page.addView(slogan);
