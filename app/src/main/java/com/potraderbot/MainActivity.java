@@ -84,159 +84,196 @@ public final class MainActivity extends Activity {
         handler.postDelayed(updateCheckRunnable, UPDATE_CHECK_MS);
     }
 
+    private Button[] platformTabs;
+
     private void buildScreen() {
         SharedPreferences preferences = getSharedPreferences("po_trader_settings", MODE_PRIVATE);
         paperTrading = new PaperTradingEngine(preferences);
 
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(0xFF080808);
+        root.setBackgroundColor(0xFF090D13);
 
         ImageView backgroundArt = new ImageView(this);
         backgroundArt.setImageResource(R.drawable.god_trading_art);
         backgroundArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        backgroundArt.setAlpha(0.72f);
+        backgroundArt.setAlpha(0.20f);
         root.addView(backgroundArt, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-
-        View darkOverlay = new View(this);
-        darkOverlay.setBackgroundColor(0x78000000);
-        root.addView(darkOverlay, new FrameLayout.LayoutParams(
+        View overlay = new View(this);
+        overlay.setBackgroundColor(0xD9090D13);
+        root.addView(overlay, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        scroll.setBackgroundColor(0x00000000);
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(18, 18, 18, 18);
-        page.setBackgroundColor(0x00000000);
+        page.setPadding(14, 12, 14, 18);
         scroll.addView(page);
         root.addView(scroll, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
-        TextView crown = label("♛", 34, 0xFFFFC72C, true);
-        crown.setGravity(android.view.Gravity.CENTER);
-        page.addView(crown);
-        TextView title = label("GOD OF TRADING", 28, 0xFFFFC72C, true);
-        title.setGravity(android.view.Gravity.CENTER);
-        page.addView(title);
-        TextView subtitle = label("ТОРГОВЫЙ ПОМОЩНИК", 14, 0xFFFFD76A, true);
-        subtitle.setGravity(android.view.Gravity.CENTER);
-        page.addView(subtitle);
+        LinearLayout header = new LinearLayout(this);
+        header.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView crown = label("♛", 42, 0xFFFFC72C, true);
+        header.addView(crown, new LinearLayout.LayoutParams(58, LinearLayout.LayoutParams.WRAP_CONTENT));
+        LinearLayout brand = new LinearLayout(this);
+        brand.setOrientation(LinearLayout.VERTICAL);
+        TextView title = label("PO TRADER BOT", 23, 0xFFF4F7FC, true);
+        TextView subtitle = label("АНАЛИТИЧЕСКИЙ ПОМОЩНИК", 11, 0xFFFFD45A, true);
+        brand.addView(title);
+        brand.addView(subtitle);
+        header.addView(brand, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        Button helpTop = makeNavButton("?");
+        helpTop.setTextSize(19);
+        helpTop.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("О приложении")
+                .setMessage("PO Trader Bot анализирует рыночные данные и показывает справочные сигналы. Он не подключается к аккаунту брокера и не размещает реальные сделки.")
+                .setPositiveButton("Понятно", null).show());
+        header.addView(helpTop, new LinearLayout.LayoutParams(48, 48));
+        page.addView(header);
 
-        TextView ribbon = label("★  GOD OF TRADING  ★", 20, 0xFFFFD45A, true);
-        ribbon.setGravity(android.view.Gravity.CENTER);
-        ribbon.setPadding(0, 4, 0, 16);
-        page.addView(ribbon);
+        status = label("●  ОЖИДАНИЕ ДАННЫХ", 16, 0xFFFFC857, true);
+        status.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        status.setPadding(14, 14, 14, 14);
+        LinearLayout statusCard = panel();
+        statusCard.addView(status);
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        statusParams.topMargin = 14;
+        page.addView(statusCard, statusParams);
 
-        status = label("ТЕКУЩИЙ СИГНАЛ: ЖДАТЬ", 20, 0xFFFFD45A, true);
-        status.setGravity(android.view.Gravity.CENTER);
-        status.setPadding(0, 10, 0, 12);
-        page.addView(status);
+        LinearLayout modeRow = new LinearLayout(this);
+        modeRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView modeCaption = label("РЕЖИМ РАБОТЫ", 12, 0xFFB9C5D5, true);
+        modeRow.addView(modeCaption, new LinearLayout.LayoutParams(0, 42, 1f));
+        Button modeButton = makeAccentButton("ДЕМО  ▾");
+        modeButton.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("Режим")
+                .setItems(new String[]{"Демо", "Реальный — только сигналы"}, (dialog, which) -> {
+                    modeInput.setSelection(which);
+                    modeButton.setText((which == 0 ? "ДЕМО" : "РЕАЛЬНЫЕ СИГНАЛЫ") + "  ▾");
+                }).show());
+        modeRow.addView(modeButton, new LinearLayout.LayoutParams(170, 44));
+        LinearLayout.LayoutParams modeRowParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        modeRowParams.topMargin = 10;
+        page.addView(modeRow, modeRowParams);
 
-        LinearLayout safetyPanel = new LinearLayout(this);
-        safetyPanel.setOrientation(LinearLayout.VERTICAL);
-        safetyPanel.setPadding(12, 10, 12, 10);
-        android.graphics.drawable.GradientDrawable safetyBg = new android.graphics.drawable.GradientDrawable();
-        safetyBg.setColor(0xFF17130A);
-        safetyBg.setCornerRadius(14);
-        safetyBg.setStroke(1, 0xFF80652D);
-        safetyPanel.setBackground(safetyBg);
-        TextView safetyText = label("ПРАВИЛО БЕЗОПАСНОСТИ\\nСигналы и автосимуляция не гарантируют прибыль. Симуляция виртуальная и не размещает реальные ордера.", 12, 0xFFFFDFA0, false);
-        safetyPanel.addView(safetyText);
-        Button hideSafety = makeNavButton("СКРЫТЬ ПРАВИЛО БЕЗОПАСНОСТИ");
-        safetyPanel.addView(hideSafety);
-        page.addView(safetyPanel);
-        boolean safetyHidden = preferences.getBoolean("hide_safety_rule", true);
-        safetyPanel.setVisibility(safetyHidden ? View.GONE : View.VISIBLE);
-        Button showSafety = makeNavButton("ⓘ ПРАВИЛО БЕЗОПАСНОСТИ");
-        showSafety.setVisibility(safetyHidden ? View.VISIBLE : View.GONE);
-        page.addView(showSafety);
-        hideSafety.setOnClickListener(v -> {
-            preferences.edit().putBoolean("hide_safety_rule", true).apply();
-            safetyPanel.setVisibility(View.GONE);
-            showSafety.setVisibility(View.VISIBLE);
-        });
-        showSafety.setOnClickListener(v -> {
-            preferences.edit().putBoolean("hide_safety_rule", false).apply();
-            safetyPanel.setVisibility(View.VISIBLE);
-            showSafety.setVisibility(View.GONE);
-        });
+        LinearLayout summary = new LinearLayout(this);
+        summary.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout balance = panel();
+        balance.addView(label("БАЛАНС (ВИРТУАЛЬНЫЙ)", 11, 0xFFB9C5D5, true));
+        balance.addView(label("20 000 ₽", 24, 0xFFF4F7FC, true));
+        LinearLayout trades = panel();
+        trades.addView(label("СДЕЛОК СЕГОДНЯ", 11, 0xFFB9C5D5, true));
+        trades.addView(label("Симуляция", 20, 0xFF70D6A5, true));
+        summary.addView(balance, new LinearLayout.LayoutParams(0, 82, 1f));
+        LinearLayout.LayoutParams tradeParams = new LinearLayout.LayoutParams(0, 82, 1f);
+        tradeParams.leftMargin = 8;
+        summary.addView(trades, tradeParams);
+        LinearLayout.LayoutParams summaryParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        summaryParams.topMargin = 8;
+        page.addView(summary, summaryParams);
 
-        Button upSignal = makeSignalButton("↑     ВВЕРХ", 0xFF00D94A);
-        Button downSignal = makeSignalButton("↓     ВНИЗ", 0xFFFF2424);
-        Button waitSignal = makeSignalButton("◷     ЖДАТЬ", 0xFFE6E6E6);
-        page.addView(upSignal);
-        page.addView(downSignal);
-        page.addView(waitSignal);
+        LinearLayout signalCard = panel();
+        signalCard.setOrientation(LinearLayout.VERTICAL);
+        TextView signalHeading = label("АНАЛИЗ РЫНКА", 14, 0xFFB9C5D5, true);
+        signalHeading.setGravity(android.view.Gravity.CENTER);
+        signalCard.addView(signalHeading);
+        TextView signalDisplay = label("ЖДАТЬ  ◷", 34, 0xFFFFC857, true);
+        signalDisplay.setGravity(android.view.Gravity.CENTER);
+        signalDisplay.setPadding(0, 8, 0, 8);
+        signalCard.addView(signalDisplay);
+        TextView signalHint = label("EMA 9/21  •  RSI 14  •  ФИЛЬТР ТРЕНДА", 11, 0xFFB9C5D5, false);
+        signalHint.setGravity(android.view.Gravity.CENTER);
+        signalCard.addView(signalHint);
+        LinearLayout.LayoutParams signalParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        signalParams.topMargin = 10;
+        page.addView(signalCard, signalParams);
 
-        analyzeButton = makeButton("⟳   НОВЫЙ АНАЛИЗ");
+        LinearLayout signalButtons = new LinearLayout(this);
+        signalButtons.setOrientation(LinearLayout.HORIZONTAL);
+        Button upSignal = makeSignalButton("↗  ВВЕРХ", 0xFF00C853);
+        Button downSignal = makeSignalButton("↘  ВНИЗ", 0xFFFF3434);
+        upSignal.setTextSize(18);
+        downSignal.setTextSize(18);
+        signalButtons.addView(upSignal, new LinearLayout.LayoutParams(0, 62, 1f));
+        LinearLayout.LayoutParams downParams = new LinearLayout.LayoutParams(0, 62, 1f);
+        downParams.leftMargin = 8;
+        signalButtons.addView(downSignal, downParams);
+        LinearLayout.LayoutParams signalButtonsParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        signalButtonsParams.topMargin = 10;
+        page.addView(signalButtons, signalButtonsParams);
+        waitSignalView = label("Сигнал появится после загрузки котировок", 12, 0xFFB9C5D5, false);
+        waitSignalView.setGravity(android.view.Gravity.CENTER);
+        waitSignalView.setPadding(4, 8, 4, 8);
+        page.addView(waitSignalView);
+
+        analyzeButton = makeAccentButton("⟳  НОВЫЙ АНАЛИЗ");
         analyzeButton.setOnClickListener(v -> loadAndAnalyze(false));
         addButtonWithHelp(page, analyzeButton, "Новый анализ",
                 "Загружает закрытые минутные свечи и рассчитывает EMA 9, EMA 21 и RSI 14. Сигнал является аналитическим, а не командой на сделку.");
 
-        autoButton = makeButton("ВКЛЮЧИТЬ АВТООБНОВЛЕНИЕ");
+        autoButton = makeAccentButton("ВКЛЮЧИТЬ АВТООБНОВЛЕНИЕ");
         autoButton.setOnClickListener(v -> toggleAutoRefresh());
         addButtonWithHelp(page, autoButton, "Автообновление",
                 "Обновляет котировки и сигнал каждые 10 секунд, пока приложение открыто.");
 
-        paperButton = makeButton("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ");
+        paperButton = makeAccentButton("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ");
         paperButton.setOnClickListener(v -> togglePaperAuto());
         addButtonWithHelp(page, paperButton, "Автосимуляция",
-                "Автосимуляция использует реальные котировки выбранного графика, но открывает только виртуальные сделки и не отправляет ордера брокеру. Можно включать и при режиме «Реальный — сигналы».");
+                "Использует котировки выбранного инструмента, но учитывает только виртуальные сделки и не отправляет ордера брокеру.");
 
-        details = label("Сначала укажите API-ключ Twelve Data в настройках и нажмите «Новый анализ».",
-                14, 0xFFE8E0CF, false);
-        details.setPadding(10, 18, 10, 18);
-        page.addView(details);
+        details = label("Откройте настройки, укажите API-ключ Twelve Data и нажмите «Новый анализ».",
+                13, 0xFFE1E8F0, false);
+        details.setPadding(12, 14, 12, 14);
+        LinearLayout detailsCard = panel();
+        detailsCard.addView(details);
+        page.addView(detailsCard);
 
-        TextView settingsHeading = label("НАСТРОЙКИ АНАЛИЗА", 16, 0xFFFFD45A, true);
-        settingsHeading.setPadding(0, 16, 0, 8);
-        page.addView(settingsHeading);
-
-        addHelpTitle(page, "Валютная пара", "Укажите пару в формате EUR/USD. Анализ использует минутные свечи.");
+        Button settingsToggle = makeNavButton("⚙  НАСТРОЙКИ ИНСТРУМЕНТА");
+        page.addView(settingsToggle);
+        LinearLayout settings = new LinearLayout(this);
+        settings.setOrientation(LinearLayout.VERTICAL);
+        settings.setPadding(10, 8, 10, 8);
+        settings.addView(label("ВАЛЮТНАЯ ПАРА", 12, 0xFFFFD45A, true));
         symbolInput = editField("EUR/USD");
         symbolInput.setText("EUR/USD");
-        page.addView(symbolInput);
-
-        addHelpTitle(page, "API-ключ Twelve Data", "Ключ нужен для загрузки котировок. Не вводите здесь пароль от брокера.");
+        settings.addView(symbolInput);
+        settings.addView(label("API-КЛЮЧ TWELVE DATA", 12, 0xFFFFD45A, true));
         apiKeyInput = editField("Вставьте личный API-ключ");
         apiKeyInput.setInputType(0x00000081);
-        page.addView(apiKeyInput);
+        settings.addView(apiKeyInput);
+        TextView platformNote = label("Котировки загружаются из Twelve Data. Выбор площадки ниже меняет только профиль интерфейса, не источник данных.", 11, 0xFFB9C5D5, false);
+        platformNote.setPadding(0, 8, 0, 8);
+        settings.addView(platformNote);
+        settings.setVisibility(View.GONE);
+        page.addView(settings);
+        settingsToggle.setOnClickListener(v -> settings.setVisibility(
+                settings.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE));
 
-        LinearLayout selectors = new LinearLayout(this);
-        selectors.setOrientation(LinearLayout.HORIZONTAL);
-        selectors.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        selectors.setPadding(0, 14, 0, 10);
-
-        LinearLayout platformBox = selectorBox("ПЛОЩАДКА");
         platformInput = new Spinner(this);
         String[] platforms = {"Binarium", "Pocket Option", "Универсальный"};
         ArrayAdapter<String> platformAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, platforms);
         platformAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         platformInput.setAdapter(platformAdapter);
         platformInput.setSelection(Math.max(0, Math.min(preferences.getInt("platform_index", 0), platforms.length - 1)));
-        platformInput.setBackgroundTintList(ColorStateList.valueOf(0xFFFFC72C));
-        platformBox.addView(platformInput);
-        selectors.addView(platformBox, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-
-        LinearLayout modeBox = selectorBox("РЕЖИМ");
+        platformInput.setVisibility(View.GONE);
         modeInput = new Spinner(this);
         String[] modes = {"Демо", "Реальный — сигналы"};
         ArrayAdapter<String> modeAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, modes);
         modeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         modeInput.setAdapter(modeAdapter);
         modeInput.setSelection(Math.max(0, Math.min(preferences.getInt("trading_mode", 0), modes.length - 1)));
-        modeInput.setBackgroundTintList(ColorStateList.valueOf(0xFFFFC72C));
-        modeBox.addView(modeInput);
-        LinearLayout.LayoutParams modeParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        modeParams.leftMargin = 8;
-        selectors.addView(modeBox, modeParams);
-        page.addView(selectors);
-
+        modeInput.setVisibility(View.GONE);
         platformInput.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
                 preferences.edit().putInt("platform_index", position).apply();
+                refreshPlatformTabs(position);
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
         });
@@ -245,40 +282,90 @@ public final class MainActivity extends Activity {
                 preferences.edit().putInt("trading_mode", position).apply();
                 if (paperButton != null && !paperAutoEnabled) {
                     paperButton.setText(position == 0 ? "ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ"
-                            : "АВТОСИМУЛЯЦИЯ (ВИРТУАЛЬНО, НА РЕАЛЬНОМ ГРАФИКЕ)");
+                            : "АВТОСИМУЛЯЦИЯ (ВИРТУАЛЬНО)");
                 }
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
         });
 
-        Button openPlatform = makeButton("ОТКРЫТЬ ПЛОЩАДКУ");
+        Button openPlatform = makeNavButton("ОТКРЫТЬ ВЫБРАННУЮ ПЛОЩАДКУ");
         openPlatform.setOnClickListener(v -> openSelectedPlatform());
         page.addView(openPlatform);
 
-        LinearLayout nav = new LinearLayout(this);
-        nav.setOrientation(LinearLayout.HORIZONTAL);
-        nav.setPadding(0, 12, 0, 8);
-        Button stats = makeNavButton("🏆\nСтатистика");
+        LinearLayout platformNav = panel();
+        platformNav.setOrientation(LinearLayout.HORIZONTAL);
+        platformTabs = new Button[3];
+        String[] tabNames = {"Pocket\nOption", "Binarium", "Универсальный"};
+        for (int i = 0; i < tabNames.length; i++) {
+            final int index = i;
+            Button tab = new Button(this);
+            tab.setText(tabNames[i]);
+            tab.setAllCaps(false);
+            tab.setTextSize(11);
+            tab.setMinHeight(58);
+            tab.setTextColor(0xFFE7EDF5);
+            tab.setOnClickListener(v -> platformInput.setSelection(index));
+            platformTabs[i] = tab;
+            platformNav.addView(tab, new LinearLayout.LayoutParams(0, 64, 1f));
+        }
+        LinearLayout.LayoutParams navParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        navParams.topMargin = 14;
+        page.addView(platformNav, navParams);
+        refreshPlatformTabs(platformInput.getSelectedItemPosition());
+
+        Button stats = makeNavButton("СТАТИСТИКА СИМУЛЯЦИИ");
         stats.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("Статистика")
                 .setMessage(paperTrading == null ? "Пока нет данных." : paperTrading.getSummary())
                 .setPositiveButton("Закрыть", null).show());
-        Button about = makeNavButton("ⓘ\nО программе");
-        about.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("GOD OF TRADING")
-                .setMessage("Торговый помощник для анализа минутных свечей. Сигналы не гарантируют прибыль. Автоматическое размещение реальных ордеров не поддерживается.")
-                .setPositiveButton("Понятно", null).show());
-        updateButton = makeNavButton("⟳\nОбновить");
+        page.addView(stats);
+        updateButton = makeNavButton("⟳  ПРОВЕРИТЬ ОБНОВЛЕНИЯ");
         updateButton.setOnClickListener(v -> checkForUpdate());
-        nav.addView(stats, new LinearLayout.LayoutParams(0, 66, 1f));
-        nav.addView(about, new LinearLayout.LayoutParams(0, 66, 1f));
-        nav.addView(updateButton, new LinearLayout.LayoutParams(0, 66, 1f));
-        page.addView(nav);
+        page.addView(updateButton);
 
-        TextView slogan = label("TRADE SMART. RULE THE MARKET.", 15, 0xFFFFC72C, true);
-        slogan.setGravity(android.view.Gravity.CENTER);
-        slogan.setPadding(0, 12, 0, 18);
-        page.addView(slogan);
+        TextView disclaimer = label("ТОРГУЙТЕ ОСОЗНАННО • СИГНАЛЫ НЕ ГАРАНТИРУЮТ ПРИБЫЛЬ", 10, 0xFF8995A5, true);
+        disclaimer.setGravity(android.view.Gravity.CENTER);
+        disclaimer.setPadding(0, 14, 0, 8);
+        page.addView(disclaimer);
 
         setContentView(root);
+    }
+
+    private TextView waitSignalView;
+
+    private LinearLayout panel() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(12, 10, 12, 10);
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(0xE8111721);
+        bg.setCornerRadius(18);
+        bg.setStroke(2, 0xFF303B4A);
+        box.setBackground(bg);
+        return box;
+    }
+
+    private Button makeAccentButton(String text) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setAllCaps(false);
+        button.setTextSize(13);
+        button.setTypeface(null, Typeface.BOLD);
+        button.setTextColor(0xFF10151C);
+        button.setBackgroundTintList(ColorStateList.valueOf(0xFFFFC72C));
+        return button;
+    }
+
+    private void refreshPlatformTabs(int selected) {
+        if (platformTabs == null) return;
+        for (int i = 0; i < platformTabs.length; i++) {
+            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+            bg.setColor(i == selected ? 0xFF263548 : 0xFF111720);
+            bg.setCornerRadius(12);
+            bg.setStroke(i == selected ? 3 : 1, i == selected ? 0xFFFFC72C : 0xFF465366);
+            platformTabs[i].setBackground(bg);
+            platformTabs[i].setTextColor(i == selected ? 0xFFFFD45A : 0xFFE7EDF5);
+        }
     }
 
     private LinearLayout selectorBox(String caption) {
