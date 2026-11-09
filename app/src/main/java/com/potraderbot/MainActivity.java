@@ -1,6 +1,7 @@
 package com.potraderbot;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -50,6 +51,7 @@ public final class MainActivity extends Activity {
     private Button analyzeButton;
     private Button autoButton;
     private Button updateButton;
+    private Button platformButton;
     private boolean autoRefreshEnabled = false;
     private boolean requestInProgress = false;
     private String updateUrl;
@@ -105,6 +107,18 @@ public final class MainActivity extends Activity {
         platformInput.setBackgroundTintList(ColorStateList.valueOf(0xFFB8C0CC));
         page.addView(platformInput);
 
+        platformButton = makeButton("ОТКРЫТЬ BINARIUM");
+        platformButton.setOnClickListener(v -> openSelectedPlatform());
+        page.addView(platformButton);
+        platformInput.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                preferences.edit().putInt("platform_index", position).apply();
+                platformButton.setText(position == 0 ? "ОТКРЫТЬ BINARIUM"
+                        : position == 1 ? "ОТКРЫТЬ POCKET OPTION" : "ВЫБРАТЬ ПЛОЩАДКУ");
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        });
+
         page.addView(label("Валютная пара", 14, 0xFFFFFFFF, true));
         symbolInput = editField("EUR/USD");
         symbolInput.setText("EUR/USD");
@@ -138,9 +152,9 @@ public final class MainActivity extends Activity {
 
         page.addView(label("Правила безопасности", 17, 0xFFFFFFFF, true));
         page.addView(label("• Автообновление запрашивает новые котировки и пересчитывает EMA/RSI каждые 10 секунд, пока приложение открыто.\n"
-                + "• Выбор площадки не подключает аккаунт брокера.\n"
-                + "• Котировки во всех режимах загружаются из Twelve Data.\n"
-                + "• Приложение не размещает реальные ордера.\n"
+                + "• Выбор площадки меняет адрес кнопки «Открыть площадку»; вход выполняется на официальном сайте.\n"
+                + "• Котировки во всех режимах загружаются из Twelve Data, а не из терминала брокера.\n"
+                + "• Автоматическое исполнение ордеров не реализовано: публичная официальная API-документация Binarium для выставления сделок не обнаружена. Не вводите пароль от брокера в приложение.\n"
                 + "• Сигнал не гарантирует результат; сначала проверяйте стратегию на демо.\n"
                 + "• Новая версия скачивается только из GitHub Releases; установку Android нужно подтвердить вручную.", 14, 0xFFFFC857, false));
         setContentView(scroll);
@@ -163,6 +177,31 @@ public final class MainActivity extends Activity {
         field.setHintTextColor(0xFFB8C0CC);
         field.setBackgroundTintList(ColorStateList.valueOf(0xFF9AA4B2));
         return field;
+    }
+
+    private void openSelectedPlatform() {
+        int selected = platformInput.getSelectedItemPosition();
+        if (selected == 2) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Выберите торговую площадку")
+                    .setItems(new String[]{"Binarium", "Pocket Option"}, (dialog, which) ->
+                            openPlatformUrl(which == 0
+                                    ? "https://binarium.com/"
+                                    : "https://pocketoption.com/"))
+                    .setNegativeButton("Отмена", null)
+                    .show();
+            return;
+        }
+        openPlatformUrl(selected == 0 ? "https://binarium.com/" : "https://pocketoption.com/");
+    }
+
+    private void openPlatformUrl(String address) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(address)));
+        } catch (Exception e) {
+            status.setText("НЕ УДАЛОСЬ ОТКРЫТЬ ПЛОЩАДКУ");
+            status.setTextColor(0xFFFF7B72);
+        }
     }
 
     private void toggleAutoRefresh() {
