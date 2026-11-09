@@ -85,7 +85,7 @@ public final class PaperTradingEngine {
         activeTrade = new Trade(signal, entryTime, entryTime + EXPIRY_MILLIS, last.close);
         tradesToday++;
         save();
-        lastEvent = "ОТКРЫТА ВИРТУАЛЬНАЯ " + (signal == MarketAnalyzer.Signal.CALL ? "CALL" : "PUT")
+        lastEvent = "ОТКРЫТА ВИРТУАЛЬНАЯ " + (signal == MarketAnalyzer.Signal.CALL ? "ВВЕРХ" : "ВНИЗ")
                 + " • ставка " + format(STAKE) + " • вход " + format(last.close)
                 + " • экспирация через 3 минуты.";
         return lastEvent;
@@ -127,7 +127,7 @@ public final class PaperTradingEngine {
 
     public synchronized String getSummary() {
         String active = activeTrade == null ? "Нет активной виртуальной сделки."
-                : "Активна " + (activeTrade.direction == MarketAnalyzer.Signal.CALL ? "CALL" : "PUT")
+                : "Активна " + (activeTrade.direction == MarketAnalyzer.Signal.CALL ? "ВВЕРХ" : "ВНИЗ")
                 + " • вход " + format(activeTrade.entryPrice) + " • закрытие ориентировочно через 3 минуты.";
         return "ДЕМО-СИМУЛЯЦИЯ (не Binarium)\n"
                 + "Виртуальный баланс: " + format(balance) + "\n"
