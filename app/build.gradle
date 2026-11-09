@@ -4,6 +4,9 @@ plugins {
 
 android {
     namespace 'com.potraderbot'
+    buildFeatures {
+        buildConfig true
+    }
     compileSdk 36
 
     defaultConfig {
