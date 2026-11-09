@@ -1,4 +1,4 @@
-# PO Trader Bot — Android 0.2.0
+# GOD OF TRADING — Android trading assistant
 
 ## Что добавлено
 - Отдельный Android-модуль приложения.
