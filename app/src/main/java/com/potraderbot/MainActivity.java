@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.graphics.Typeface;
 import android.content.res.ColorStateList;
+import android.content.SharedPreferences;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -51,11 +52,19 @@ public final class MainActivity extends Activity {
 
         page.addView(label("Торговая платформа", 14, 0xFFFFFFFF, true));
         platformInput = new Spinner(this);
-        String[] platforms = {"Binarium", "Pocket Option"};
+        String[] platforms = {"Binarium", "Pocket Option", "Универсальный режим"};
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, platforms);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         platformInput.setAdapter(adapter);
-        platformInput.setSelection(0);
+        SharedPreferences preferences = getSharedPreferences("po_trader_settings", MODE_PRIVATE);
+        int savedPlatform = preferences.getInt("platform_index", 0);
+        platformInput.setSelection(Math.max(0, Math.min(savedPlatform, platforms.length - 1)));
+        platformInput.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                preferences.edit().putInt("platform_index", position).apply();
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        });
         platformInput.setBackgroundTintList(ColorStateList.valueOf(0xFFB8C0CC));
         page.addView(platformInput);
 
@@ -86,8 +95,9 @@ public final class MainActivity extends Activity {
         page.addView(details);
 
         page.addView(label("Правила безопасности", 17, 0xFFFFFFFF, true));
-        page.addView(label("• Выбор Binarium меняет обозначение платформы в интерфейсе.\n"
-                + "• Котировки загружаются из Twelve Data, а не из аккаунта Binarium.\n"
+        page.addView(label("• Переключение меняет режим отображения и сохраняется после перезапуска.\n"
+                + "• Выбор площадки не подключает аккаунт брокера.\n"
+                + "• Котировки во всех режимах загружаются из Twelve Data.\n"
                 + "• Приложение не подключается к аккаунту и не размещает реальные ордера.\n"
                 + "• Сигнал не гарантирует результат; сначала проверяйте стратегию на демо.", 14, 0xFFFFC857, false));
         setContentView(scroll);
