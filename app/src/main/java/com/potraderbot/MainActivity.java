@@ -1018,7 +1018,7 @@ public final class MainActivity extends Activity {
                             double stake = getConfiguredStake();
                             double payout = getConfiguredPayout();
                             int expiryMinutes = expiryInput == null ? 3 : expiryInput.getSelectedItemPosition() + 3;
-                            paperTrading.process(candles, shown.signal, stake, payout, expiryMinutes);
+                            paperTrading.process(candles, shown.signal, stake, payout, expiryMinutes, symbol);
                         } catch (Exception invalidRisk) {
                             stopPaperAuto(invalidRisk.getMessage() == null ? "Автосимуляция остановлена: проверьте риск." : invalidRisk.getMessage());
                         }
