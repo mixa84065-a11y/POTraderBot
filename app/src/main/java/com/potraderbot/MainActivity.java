@@ -620,7 +620,7 @@ public final class MainActivity extends Activity {
         card.addView(label("КАЛЬКУЛЯТОР РИСКА • К ЭТОМУ СИГНАЛУ", 12, 0xFFFFD45A, true));
         riskBalanceInput = editField("Баланс счёта");
         riskBalanceInput.setInputType(8194);
-        riskBalanceInput.setText("20000");
+        riskBalanceInput.setText(String.format(Locale.US, "%.2f", paperTrading.getVirtualBalance()));
         riskPercentInput = editField("Риск на позицию (%)");
         riskPercentInput.setInputType(8194);
         riskPercentInput.setText("1");
@@ -658,7 +658,9 @@ public final class MainActivity extends Activity {
     private void updateInlineRisk() {
         if (riskCalculationView == null || riskBalanceInput == null || riskPercentInput == null) return;
         try {
-            double balance = Double.parseDouble(riskBalanceInput.getText().toString().trim().replace(',', '.'));
+            double balance = modeInput != null && modeInput.getSelectedItemPosition() == 0
+                    ? paperTrading.getVirtualBalance()
+                    : Double.parseDouble(riskBalanceInput.getText().toString().trim().replace(',', '.'));
             double percent = Double.parseDouble(riskPercentInput.getText().toString().trim().replace(',', '.'));
             if (!Double.isFinite(balance) || !Double.isFinite(percent) || balance <= 0 || percent <= 0 || percent > 100) {
                 throw new NumberFormatException();
@@ -1019,6 +1021,9 @@ public final class MainActivity extends Activity {
                             double payout = getConfiguredPayout();
                             int expiryMinutes = expiryInput == null ? 3 : expiryInput.getSelectedItemPosition() + 3;
                             paperTrading.process(candles, shown.signal, stake, payout, expiryMinutes, symbol);
+                            if (riskBalanceInput != null) {
+                                riskBalanceInput.setText(String.format(Locale.US, "%.2f", paperTrading.getVirtualBalance()));
+                            }
                         } catch (Exception invalidRisk) {
                             stopPaperAuto(invalidRisk.getMessage() == null ? "Автосимуляция остановлена: проверьте риск." : invalidRisk.getMessage());
                         }
@@ -1116,7 +1121,9 @@ public final class MainActivity extends Activity {
     }
 
     private double getConfiguredStake() {
-        double balance = Double.parseDouble(riskBalanceInput.getText().toString().trim().replace(',', '.'));
+        double balance = modeInput != null && modeInput.getSelectedItemPosition() == 0
+                ? paperTrading.getVirtualBalance()
+                : Double.parseDouble(riskBalanceInput.getText().toString().trim().replace(',', '.'));
         double percent = Double.parseDouble(riskPercentInput.getText().toString().trim().replace(',', '.'));
         if (!Double.isFinite(balance) || !Double.isFinite(percent) || balance <= 0 || percent <= 0 || percent > 100)
             throw new IllegalArgumentException("Проверьте баланс и процент риска в калькуляторе.");
