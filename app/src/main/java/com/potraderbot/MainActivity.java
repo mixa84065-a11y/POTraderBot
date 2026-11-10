@@ -1,6 +1,9 @@
 package com.potraderbot;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
+import android.util.Base64;
 import android.app.AlertDialog;
 import android.os.Bundle;
 import android.os.Handler;
@@ -21,10 +24,14 @@ import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 
 public class MainActivity extends Activity {
     private final TradeEngine engine = new TradeEngine();
     private ApiKeyStore apiKeyStore;
+    private SupabaseAuthStore authStore;
+    private SupabaseAuthClient authClient;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private TextView status, stats, log;
@@ -38,6 +45,12 @@ public class MainActivity extends Activity {
             apiKeyStore = new ApiKeyStore(this);
         } catch (RuntimeException error) {
             android.util.Log.e("GOD_OF_TRADING", "Secure key storage unavailable", error);
+        }
+        try {
+            authStore = new SupabaseAuthStore(this);
+            authClient = new SupabaseAuthClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY);
+        } catch (RuntimeException error) {
+            android.util.Log.e("GOD_OF_TRADING", "Secure auth storage unavailable", error);
         }
         buildUi();
     }
@@ -61,6 +74,10 @@ public class MainActivity extends Activity {
         TextView config = text("EUR/USD • 1-minute candles • 3-minute expiry\nMulti-factor analysis • max 10 manual records/day\nPause after 2 consecutive recorded losses", 15, 0xFFE5EDF7, false);
         config.setPadding(0, 12, 0, 24);
         page.addView(config);
+
+        Button accountButton = button("АККАУНТ: ВХОД / РЕГИСТРАЦИЯ");
+        accountButton.setOnClickListener(v -> showAuthDialog());
+        page.addView(accountButton);
 
         Button apiSettings = button("НАСТРОИТЬ API-КЛЮЧИ");
         apiSettings.setOnClickListener(v -> showApiKeyDialog());
@@ -141,6 +158,167 @@ public class MainActivity extends Activity {
                             + "\nПроверь API-ключи, интернет и доступность сервисов. Сигнал не сформирован.");
                     running = false;
                     analyzeButton.setEnabled(true);
+                });
+            }
+        });
+    }
+
+
+    private void showAuthDialog() {
+        if (authStore == null || authClient == null || !authClient.isConfigured()) {
+            log.setText("Авторизация пока не настроена: проверь SUPABASE_URL и SUPABASE_ANON_KEY в GitHub Actions Secrets и сборке.");
+            return;
+        }
+        if (authStore.isSignedIn()) {
+            new AlertDialog.Builder(this).setTitle("Аккаунт")
+                    .setMessage("Вход выполнен: " + authStore.email())
+                    .setPositiveButton("ВЫЙТИ", (d, w) -> signOut())
+                    .setNegativeButton("ЗАКРЫТЬ", null).show();
+            return;
+        }
+        LinearLayout fields = new LinearLayout(this);
+        fields.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        fields.setPadding(pad, pad / 2, pad, 0);
+        EditText email = new EditText(this);
+        email.setSingleLine(true);
+        email.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        email.setHint("Email");
+        fields.addView(email);
+        EditText password = new EditText(this);
+        password.setSingleLine(true);
+        password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        password.setHint("Пароль");
+        fields.addView(password);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("GOD OF TRADING — аккаунт")
+                .setMessage("Личный аккаунт приложения. Данные брокерских аккаунтов не нужны.")
+                .setView(fields).setPositiveButton("ВОЙТИ", null)
+                .setNeutralButton("РЕГИСТРАЦИЯ", null)
+                .setNegativeButton("GOOGLE", null).create();
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v ->
+                    runEmailAuth(email.getText().toString(), password.getText().toString(), false, dialog));
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v ->
+                    runEmailAuth(email.getText().toString(), password.getText().toString(), true, dialog));
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> {
+                try {
+                    String verifier = createCodeVerifier();
+                    String challenge = Base64.encodeToString(
+                            MessageDigest.getInstance("SHA-256").digest(verifier.getBytes("UTF-8")),
+                            Base64.URL_SAFE | Base64.NO_PADDING | Base64.NO_WRAP);
+                    authStore.saveCodeVerifier(verifier);
+                    String url = authClient.googleAuthUrl("com.potraderbot://auth/callback", challenge);
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                    dialog.dismiss();
+                } catch (Exception e) {
+                    log.setText("Не удалось начать вход Google: " + safeMessage(e));
+                }
+            });
+        });
+        dialog.show();
+    }
+
+    private void runEmailAuth(String emailValue, String passwordValue, boolean register, AlertDialog dialog) {
+        String email = emailValue == null ? "" : emailValue.trim();
+        String password = passwordValue == null ? "" : passwordValue;
+        if (email.isEmpty() || password.length() < 6) {
+            log.setText("Укажи корректный Email и пароль не короче 6 символов.");
+            return;
+        }
+        dialog.dismiss();
+        status.setText(register ? "РЕГИСТРАЦИЯ..." : "ВХОД...");
+        executor.submit(() -> {
+            try {
+                org.json.JSONObject response = register
+                        ? authClient.signUp(email, password) : authClient.signIn(email, password);
+                if (response.has("access_token")) saveAuthResponse(response);
+                mainHandler.post(() -> {
+                    if (isFinishing()) return;
+                    if (response.has("access_token")) {
+                        status.setText("АККАУНТ ПОДКЛЮЧЁН");
+                        log.setText("Вход выполнен: " + authStore.email()
+                                + "\nПрофиль приложения создан/проверен через Supabase.");
+                    } else {
+                        status.setText("ПРОВЕРЬ EMAIL");
+                        log.setText("Регистрация принята. Если включено подтверждение Email, открой письмо от Supabase и подтверди адрес.");
+                    }
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    if (!isFinishing()) {
+                        status.setText("ОШИБКА АВТОРИЗАЦИИ");
+                        log.setText("Не удалось выполнить запрос: " + safeMessage(e));
+                    }
+                });
+            }
+        });
+    }
+
+    private void signOut() {
+        final String token = authStore.accessToken();
+        status.setText("ВЫХОД...");
+        executor.submit(() -> {
+            try { if (!token.isEmpty()) authClient.signOut(token); } catch (Exception ignored) { }
+            authStore.clear();
+            mainHandler.post(() -> {
+                if (!isFinishing()) {
+                    status.setText("АККАУНТ ОТКЛЮЧЁН");
+                    log.setText("Локальная сессия удалена с этого телефона.");
+                }
+            });
+        });
+    }
+
+    private void saveAuthResponse(org.json.JSONObject response) {
+        org.json.JSONObject user = response.optJSONObject("user");
+        String email = user == null ? "" : user.optString("email", "");
+        String userId = user == null ? "" : user.optString("id", "");
+        authStore.save(response.optString("access_token", ""),
+                response.optString("refresh_token", ""), email, userId);
+    }
+
+    private String createCodeVerifier() {
+        byte[] bytes = new byte[32];
+        new SecureRandom().nextBytes(bytes);
+        return Base64.encodeToString(bytes, Base64.URL_SAFE | Base64.NO_PADDING | Base64.NO_WRAP);
+    }
+
+    private String safeMessage(Exception e) {
+        String message = e.getMessage();
+        return message == null ? e.getClass().getSimpleName() : message;
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        Uri data = intent == null ? null : intent.getData();
+        if (data == null || !"com.potraderbot".equals(data.getScheme())
+                || !"auth".equals(data.getHost())) return;
+        String code = data.getQueryParameter("code");
+        if (code == null || code.isEmpty()) {
+            log.setText("Google не вернул код авторизации. Проверь Redirect URL в Supabase.");
+            return;
+        }
+        String verifier = authStore == null ? "" : authStore.codeVerifier();
+        status.setText("ЗАВЕРШЕНИЕ ВХОДА GOOGLE...");
+        executor.submit(() -> {
+            try {
+                org.json.JSONObject response = authClient.exchangeCode(code, verifier);
+                saveAuthResponse(response);
+                authStore.saveCodeVerifier("");
+                mainHandler.post(() -> {
+                    if (!isFinishing()) {
+                        status.setText("АККАУНТ ПОДКЛЮЧЁН");
+                        log.setText("Вход через Google выполнен: " + authStore.email());
+                    }
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    if (!isFinishing()) {
+                        status.setText("ОШИБКА GOOGLE");
+                        log.setText("Не удалось завершить вход Google: " + safeMessage(e)
+                                + "\nПроверь callback URL com.potraderbot://auth/callback в Supabase.");
+                    }
                 });
             }
         });
