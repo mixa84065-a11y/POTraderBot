@@ -525,7 +525,7 @@ public class MainActivity extends Activity {
         status.setText("ОТПРАВКА ПИСЬМА...");
         executor.submit(() -> {
             try {
-                authClient.sendPasswordReset(email, "com.potraderbot://auth/callback");
+                authClient.sendPasswordReset(email, "com.potraderbot://auth/callback?flow=recovery");
                 mainHandler.post(() -> {
                     if (!isFinishing()) {
                         status.setText("ПИСЬМО ОТПРАВЛЕНО");
@@ -589,7 +589,8 @@ public class MainActivity extends Activity {
             return;
         }
         String verifier = authStore == null ? "" : authStore.codeVerifier();
-        status.setText("ЗАВЕРШЕНИЕ ВХОДА GOOGLE...");
+        boolean recoveryFlow = "recovery".equals(data.getQueryParameter("flow"));
+        status.setText(recoveryFlow ? "ВОССТАНОВЛЕНИЕ ПАРОЛЯ..." : "ЗАВЕРШЕНИЕ ВХОДА GOOGLE...");
         executor.submit(() -> {
             try {
                 org.json.JSONObject response = authClient.exchangeCode(code, verifier);
@@ -598,8 +599,11 @@ public class MainActivity extends Activity {
                 authStore.saveCodeVerifier("");
                 mainHandler.post(() -> {
                     if (!isFinishing()) {
-                        status.setText("АККАУНТ ПОДКЛЮЧЁН");
-                        log.setText("Вход через Google выполнен: " + authStore.email());
+                        if (recoveryFlow) showNewPasswordDialog();
+                        else {
+                            status.setText("АККАУНТ ПОДКЛЮЧЁН");
+                            log.setText("Вход через Google выполнен: " + authStore.email());
+                        }
                     }
                 });
             } catch (Exception e) {
@@ -612,6 +616,37 @@ public class MainActivity extends Activity {
                 });
             }
         });
+    }
+
+
+    private void showNewPasswordDialog() {
+        EditText password = new EditText(this);
+        password.setSingleLine(true);
+        password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        password.setHint("Новый пароль (не менее 6 символов)");
+        new AlertDialog.Builder(this).setTitle("Новый пароль").setView(password)
+                .setPositiveButton("СОХРАНИТЬ", (d, w) -> {
+                    String value = password.getText().toString();
+                    if (value.length() < 6) {
+                        log.setText("Пароль должен содержать не менее 6 символов.");
+                        return;
+                    }
+                    executor.submit(() -> {
+                        try {
+                            authClient.updatePassword(authStore.accessToken(), value);
+                            mainHandler.post(() -> {
+                                if (!isFinishing()) {
+                                    status.setText("ПАРОЛЬ ОБНОВЛЁН");
+                                    log.setText("Пароль аккаунта успешно изменён.");
+                                }
+                            });
+                        } catch (Exception e) {
+                            mainHandler.post(() -> {
+                                if (!isFinishing()) log.setText("Не удалось обновить пароль: " + safeMessage(e));
+                            });
+                        }
+                    });
+                }).setNegativeButton("ОТМЕНА", null).show();
     }
 
     private void showApiKeyDialog() {
