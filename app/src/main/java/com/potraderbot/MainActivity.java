@@ -61,6 +61,9 @@ public class MainActivity extends Activity {
             android.util.Log.e("GOD_OF_TRADING", "Secure auth storage unavailable", error);
         }
         buildUi();
+        // Handle OAuth/recovery callbacks when Android recreates the activity instead of
+        // delivering the deep link through onNewIntent().
+        onNewIntent(getIntent());
     }
 
     private void buildUi() {
