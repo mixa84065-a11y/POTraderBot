@@ -17,7 +17,6 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
-import android.widget.HorizontalScrollView;
 import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -317,8 +316,6 @@ public final class MainActivity extends Activity {
         featuresCaption.setPadding(0, dp(12), 0, dp(5));
         page.addView(featuresCaption);
 
-        HorizontalScrollView featureScroll = new HorizontalScrollView(this);
-        featureScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout featureRow = new LinearLayout(this);
         featureRow.setOrientation(LinearLayout.HORIZONTAL);
         String[] featureIcons = {"◔", "▥", "▦", "◷", "↗"};
@@ -335,25 +332,25 @@ public final class MainActivity extends Activity {
             tileBg.setCornerRadius(dp(12));
             tileBg.setStroke(dp(1), 0xFFB88924);
             tile.setBackground(tileBg);
-            TextView glyph = label(featureIcons[i], 25, 0xFFFFD45A, true);
+            TextView glyph = label(featureIcons[i], 20, 0xFFFFD45A, true);
             glyph.setGravity(android.view.Gravity.CENTER);
             tile.addView(glyph);
-            TextView tileLabel = label(featureNames[i], 10, 0xFFF3E7C8, true);
+            TextView tileLabel = label(featureNames[i], 8, 0xFFF3E7C8, true);
             tileLabel.setGravity(android.view.Gravity.CENTER);
             tile.addView(tileLabel);
             Button help = makeTinyHelp(featureNames[i].replace("\n", " "),
                     "Открыть описание и инструменты этого раздела.");
-            tile.addView(help, new LinearLayout.LayoutParams(dp(28), dp(25)));
+            tile.addView(help, new LinearLayout.LayoutParams(dp(22), dp(22)));
             tile.setOnClickListener(v -> new AlertDialog.Builder(this)
                     .setTitle(featureNames[featureIndex == 5 ? 0 : featureIndex == 6 ? 1 : featureIndex == 7 ? 2 : featureIndex == 8 ? 3 : 4].replace("\n", " "))
                     .setView(featureContent(featureIndex))
                     .setPositiveButton("Готово", null).show());
-            LinearLayout.LayoutParams tileParams = new LinearLayout.LayoutParams(dp(104), dp(112));
-            if (i > 0) tileParams.leftMargin = dp(7);
+            LinearLayout.LayoutParams tileParams = new LinearLayout.LayoutParams(0, dp(98), 1f);
+            if (i > 0) tileParams.leftMargin = dp(3);
             featureRow.addView(tile, tileParams);
         }
-        featureScroll.addView(featureRow);
-        page.addView(featureScroll);
+        page.addView(featureRow, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(102)));
 
         TextView disclaimer = label("— ТОРГУЙ ГРАМОТНО, УПРАВЛЯЙ РЫНКОМ —", 11, 0xFFFFC72C, true);
         disclaimer.setGravity(android.view.Gravity.CENTER);
