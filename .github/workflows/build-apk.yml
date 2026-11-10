@@ -48,6 +48,26 @@ jobs:
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/dedgod-release.jks"
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/dedgod-release.jks" >> "$GITHUB_ENV"
 
+      - name: Validate Supabase registration configuration
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "::error::GitHub Secret SUPABASE_URL is missing."
+            exit 1
+          fi
+          if [ "$SUPABASE_URL" != "https://srzemjqjgceoebvimmct.supabase.co" ]; then
+            echo "::error::SUPABASE_URL does not match the configured GOD-OF-TRADING project."
+            exit 1
+          fi
+          if [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::GitHub Secret SUPABASE_ANON_KEY is missing."
+            exit 1
+          fi
+          echo "Supabase URL and public API key are present. Values are not printed."
+
       - name: Build signed release APK
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
