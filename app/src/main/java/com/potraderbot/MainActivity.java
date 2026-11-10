@@ -448,6 +448,9 @@ public class MainActivity extends Activity {
         password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         password.setHint("Пароль");
         fields.addView(password);
+        Button resetPassword = button("ВОССТАНОВИТЬ ПАРОЛЬ");
+        resetPassword.setOnClickListener(v -> sendPasswordReset(email.getText().toString()));
+        fields.addView(resetPassword);
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("GOD OF TRADING — аккаунт")
                 .setMessage("Личный аккаунт приложения. Данные брокерских аккаунтов не нужны.")
                 .setView(fields).setPositiveButton("ВОЙТИ", null)
@@ -506,6 +509,34 @@ public class MainActivity extends Activity {
                     if (!isFinishing()) {
                         status.setText("ОШИБКА АВТОРИЗАЦИИ");
                         log.setText("Не удалось выполнить запрос: " + safeMessage(e));
+                    }
+                });
+            }
+        });
+    }
+
+
+    private void sendPasswordReset(String emailValue) {
+        String email = emailValue == null ? "" : emailValue.trim();
+        if (email.isEmpty()) {
+            log.setText("Сначала введи Email, на который зарегистрирован аккаунт.");
+            return;
+        }
+        status.setText("ОТПРАВКА ПИСЬМА...");
+        executor.submit(() -> {
+            try {
+                authClient.sendPasswordReset(email, "com.potraderbot://auth/callback");
+                mainHandler.post(() -> {
+                    if (!isFinishing()) {
+                        status.setText("ПИСЬМО ОТПРАВЛЕНО");
+                        log.setText("Если адрес зарегистрирован, Supabase отправит письмо для восстановления пароля. Проверь также папку Спам.");
+                    }
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    if (!isFinishing()) {
+                        status.setText("ОШИБКА ВОССТАНОВЛЕНИЯ");
+                        log.setText("Не удалось отправить письмо: " + safeMessage(e));
                     }
                 });
             }
