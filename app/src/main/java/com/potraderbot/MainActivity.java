@@ -13,7 +13,6 @@ import android.widget.TextView;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
@@ -50,7 +49,7 @@ public class MainActivity extends Activity {
         status.setPadding(0, 36, 0, 12);
         page.addView(status);
 
-        TextView config = text("EUR/USD • 1-minute candles • 3-minute expiry\nEMA 9/21 + RSI 14 • max 10 manual records/day\nPause after 2 consecutive recorded losses", 15, 0xFFE5EDF7, false);
+        TextView config = text("EUR/USD • 1-minute candles • 3-minute expiry\nMulti-factor analysis • max 10 manual records/day\nPause after 2 consecutive recorded losses", 15, 0xFFE5EDF7, false);
         config.setPadding(0, 12, 0, 24);
         page.addView(config);
 
@@ -73,9 +72,9 @@ public class MainActivity extends Activity {
         stats.setPadding(0, 28, 0, 10);
         page.addView(stats);
 
-        log = text("Нажми «АНАЛИЗИРОВАТЬ», чтобы загрузить актуальные минутные свечи и проверить экономический календарь.\nСделки автоматически не открываются.", 14, 0xFFB8C6D9, false);
+        log = text("Нажми «АНАЛИЗИРОВАТЬ», чтобы выполнить многофакторный анализ рынка и проверить экономический календарь.\nСделки автоматически не открываются.", 14, 0xFFB8C6D9, false);
         page.addView(log);
-        page.addView(text("\nIMPORTANT: Market data comes from Twelve Data and may differ from Binarium quotes. Signals are informational, not a guarantee. Trades must be checked and confirmed manually in Binarium.", 13, 0xFFFFC857, true));
+        page.addView(text("\nIMPORTANT: Market data comes from Twelve Data and may differ from Binarium quotes. Scenario scores are heuristic, not calibrated probabilities. Signals are informational, not a guarantee. Trades must be checked and confirmed manually in Binarium.", 13, 0xFFFFC857, true));
         setContentView(scroll);
     }
 
@@ -95,7 +94,7 @@ public class MainActivity extends Activity {
         analyzeButton.setEnabled(false);
         status.setText("STATUS: LOADING MARKET DATA...");
         status.setTextColor(0xFFFFC857);
-        log.setText("Запрашиваю минутные свечи и экономический календарь. Сделки не открываются.");
+        log.setText("Запрашиваю историю минутных свечей и экономический календарь. Сделки не открываются.");
 
         analysisTask = executor.submit(() -> {
             try {
@@ -111,6 +110,7 @@ public class MainActivity extends Activity {
                     status.setTextColor(result.signal == MarketAnalyzer.Signal.WAIT
                             ? 0xFFFFC857 : 0xFF70D6A5);
                     log.setText(result.reason + "\nПолучено свечей: " + result.candleCount
+                            + "\n" + result.technicalReport
                             + "\nИсточник котировок: Twelve Data"
                             + "\nЭкономический календарь: API.SH"
                             + "\nСделка не открывалась. Проверь котировку на Binarium вручную.");
