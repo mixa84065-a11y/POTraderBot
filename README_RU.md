@@ -23,7 +23,7 @@ API_SH_KEY=твой_ключ_api_sh
 
 Файл `local.properties` добавлен в `.gitignore`. Не загружай его в GitHub и не пересылай другим людям. После этого собери APK. Если ключи не заданы, приложение покажет сообщение API KEYS REQUIRED и не будет выдавать рыночный сигнал.
 
-Для GitHub Actions локальный `local.properties` не передаётся. Чтобы собирать APK с ключами в облаке, нужно отдельно настроить GitHub Actions Secrets и добавить безопасный шаг генерации `local.properties`; не вставляй ключи непосредственно в workflow или исходники.
+Для GitHub Actions добавь в Settings → Secrets and variables → Actions два секрета с точными именами `TWELVE_DATA_API_KEY` и `API_SH_KEY`. Workflow сам создаст временный `local.properties` на runner перед сборкой; ключи не выводятся в лог и не коммитятся. Не вставляй ключи непосредственно в workflow или исходники.
 
 ## Структура Android-проекта
 - `app/` — настоящий Android application module.
