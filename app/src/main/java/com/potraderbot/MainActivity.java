@@ -52,6 +52,7 @@ public final class MainActivity extends Activity {
     private Spinner platformInput;
     private Spinner modeInput;
     private TextView status;
+    private TextView quoteView;
     private TextView details;
     private ChartView chartView;
     private EditText riskBalanceInput, riskPercentInput, payoutInput;
@@ -174,7 +175,7 @@ public final class MainActivity extends Activity {
         Button assetButton = makeNavButton("EUR/USD  ▾");
         assetButton.setTextSize(14);
         assetRow.addView(assetButton, new LinearLayout.LayoutParams(dp(116), dp(54)));
-        TextView quoteView = label("—", 20, 0xFF00E676, true);
+        quoteView = label("—", 20, 0xFF00E676, true);
         quoteView.setGravity(android.view.Gravity.CENTER);
         LinearLayout.LayoutParams quoteParams = new LinearLayout.LayoutParams(dp(58), dp(54));
         quoteParams.leftMargin = dp(6);
@@ -183,17 +184,41 @@ public final class MainActivity extends Activity {
                 "Выберите валютную пару для анализа. Котировки загружаются из Twelve Data; выбор не открывает и не размещает сделку.");
         assetRow.addView(assetHelp, new LinearLayout.LayoutParams(dp(34), dp(38)));
         assetButton.setOnClickListener(v -> {
-            EditText input = editField("Например, EUR/USD");
-            input.setText(symbolInput.getText().toString());
-            new AlertDialog.Builder(this).setTitle("Выбор актива")
-                    .setView(input)
-                    .setPositiveButton("Сохранить", (d, w) -> {
-                        String value = input.getText().toString().trim();
-                        if (!value.isEmpty()) {
-                            symbolInput.setText(value);
-                            assetButton.setText(value.toUpperCase(Locale.US) + "  ▾");
-                        }
-                    }).setNegativeButton("Отмена", null).show();
+            String[] names = {
+                    "EUR/USD","EUR/JPY","EUR/CAD","EUR/GBP","EUR/AUD","EUR/NZD","EUR/CHF",
+                    "GBP/USD","GBP/JPY","GBP/CHF","GBP/AUD","GBP/NZD","GBP/CAD",
+                    "USD/JPY","USD/CHF","USD/CAD","USD/CNH","USD/SEK","USD/ZAR","USD/MXN","USD/NOK","USD/SGD",
+                    "AUD/USD","AUD/JPY","AUD/CHF","AUD/NZD","AUD/CAD","NZD/USD","NZD/JPY","NZD/CHF","NZD/CAD",
+                    "CAD/JPY","CAD/CHF","CHF/JPY",
+                    "ЗОЛОТО (XAU/USD)","СЕРЕБРО (XAG/USD)",
+                    "BITCOIN (BTC/USD)","ETHEREUM (ETH/USD)","TRON (TRX/USD)","DOGECOIN (DOGE/USD)",
+                    "SOLANA (SOL/USD)","LITECOIN (LTC/USD)","RIPPLE (XRP/USD)",
+                    "APPLE (AAPL)","TESLA (TSLA)","AMAZON (AMZN)","ALIBABA (BABA)",
+                    "META (META)","MICROSOFT (MSFT)","NETFLIX (NFLX)","NVIDIA (NVDA)",
+                    "INTEL (INTC)","VISA (V)","MASTERCARD (MA)","TOYOTA (TM)","MCDONALDS (MCD)",
+                    "DOW JONES (DJI)","NASDAQ (IXIC)"
+            };
+            String[] symbols = {
+                    "EUR/USD","EUR/JPY","EUR/CAD","EUR/GBP","EUR/AUD","EUR/NZD","EUR/CHF",
+                    "GBP/USD","GBP/JPY","GBP/CHF","GBP/AUD","GBP/NZD","GBP/CAD",
+                    "USD/JPY","USD/CHF","USD/CAD","USD/CNH","USD/SEK","USD/ZAR","USD/MXN","USD/NOK","USD/SGD",
+                    "AUD/USD","AUD/JPY","AUD/CHF","AUD/NZD","AUD/CAD","NZD/USD","NZD/JPY","NZD/CHF","NZD/CAD",
+                    "CAD/JPY","CAD/CHF","CHF/JPY",
+                    "XAU/USD","XAG/USD","BTC/USD","ETH/USD","TRX/USD","DOGE/USD","SOL/USD","LTC/USD","XRP/USD",
+                    "AAPL","TSLA","AMZN","BABA","META","MSFT","NFLX","NVDA","INTC","V","MA","TM","MCD","DJI","IXIC"
+            };
+            int selected = 0;
+            String current = symbolInput.getText().toString().trim().toUpperCase(Locale.US);
+            for (int i = 0; i < symbols.length; i++) if (symbols[i].equals(current)) { selected = i; break; }
+            new AlertDialog.Builder(this).setTitle("РЫНОЧНЫЕ ИНСТРУМЕНТЫ")
+                    .setSingleChoiceItems(names, selected, (dialog, which) -> {
+                        String symbol = symbols[which];
+                        symbolInput.setText(symbol);
+                        assetButton.setText(symbol + "  ▾");
+                        quoteView.setText("—");
+                        dialog.dismiss();
+                    })
+                    .setNegativeButton("ЗАКРЫТЬ", null).show();
         });
         LinearLayout.LayoutParams assetParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -917,6 +942,7 @@ public final class MainActivity extends Activity {
                     analyzeButton.setEnabled(true);
                     displayedSignal = shown.signal;
                     if (chartView != null) chartView.setMarketData(candles, shown.signal, last.close, staleData);
+                    if (quoteView != null) quoteView.setText(String.format(Locale.US, "%.5f", last.close));
                     updateInlineRisk();
                     status.setText((staleData ? "ДАННЫЕ УСТАРЕЛИ • " : autoRefreshEnabled ? "АВТО • " : "") + "СИГНАЛ: " + signalLabel(shown.signal));
                     status.setTextColor(shown.signal == MarketAnalyzer.Signal.WAIT ? 0xFFFFC857 : 0xFF70D6A5);
