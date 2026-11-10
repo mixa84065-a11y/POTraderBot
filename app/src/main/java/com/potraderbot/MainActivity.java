@@ -75,6 +75,7 @@ public final class MainActivity extends Activity {
     private Button updateButton;
     private Button platformButton;
     private Button paperButton;
+    private TextView virtualBalanceView;
     private PaperTradingEngine paperTrading;
     private boolean paperAutoEnabled = false;
     private boolean autoRefreshEnabled = false;
@@ -134,11 +135,15 @@ public final class MainActivity extends Activity {
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(12), dp(10), dp(12), dp(16));
         scroll.addView(page);
-        root.addView(scroll, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        FrameLayout.LayoutParams scrollParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+        scrollParams.topMargin = dp(78);
+        root.addView(scroll, scrollParams);
 
         LinearLayout header = new LinearLayout(this);
         header.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(10), dp(2), dp(10), dp(2));
+        header.setBackgroundColor(0xF2090909);
         LinearLayout accountHeader = new LinearLayout(this);
         accountHeader.setOrientation(LinearLayout.VERTICAL);
         accountHeader.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
@@ -148,8 +153,11 @@ public final class MainActivity extends Activity {
         accountHeader.addView(accountButton, new LinearLayout.LayoutParams(dp(112), dp(38)));
         TextView virtualCurrency = label("₽ ВИРТУАЛЬНЫЙ СЧЁТ", 8, 0xFFB9C5D5, true);
         virtualCurrency.setGravity(android.view.Gravity.CENTER);
-        accountHeader.addView(virtualCurrency, new LinearLayout.LayoutParams(dp(112), dp(17)));
-        header.addView(accountHeader, new LinearLayout.LayoutParams(dp(118), dp(56)));
+        accountHeader.addView(virtualCurrency, new LinearLayout.LayoutParams(dp(112), dp(14)));
+        virtualBalanceView = label("20 000,00 ₽", 12, 0xFF70D6A5, true);
+        virtualBalanceView.setGravity(android.view.Gravity.CENTER);
+        accountHeader.addView(virtualBalanceView, new LinearLayout.LayoutParams(dp(112), dp(20)));
+        header.addView(accountHeader, new LinearLayout.LayoutParams(dp(118), dp(72)));
         LinearLayout brand = new LinearLayout(this);
         brand.setOrientation(LinearLayout.VERTICAL);
         TextView title = label("GoD of Trading", 22, 0xFFFFD36A, true);
@@ -163,7 +171,8 @@ public final class MainActivity extends Activity {
         Button menuButton = makeNavButton("⋮");
         menuButton.setTextSize(26);
         header.addView(menuButton, new LinearLayout.LayoutParams(dp(38), dp(52)));
-        page.addView(header);
+        root.addView(header, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, dp(78), android.view.Gravity.TOP));
         accountButton.setOnClickListener(v -> showPersonalAccount());
 
         status = label("●  ОЖИДАНИЕ ДАННЫХ", 12, 0xFFFFC857, true);
@@ -453,8 +462,14 @@ public final class MainActivity extends Activity {
         updateButton.setOnClickListener(v -> checkForUpdate());
         menuButton.setOnClickListener(v -> showFeatureMenu(settings));
         setContentView(root);
+        renderVirtualBalance();
     }
 
+    private void renderVirtualBalance() {
+        if (virtualBalanceView == null || paperTrading == null) return;
+        virtualBalanceView.setText(String.format(Locale.getDefault(), "%,.2f ₽",
+                paperTrading.getVirtualBalance()));
+    }
 
     private void showPersonalAccount() {
         double balance = paperTrading == null ? 20000.0 : paperTrading.getVirtualBalance();
@@ -1226,6 +1241,7 @@ public final class MainActivity extends Activity {
                             double payout = getConfiguredPayout();
                             int expiryMinutes = expiryInput == null ? 3 : expiryInput.getSelectedItemPosition() + 3;
                             paperTrading.process(candles, shown.signal, stake, payout, expiryMinutes, symbol);
+                            renderVirtualBalance();
                             if (riskBalanceInput != null) {
                                 riskBalanceInput.setText(String.format(Locale.US, "%.2f", paperTrading.getVirtualBalance()));
                             }
@@ -1459,6 +1475,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        renderVirtualBalance();
     }
 
     @Override protected void onDestroy() {
