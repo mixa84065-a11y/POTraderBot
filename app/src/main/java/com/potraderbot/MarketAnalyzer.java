@@ -36,6 +36,15 @@ public final class MarketAnalyzer {
         appendFactor(why,"последняя свеча бычья и выше предыдущего закрытия",candleUp);
         appendFactor(why,"последняя свеча медвежья и ниже предыдущего закрытия",candleDown);
         if(why.charAt(why.length()-1)==' ') why.append("нет полного совпадения условий");
+        why.append("\nПРОТИВОРЕЧИЯ / НЕСОВПАДЕНИЯ: ");
+        if(signal==Signal.CALL || signal==Signal.PUT) why.append("встречных условий среди EMA, RSI и последней свечи не выявлено.");
+        else {
+            boolean anyMissing=false;
+            if(!trendUp && !trendDown){why.append("EMA 9 и EMA 21 не задают направление; ");anyMissing=true;}
+            if(!rsiUp && !rsiDown){why.append("RSI вне рабочих зон 32–68; ");anyMissing=true;}
+            if(!candleUp && !candleDown){why.append("последняя свеча не подтвердила импульс; ");anyMissing=true;}
+            if(!anyMissing) why.append("три условия не совпали в одном направлении.");
+        }
         why.append("\nРЕШЕНИЕ: ");
         if(signal==Signal.CALL) why.append("ВВЕРХ — совпали тренд, RSI и импульс свечи.");
         else if(signal==Signal.PUT) why.append("ВНИЗ — совпали тренд, RSI и импульс свечи.");
