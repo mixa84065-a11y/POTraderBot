@@ -25,7 +25,6 @@ public final class PaperTradingEngine {
     private int losses;
     private String dayKey;
     private Trade activeTrade;
-    private long lastProcessedCandle = -1L;
     private String lastEvent = "Автосимуляция выключена.";
 
     private static final class Trade {
@@ -58,7 +57,6 @@ public final class PaperTradingEngine {
         wins = preferences.getInt("paper_wins", 0);
         losses = preferences.getInt("paper_losses", 0);
         restoreActiveTrade();
-        lastProcessedCandle = preferences.getLong("paper_last_processed_candle", -1L);
         lastEvent = preferences.getString("paper_last_event", "Автосимуляция выключена.");
     }
 
@@ -76,9 +74,11 @@ public final class PaperTradingEngine {
             return lastEvent;
         }
         Candle last = candles.get(candles.size() - 1);
-        if (last.time == lastProcessedCandle) return lastEvent;
-        lastProcessedCandle = last.time;
-        preferences.edit().putLong("paper_last_processed_candle", lastProcessedCandle).apply();
+        String normalizedSymbol = symbol == null ? "" : symbol.trim().toUpperCase(Locale.US);
+        String candleKey = "paper_last_processed_candle_" + normalizedSymbol.replaceAll("[^A-Z0-9._-]", "_");
+        long lastProcessedForSymbol = preferences.getLong(candleKey, -1L);
+        if (last.time == lastProcessedForSymbol) return lastEvent;
+        preferences.edit().putLong(candleKey, last.time).apply();
 
         if (activeTrade != null) return lastEvent;
         if (tradesToday >= MAX_TRADES_PER_DAY) {
@@ -174,8 +174,11 @@ public final class PaperTradingEngine {
         wins = 0;
         losses = 0;
         activeTrade = null;
-        lastProcessedCandle = -1L;
-        preferences.edit().remove("paper_last_processed_candle").apply();
+        SharedPreferences.Editor resetEditor = preferences.edit();
+        for (String key : preferences.getAll().keySet()) {
+            if (key.startsWith("paper_last_processed_candle_")) resetEditor.remove(key);
+        }
+        resetEditor.apply();
         lastEvent = "Виртуальный счёт сброшен.";
         preferences.edit().remove("paper_active_direction").remove("paper_active_entry_time")
                 .remove("paper_active_expiry_time").remove("paper_active_entry_price")
@@ -226,7 +229,6 @@ public final class PaperTradingEngine {
                 .putInt("paper_wins", wins)
                 .putInt("paper_losses", losses)
                 .putString("paper_day", dayKey);
-        editor.putLong("paper_last_processed_candle", lastProcessedCandle);
         if (activeTrade == null) {
             editor.remove("paper_active_direction").remove("paper_active_entry_time")
                     .remove("paper_active_expiry_time").remove("paper_active_entry_price")
