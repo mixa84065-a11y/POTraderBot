@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - feature/live-paper-trading
+      - feature/live-paper-trading\n      - feature/binarium-data-engine
 
 permissions:
   contents: write
