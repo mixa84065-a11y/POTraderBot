@@ -52,7 +52,7 @@ public class BinariumDataEngine {
         MarketAnalyzer.AnalysisReport report = analyzer.analyzeDetailed(candles);
         return new Result(report.signal,
                 report.signal == MarketAnalyzer.Signal.WAIT
-                        ? "WAIT: недостаточно согласованных условий для входа"
+                        ? "ОЖИДАНИЕ: недостаточно согласованных условий для входа"
                         : "Условия направления прошли технические фильтры; это не гарантия исхода",
                 candles.size(), report.toDisplayText());
     }
