@@ -1,14 +1,17 @@
 package com.potraderbot;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.graphics.Typeface;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.text.InputType;
 
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -21,6 +24,7 @@ import java.util.concurrent.Future;
 
 public class MainActivity extends Activity {
     private final TradeEngine engine = new TradeEngine();
+    private ApiKeyStore apiKeyStore;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private TextView status, stats, log;
@@ -30,6 +34,11 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
+        try {
+            apiKeyStore = new ApiKeyStore(this);
+        } catch (RuntimeException error) {
+            android.util.Log.e("GOD_OF_TRADING", "Secure key storage unavailable", error);
+        }
         buildUi();
     }
 
@@ -52,6 +61,10 @@ public class MainActivity extends Activity {
         TextView config = text("EUR/USD • 1-minute candles • 3-minute expiry\nMulti-factor analysis • max 10 manual records/day\nPause after 2 consecutive recorded losses", 15, 0xFFE5EDF7, false);
         config.setPadding(0, 12, 0, 24);
         page.addView(config);
+
+        Button apiSettings = button("НАСТРОИТЬ API-КЛЮЧИ");
+        apiSettings.setOnClickListener(v -> showApiKeyDialog());
+        page.addView(apiSettings);
 
         analyzeButton = button("АНАЛИЗИРОВАТЬ");
         analyzeButton.setOnClickListener(v -> runLiveAnalysis());
@@ -80,13 +93,12 @@ public class MainActivity extends Activity {
 
     private void runLiveAnalysis() {
         if (running) return;
-        if (BuildConfig.TWELVE_DATA_API_KEY.trim().isEmpty()
-                || BuildConfig.API_SH_KEY.trim().isEmpty()) {
+        String twelveKey = apiKeyStore == null ? "" : apiKeyStore.getTwelveDataKey();
+        String apiShKey = apiKeyStore == null ? "" : apiKeyStore.getApiShKey();
+        if (twelveKey.trim().isEmpty() || apiShKey.trim().isEmpty()) {
             status.setText("STATUS: API KEYS REQUIRED");
             status.setTextColor(0xFFFFC857);
-            log.setText("Для анализа нужны оба ключа. Добавь их локально в local.properties: "
-                    + "TWELVE_DATA_API_KEY=... и API_SH_KEY=... . "
-                    + "Не публикуй этот файл в GitHub и не отправляй ключи в чат.");
+            log.setText("Для анализа нужны оба API-ключа. Нажми «НАСТРОИТЬ API-КЛЮЧИ» и сохрани их в защищённом хранилище телефона. Ключи не отправляются в чат и не записываются в исходный код.");
             return;
         }
 
@@ -100,7 +112,7 @@ public class MainActivity extends Activity {
             try {
                 long now = System.currentTimeMillis();
                 BinariumDataEngine dataEngine = new BinariumDataEngine(
-                        BuildConfig.TWELVE_DATA_API_KEY, BuildConfig.API_SH_KEY);
+                        twelveKey, apiShKey);
                 BinariumDataEngine.Result result = dataEngine.analyze(
                         "EUR/USD", calendarDate(-1), calendarDate(2), now);
 
@@ -131,6 +143,64 @@ public class MainActivity extends Activity {
                 });
             }
         });
+    }
+
+    private void showApiKeyDialog() {
+        if (apiKeyStore == null) {
+            log.setText("Защищённое хранилище недоступно на этом устройстве. Обнови Android и попробуй снова.");
+            return;
+        }
+        LinearLayout fields = new LinearLayout(this);
+        fields.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        fields.setPadding(pad, pad / 2, pad, 0);
+
+        TextView twelveLabel = text("Twelve Data API key", 14, 0xFFE5EDF7, true);
+        fields.addView(twelveLabel);
+        EditText twelveInput = new EditText(this);
+        twelveInput.setSingleLine(true);
+        twelveInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        twelveInput.setHint("Вставь ключ Twelve Data");
+        twelveInput.setText(apiKeyStore.getTwelveDataKey());
+        fields.addView(twelveInput);
+
+        TextView apiShLabel = text("API.SH key", 14, 0xFFE5EDF7, true);
+        apiShLabel.setPadding(0, pad, 0, 0);
+        fields.addView(apiShLabel);
+        EditText apiShInput = new EditText(this);
+        apiShInput.setSingleLine(true);
+        apiShInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        apiShInput.setHint("Вставь ключ API.SH");
+        apiShInput.setText(apiKeyStore.getApiShKey());
+        fields.addView(apiShInput);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Защищённые API-ключи")
+                .setMessage("Ключи сохраняются на этом телефоне в зашифрованном виде и не сбрасываются при закрытии приложения.")
+                .setView(fields)
+                .setPositiveButton("СОХРАНИТЬ", null)
+                .setNeutralButton("УДАЛИТЬ КЛЮЧИ", null)
+                .setNegativeButton("ОТМЕНА", null)
+                .create();
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                String twelve = twelveInput.getText().toString().trim();
+                String apiSh = apiShInput.getText().toString().trim();
+                if (twelve.isEmpty() || apiSh.isEmpty()) {
+                    log.setText("Введи оба ключа. Они нужны для котировок и экономического календаря.");
+                    return;
+                }
+                apiKeyStore.save(twelve, apiSh);
+                log.setText("API-ключи сохранены в зашифрованном хранилище телефона.");
+                dialog.dismiss();
+            });
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                apiKeyStore.clear();
+                log.setText("API-ключи удалены с этого телефона.");
+                dialog.dismiss();
+            });
+        });
+        dialog.show();
     }
 
     private String calendarDate(int dayOffset) {
