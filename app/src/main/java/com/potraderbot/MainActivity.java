@@ -96,7 +96,7 @@ public class MainActivity extends Activity {
         String twelveKey = apiKeyStore == null ? "" : apiKeyStore.getTwelveDataKey();
         String apiShKey = apiKeyStore == null ? "" : apiKeyStore.getApiShKey();
         if (twelveKey.trim().isEmpty() || apiShKey.trim().isEmpty()) {
-            status.setText("STATUS: API KEYS REQUIRED");
+            status.setText("ТРЕБУЮТСЯ API-КЛЮЧИ");
             status.setTextColor(0xFFFFC857);
             log.setText("Для анализа нужны оба API-ключа. Нажми «НАСТРОИТЬ API-КЛЮЧИ» и сохрани их в защищённом хранилище телефона. Ключи не отправляются в чат и не записываются в исходный код.");
             return;
@@ -104,7 +104,7 @@ public class MainActivity extends Activity {
 
         running = true;
         analyzeButton.setEnabled(false);
-        status.setText("STATUS: LOADING MARKET DATA...");
+        status.setText("ЗАГРУЗКА ДАННЫХ РЫНКА...");
         status.setTextColor(0xFFFFC857);
         log.setText("Запрашиваю историю минутных свечей и экономический календарь. Сделки не открываются.");
 
@@ -118,7 +118,7 @@ public class MainActivity extends Activity {
 
                 mainHandler.post(() -> {
                     if (!running || isFinishing()) return;
-                    status.setText("SIGNAL: " + result.signal);
+                    status.setText(result.signal == MarketAnalyzer.Signal.CALL ? "ВВЕРХ"\n                            : result.signal == MarketAnalyzer.Signal.PUT ? "ВНИЗ" : "ОЖИДАНИЕ");
                     status.setTextColor(result.signal == MarketAnalyzer.Signal.WAIT
                             ? 0xFFFFC857 : 0xFF70D6A5);
                     log.setText(result.reason + "\nПолучено свечей: " + result.candleCount
@@ -132,7 +132,7 @@ public class MainActivity extends Activity {
             } catch (Exception error) {
                 mainHandler.post(() -> {
                     if (!running || isFinishing()) return;
-                    status.setText("STATUS: DATA ERROR");
+                    status.setText("ОШИБКА ДАННЫХ");
                     status.setTextColor(0xFFFF6B6B);
                     String message = error.getMessage();
                     log.setText("Не удалось выполнить анализ: "
