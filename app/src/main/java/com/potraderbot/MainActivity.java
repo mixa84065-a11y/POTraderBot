@@ -287,7 +287,7 @@ public final class MainActivity extends Activity {
         LinearLayout platformNav = new LinearLayout(this);
         platformNav.setOrientation(LinearLayout.HORIZONTAL);
         platformTabs = new Button[3];
-        String[] tabNames = {"🔵\\nPocket Option", "◢\\nBinarium", "◎\\nУниверсальный"};
+        String[] tabNames = {"🔵\nPocket Option", "◢\nBinarium", "◎\nУниверсальный"};
         for (int i = 0; i < tabNames.length; i++) {
             final int index = i;
             LinearLayout item = new LinearLayout(this);
@@ -322,7 +322,7 @@ public final class MainActivity extends Activity {
         LinearLayout featureRow = new LinearLayout(this);
         featureRow.setOrientation(LinearLayout.HORIZONTAL);
         String[] featureIcons = {"◔", "▥", "▦", "◷", "↗"};
-        String[] featureNames = {"Сила\\nсигнала", "Объяснение\\nсигнала", "Калькулятор\\nриска", "Часы\\nсессий", "Умный\\nжурнал"};
+        String[] featureNames = {"Сила\nсигнала", "Объяснение\nсигнала", "Калькулятор\nриска", "Часы\nсессий", "Умный\nжурнал"};
         int[] featureIndexes = {5, 6, 7, 8, 9};
         for (int i = 0; i < featureNames.length; i++) {
             final int featureIndex = featureIndexes[i];
@@ -341,11 +341,11 @@ public final class MainActivity extends Activity {
             TextView tileLabel = label(featureNames[i], 10, 0xFFF3E7C8, true);
             tileLabel.setGravity(android.view.Gravity.CENTER);
             tile.addView(tileLabel);
-            Button help = makeTinyHelp(featureNames[i].replace("\\n", " "),
+            Button help = makeTinyHelp(featureNames[i].replace("\n", " "),
                     "Открыть описание и инструменты этого раздела.");
             tile.addView(help, new LinearLayout.LayoutParams(dp(28), dp(25)));
             tile.setOnClickListener(v -> new AlertDialog.Builder(this)
-                    .setTitle(featureNames[featureIndex == 5 ? 0 : featureIndex == 6 ? 1 : featureIndex == 7 ? 2 : featureIndex == 8 ? 3 : 4].replace("\\n", " "))
+                    .setTitle(featureNames[featureIndex == 5 ? 0 : featureIndex == 6 ? 1 : featureIndex == 7 ? 2 : featureIndex == 8 ? 3 : 4].replace("\n", " "))
                     .setView(featureContent(featureIndex))
                     .setPositiveButton("Готово", null).show());
             LinearLayout.LayoutParams tileParams = new LinearLayout.LayoutParams(dp(104), dp(112));
@@ -363,7 +363,7 @@ public final class MainActivity extends Activity {
         LinearLayout bottomNav = new LinearLayout(this);
         bottomNav.setOrientation(LinearLayout.HORIZONTAL);
         bottomNav.setGravity(android.view.Gravity.CENTER);
-        String[] bottomLabels = {"▥\\nАНАЛИТИКА  ?", "⚙\\nНАСТРОЙКИ  ?", "ⓘ\\nИНФО  ?", "⟳\\nОБНОВЛЕНИЕ  ?"};
+        String[] bottomLabels = {"▥\nАНАЛИТИКА  ?", "⚙\nНАСТРОЙКИ  ?", "ⓘ\nИНФО  ?", "⟳\nОБНОВЛЕНИЕ  ?"};
         for (int i = 0; i < bottomLabels.length; i++) {
             final int action = i;
             Button nav = makeNavButton(bottomLabels[i]);
