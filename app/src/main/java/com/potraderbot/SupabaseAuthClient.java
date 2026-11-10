@@ -43,6 +43,31 @@ public final class SupabaseAuthClient {
                 body, null);
     }
 
+
+    public void updatePassword(String accessToken, String newPassword) throws Exception {
+        if (!isConfigured()) throw new IllegalStateException("Supabase не настроен");
+        HttpURLConnection c = (HttpURLConnection) new URL(baseUrl + "/auth/v1/user").openConnection();
+        try {
+            c.setRequestMethod("PUT");
+            c.setConnectTimeout(15000);
+            c.setReadTimeout(20000);
+            c.setRequestProperty("apikey", anonKey);
+            c.setRequestProperty("Authorization", "Bearer " + accessToken);
+            c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            JSONObject body = new JSONObject();
+            body.put("password", newPassword);
+            c.setDoOutput(true);
+            try (OutputStream out = c.getOutputStream()) {
+                out.write(body.toString().getBytes(StandardCharsets.UTF_8));
+            }
+            int status = c.getResponseCode();
+            InputStream in = status >= 200 && status < 300 ? c.getInputStream() : c.getErrorStream();
+            String response = readAll(in);
+            if (status < 200 || status >= 300)
+                throw new IllegalStateException("Не удалось обновить пароль: " + status + " " + response);
+        } finally { c.disconnect(); }
+    }
+
     public void signOut(String accessToken) throws Exception {
         request("/auth/v1/logout", null, accessToken);
     }
