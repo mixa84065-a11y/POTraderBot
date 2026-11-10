@@ -475,9 +475,7 @@ public class MainActivity extends Activity {
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> {
                 try {
                     String verifier = createCodeVerifier();
-                    String challenge = Base64.encodeToString(
-                            MessageDigest.getInstance("SHA-256").digest(verifier.getBytes("UTF-8")),
-                            Base64.URL_SAFE | Base64.NO_PADDING | Base64.NO_WRAP);
+                    String challenge = createCodeChallenge(verifier);
                     authStore.saveCodeVerifier(verifier);
                     String url = authClient.googleAuthUrl("com.potraderbot://auth/callback", challenge);
                     startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
@@ -501,8 +499,16 @@ public class MainActivity extends Activity {
         status.setText(register ? "РЕГИСТРАЦИЯ..." : "ВХОД...");
         executor.submit(() -> {
             try {
-                org.json.JSONObject response = register
-                        ? authClient.signUp(email, password) : authClient.signIn(email, password);
+                org.json.JSONObject response;
+                if (register) {
+                    String verifier = createCodeVerifier();
+                    authStore.saveCodeVerifier(verifier);
+                    String challenge = createCodeChallenge(verifier);
+                    response = authClient.signUp(email, password,
+                            "com.potraderbot://auth/callback?flow=signup", challenge);
+                } else {
+                    response = authClient.signIn(email, password);
+                }
                 if (response.has("access_token")) { saveAuthResponse(response); loadSettingsAfterLogin(); }
                 mainHandler.post(() -> {
                     if (isFinishing()) return;
@@ -536,7 +542,10 @@ public class MainActivity extends Activity {
         status.setText("ОТПРАВКА ПИСЬМА...");
         executor.submit(() -> {
             try {
-                authClient.sendPasswordReset(email, "com.potraderbot://auth/callback?flow=recovery");
+                String verifier = createCodeVerifier();
+                authStore.saveCodeVerifier(verifier);
+                authClient.sendPasswordReset(email, "com.potraderbot://auth/callback?flow=recovery",
+                        createCodeChallenge(verifier));
                 mainHandler.post(() -> {
                     if (!isFinishing()) {
                         status.setText("ПИСЬМО ОТПРАВЛЕНО");
@@ -590,6 +599,12 @@ public class MainActivity extends Activity {
         return Base64.encodeToString(bytes, Base64.URL_SAFE | Base64.NO_PADDING | Base64.NO_WRAP);
     }
 
+    private String createCodeChallenge(String verifier) throws Exception {
+        return Base64.encodeToString(
+                MessageDigest.getInstance("SHA-256").digest(verifier.getBytes("UTF-8")),
+                Base64.URL_SAFE | Base64.NO_PADDING | Base64.NO_WRAP);
+    }
+
     private String safeMessage(Exception e) {
         String message = e.getMessage();
         return message == null ? e.getClass().getSimpleName() : message;
@@ -607,8 +622,10 @@ public class MainActivity extends Activity {
             return;
         }
         String verifier = authStore == null ? "" : authStore.codeVerifier();
-        boolean recoveryFlow = "recovery".equals(data.getQueryParameter("flow"));
-        status.setText(recoveryFlow ? "ВОССТАНОВЛЕНИЕ ПАРОЛЯ..." : "ЗАВЕРШЕНИЕ ВХОДА GOOGLE...");
+        String flow = data.getQueryParameter("flow");
+        boolean recoveryFlow = "recovery".equals(flow);
+        boolean signupFlow = "signup".equals(flow);
+        status.setText(recoveryFlow ? "ВОССТАНОВЛЕНИЕ ПАРОЛЯ..." : "ЗАВЕРШЕНИЕ АВТОРИЗАЦИИ...");
         executor.submit(() -> {
             try {
                 org.json.JSONObject response = authClient.exchangeCode(code, verifier);
@@ -617,10 +634,11 @@ public class MainActivity extends Activity {
                 authStore.saveCodeVerifier("");
                 mainHandler.post(() -> {
                     if (!isFinishing()) {
+                        authStore.saveCodeVerifier("");
                         if (recoveryFlow) showNewPasswordDialog();
                         else {
-                            status.setText("АККАУНТ ПОДКЛЮЧЁН");
-                            log.setText("Вход через Google выполнен: " + authStore.email());
+                            status.setText(signupFlow ? "EMAIL ПОДТВЕРЖДЁН" : "АККАУНТ ПОДКЛЮЧЁН");
+                            log.setText((signupFlow ? "Email подтверждён: " : "Вход выполнен: ") + authStore.email());
                         }
                     }
                 });
