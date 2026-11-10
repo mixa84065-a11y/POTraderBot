@@ -13,7 +13,7 @@ import java.util.TimeZone;
  * Stake, payout and expiry are supplied by the on-screen demo risk calculator.
  */
 public final class PaperTradingEngine {
-    private static final double START_BALANCE = 10_000.0;
+    private static final double START_BALANCE = 20_000.0;
     private static final int MAX_TRADES_PER_DAY = 5;
     private static final int MAX_CONSECUTIVE_LOSSES = 3;
 
@@ -51,13 +51,25 @@ public final class PaperTradingEngine {
     public PaperTradingEngine(SharedPreferences preferences) {
         this.preferences = preferences;
         resetDayIfNeeded();
-        balance = preferences.getFloat("paper_balance", (float) START_BALANCE);
+        boolean balanceV2Initialized = preferences.getBoolean("paper_balance_v2_initialized", false);
+        if (!balanceV2Initialized) {
+            // One-time migration: align the existing demo account with the requested 20,000 start.
+            balance = START_BALANCE;
+            preferences.edit().putFloat("paper_balance", (float) START_BALANCE)
+                    .putBoolean("paper_balance_v2_initialized", true).apply();
+        } else {
+            balance = preferences.getFloat("paper_balance", (float) START_BALANCE);
+        }
         tradesToday = preferences.getInt("paper_trades_today", 0);
         consecutiveLosses = preferences.getInt("paper_consecutive_losses", 0);
         wins = preferences.getInt("paper_wins", 0);
         losses = preferences.getInt("paper_losses", 0);
         restoreActiveTrade();
         lastEvent = preferences.getString("paper_last_event", "Автосимуляция выключена.");
+    }
+
+    public synchronized double getVirtualBalance() {
+        return balance;
     }
 
     public synchronized String process(List<Candle> candles, MarketAnalyzer.Signal signal,
