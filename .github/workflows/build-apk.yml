@@ -58,6 +58,7 @@ jobs:
             echo "::error::GitHub Secret SUPABASE_URL is missing."
             exit 1
           fi
+          SUPABASE_URL="$(printf '%s' "$SUPABASE_URL" | tr -d '[:space:]')"
           SUPABASE_URL="${SUPABASE_URL%/}"
           if [ "$SUPABASE_URL" != "https://srzemjqjgceoebvimmct.supabase.co" ]; then
             echo "::error::SUPABASE_URL does not match the configured GOD-OF-TRADING project."
