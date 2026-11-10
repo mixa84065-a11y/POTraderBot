@@ -26,14 +26,14 @@ public final class MarketDataClient {
     public List<Candle> fetchOneMinuteCandles(String symbol, String apiKey) throws Exception {
         String cleanSymbol = symbol == null ? "" : symbol.trim().toUpperCase(Locale.US);
         String cleanKey = apiKey == null ? "" : apiKey.trim();
-        if (!cleanSymbol.matches("[A-Z]{3}/[A-Z]{3}")) {
-            throw new IllegalArgumentException("Укажите валютную пару в формате EUR/USD.");
+        if (!cleanSymbol.matches("[A-Z]{3}/[A-Z]{3}") && !cleanSymbol.matches("[A-Z0-9._^:-]{1,20}")) {
+            throw new IllegalArgumentException("Выберите поддерживаемый рыночный символ из списка.");
         }
         if (cleanKey.isEmpty()) {
             throw new IllegalArgumentException("Введите API-ключ Twelve Data.");
         }
 
-        String query = "?symbol=" + cleanSymbol.replace("/", "%2F")
+        String query = "?symbol=" + java.net.URLEncoder.encode(cleanSymbol, "UTF-8")
                 + "&interval=1min&outputsize=120&timezone=UTC&format=JSON&apikey="
                 + java.net.URLEncoder.encode(cleanKey, "UTF-8");
         HttpURLConnection connection = (HttpURLConnection) new URL(ENDPOINT + query).openConnection();
