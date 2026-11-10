@@ -31,8 +31,19 @@ public final class ChartView extends View {
         int n=Math.min(60,candles.size()), start=candles.size()-n;
         double min=Double.MAX_VALUE,max=-Double.MAX_VALUE;
         for(int i=start;i<candles.size();i++){ Candle x=candles.get(i); min=Math.min(min,x.low); max=Math.max(max,x.high); }
+        double support=min, resistance=max;
         double extra=Math.max((max-min)*0.12,Math.abs(max)*0.00001); min-=extra; max+=extra;
         float ph=bottom-top, slot=(right-left)/n, body=Math.max(2,slot*.58f);
+        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1f);
+        p.setPathEffect(new android.graphics.DashPathEffect(new float[]{3,5},0));
+        p.setColor(0x6687B7FF);
+        c.drawLine(left,map(resistance,min,max,top,bottom),right,map(resistance,min,max,top,bottom),p);
+        c.drawLine(left,map(support,min,max,top,bottom),right,map(support,min,max,top,bottom),p);
+        p.setPathEffect(null); p.setStyle(Paint.Style.FILL);
+        p.setTextSize(9f*getResources().getDisplayMetrics().density);
+        p.setColor(0xFF87B7FF);
+        c.drawText("Сопротивление (локальный максимум)",left+2,map(resistance,min,max,top,bottom)-3,p);
+        c.drawText("Поддержка (локальный минимум)",left+2,map(support,min,max,top,bottom)-3,p);
         Path e9path=new Path(),e21path=new Path();
         double e9=candles.get(0).close,e21=e9,k9=2.0/10,k21=2.0/22;
         for(int i=0;i<candles.size();i++){
