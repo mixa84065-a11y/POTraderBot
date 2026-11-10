@@ -9,16 +9,13 @@ import java.util.Locale;
 import java.util.TimeZone;
 
 /**
- * Local paper-trading simulator. It never sends orders to a broker.
- * Uses the external candle feed and a fixed illustrative 80% payout.
+ * Local paper-trading simulator. It has no broker integration and never sends orders.
+ * Stake, payout and expiry are supplied by the on-screen demo risk calculator.
  */
 public final class PaperTradingEngine {
     private static final double START_BALANCE = 10_000.0;
-    private static final double STAKE = 100.0;
-    private static final double SIMULATED_PAYOUT = 0.80;
     private static final int MAX_TRADES_PER_DAY = 5;
     private static final int MAX_CONSECUTIVE_LOSSES = 3;
-    private static final long EXPIRY_MILLIS = 3L * 60L * 1000L;
 
     private final SharedPreferences preferences;
     private double balance;
@@ -36,12 +33,17 @@ public final class PaperTradingEngine {
         final long entryTime;
         final long expiryTime;
         final double entryPrice;
+        final double stake;
+        final double payoutPercent;
 
-        Trade(MarketAnalyzer.Signal direction, long entryTime, long expiryTime, double entryPrice) {
+        Trade(MarketAnalyzer.Signal direction, long entryTime, long expiryTime,
+              double entryPrice, double stake, double payoutPercent) {
             this.direction = direction;
             this.entryTime = entryTime;
             this.expiryTime = expiryTime;
             this.entryPrice = entryPrice;
+            this.stake = stake;
+            this.payoutPercent = payoutPercent;
         }
     }
 
@@ -53,11 +55,21 @@ public final class PaperTradingEngine {
         consecutiveLosses = preferences.getInt("paper_consecutive_losses", 0);
         wins = preferences.getInt("paper_wins", 0);
         losses = preferences.getInt("paper_losses", 0);
+        restoreActiveTrade();
+        lastEvent = preferences.getString("paper_last_event", "Автосимуляция выключена.");
     }
 
-    public synchronized String process(List<Candle> candles, MarketAnalyzer.Signal signal) {
+    public synchronized String process(List<Candle> candles, MarketAnalyzer.Signal signal,
+                                       double stake, double payoutPercent, int expiryMinutes) {
         resetDayIfNeeded();
         if (candles == null || candles.isEmpty()) return lastEvent;
+        if (!Double.isFinite(stake) || stake <= 0 || stake > balance
+                || !Double.isFinite(payoutPercent) || payoutPercent <= 0 || payoutPercent > 1000
+                || expiryMinutes < 3 || expiryMinutes > 5) {
+            lastEvent = "Сделка не открыта: проверьте виртуальную ставку, выплату и экспирацию 3–5 минут.";
+            return lastEvent;
+        }
+
         settleIfExpired(candles);
         Candle last = candles.get(candles.size() - 1);
         if (last.time == lastProcessedCandle) return lastEvent;
@@ -66,28 +78,34 @@ public final class PaperTradingEngine {
         if (activeTrade != null) return lastEvent;
         if (tradesToday >= MAX_TRADES_PER_DAY) {
             lastEvent = "Лимит симуляции на сегодня достигнут (" + MAX_TRADES_PER_DAY + " сделок).";
+            persistEvent();
             return lastEvent;
         }
         if (consecutiveLosses >= MAX_CONSECUTIVE_LOSSES) {
             lastEvent = "Пауза: достигнут лимит " + MAX_CONSECUTIVE_LOSSES + " убытков подряд.";
+            persistEvent();
             return lastEvent;
         }
-        if (balance < STAKE) {
-            lastEvent = "Симуляция остановлена: виртуального баланса недостаточно.";
+        if (stake > balance) {
+            lastEvent = "Симуляция остановлена: виртуального баланса недостаточно для выбранного риска.";
+            persistEvent();
             return lastEvent;
         }
         if (signal != MarketAnalyzer.Signal.CALL && signal != MarketAnalyzer.Signal.PUT) {
             lastEvent = "Ожидание сигнала. Виртуальная сделка не открыта.";
+            persistEvent();
             return lastEvent;
         }
 
         long entryTime = last.time + 60_000L;
-        activeTrade = new Trade(signal, entryTime, entryTime + EXPIRY_MILLIS, last.close);
+        long expiryTime = entryTime + expiryMinutes * 60_000L;
+        activeTrade = new Trade(signal, entryTime, expiryTime, last.close, stake, payoutPercent);
         tradesToday++;
         save();
         lastEvent = "ОТКРЫТА ВИРТУАЛЬНАЯ " + (signal == MarketAnalyzer.Signal.CALL ? "ВВЕРХ" : "ВНИЗ")
-                + " • ставка " + format(STAKE) + " • вход " + format(last.close)
-                + " • экспирация через 3 минуты.";
+                + " • ставка " + format(stake) + " • выплата " + format(payoutPercent)
+                + "% • вход " + format(last.close) + " • экспирация " + expiryMinutes + " мин.";
+        persistEvent();
         return lastEvent;
     }
 
@@ -103,38 +121,44 @@ public final class PaperTradingEngine {
         if (expiryCandle == null) return;
 
         double exitPrice = expiryCandle.close;
+        boolean tie = Double.compare(exitPrice, activeTrade.entryPrice) == 0;
         boolean win = activeTrade.direction == MarketAnalyzer.Signal.CALL
-                ? exitPrice > activeTrade.entryPrice
-                : exitPrice < activeTrade.entryPrice;
+                ? exitPrice > activeTrade.entryPrice : exitPrice < activeTrade.entryPrice;
         if (win) {
-            double profit = STAKE * SIMULATED_PAYOUT;
+            double profit = activeTrade.stake * activeTrade.payoutPercent / 100.0;
             balance += profit;
             wins++;
             consecutiveLosses = 0;
             lastEvent = "ВИРТУАЛЬНАЯ СДЕЛКА В ПЛЮС • +" + format(profit)
                     + " • цена закрытия " + format(exitPrice);
+        } else if (tie) {
+            lastEvent = "ВИРТУАЛЬНАЯ СДЕЛКА В НОЛЬ • возврат ставки " + format(activeTrade.stake);
         } else {
-            balance -= STAKE;
+            balance -= activeTrade.stake;
             losses++;
             consecutiveLosses++;
-            lastEvent = (exitPrice == activeTrade.entryPrice ? "ВИРТУАЛЬНАЯ СДЕЛКА В НОЛЬ" : "ВИРТУАЛЬНАЯ СДЕЛКА В МИНУС")
-                    + " • " + (exitPrice == activeTrade.entryPrice ? "0" : "-" + format(STAKE))
+            lastEvent = "ВИРТУАЛЬНАЯ СДЕЛКА В МИНУС • -" + format(activeTrade.stake)
                     + " • цена закрытия " + format(exitPrice);
         }
         activeTrade = null;
         save();
+        persistEvent();
     }
 
     public synchronized String getSummary() {
         String active = activeTrade == null ? "Нет активной виртуальной сделки."
                 : "Активна " + (activeTrade.direction == MarketAnalyzer.Signal.CALL ? "ВВЕРХ" : "ВНИЗ")
-                + " • вход " + format(activeTrade.entryPrice) + " • закрытие ориентировочно через 3 минуты.";
-        return "ДЕМО-СИМУЛЯЦИЯ (не Binarium)\n"
+                + " • вход " + format(activeTrade.entryPrice) + " • ставка " + format(activeTrade.stake)
+                + " • экспирация " + new SimpleDateFormat("HH:mm:ss", Locale.US)
+                    .format(new Date(activeTrade.expiryTime)) + " UTC.";
+        String history = preferences.getString("paper_log", "");
+        return "ДЕМО-СИМУЛЯЦИЯ (только виртуально, без связи с брокером)\n"
                 + "Виртуальный баланс: " + format(balance) + "\n"
                 + "Сделок сегодня: " + tradesToday + "/" + MAX_TRADES_PER_DAY
                 + " • плюсовых: " + wins + " • минусовых: " + losses + "\n"
-                + "Ставка: " + format(STAKE) + " • условная выплата: 80%\n"
-                + active + "\n" + lastEvent;
+                + "Убытков подряд: " + consecutiveLosses + "/" + MAX_CONSECUTIVE_LOSSES + "\n"
+                + active + "\nПоследнее событие: " + lastEvent
+                + (history.isEmpty() ? "" : "\n\nПОСЛЕДНИЕ СОБЫТИЯ:\n" + history);
     }
 
     public synchronized void resetSimulation() {
@@ -146,7 +170,29 @@ public final class PaperTradingEngine {
         activeTrade = null;
         lastProcessedCandle = -1L;
         lastEvent = "Виртуальный счёт сброшен.";
+        preferences.edit().remove("paper_active_direction").remove("paper_active_entry_time")
+                .remove("paper_active_expiry_time").remove("paper_active_entry_price")
+                .remove("paper_active_stake").remove("paper_active_payout")
+                .putString("paper_log", "").apply();
         save();
+        persistEvent();
+    }
+
+    private void restoreActiveTrade() {
+        String direction = preferences.getString("paper_active_direction", "");
+        if (direction.isEmpty()) return;
+        try {
+            MarketAnalyzer.Signal signal = MarketAnalyzer.Signal.valueOf(direction);
+            activeTrade = new Trade(signal,
+                    preferences.getLong("paper_active_entry_time", 0L),
+                    preferences.getLong("paper_active_expiry_time", 0L),
+                    Double.longBitsToDouble(preferences.getLong("paper_active_entry_price", 0L)),
+                    Double.longBitsToDouble(preferences.getLong("paper_active_stake", 0L)),
+                    Double.longBitsToDouble(preferences.getLong("paper_active_payout", 0L)));
+        } catch (Exception ignored) {
+            activeTrade = null;
+            clearActiveTrade();
+        }
     }
 
     private void resetDayIfNeeded() {
@@ -165,12 +211,45 @@ public final class PaperTradingEngine {
     }
 
     private void save() {
-        preferences.edit().putFloat("paper_balance", (float) balance)
+        SharedPreferences.Editor editor = preferences.edit()
+                .putFloat("paper_balance", (float) balance)
                 .putInt("paper_trades_today", tradesToday)
                 .putInt("paper_consecutive_losses", consecutiveLosses)
                 .putInt("paper_wins", wins)
                 .putInt("paper_losses", losses)
-                .putString("paper_day", dayKey).apply();
+                .putString("paper_day", dayKey);
+        if (activeTrade == null) {
+            editor.remove("paper_active_direction").remove("paper_active_entry_time")
+                    .remove("paper_active_expiry_time").remove("paper_active_entry_price")
+                    .remove("paper_active_stake").remove("paper_active_payout");
+        } else {
+            editor.putString("paper_active_direction", activeTrade.direction.name())
+                    .putLong("paper_active_entry_time", activeTrade.entryTime)
+                    .putLong("paper_active_expiry_time", activeTrade.expiryTime)
+                    .putLong("paper_active_entry_price", Double.doubleToRawLongBits(activeTrade.entryPrice))
+                    .putLong("paper_active_stake", Double.doubleToRawLongBits(activeTrade.stake))
+                    .putLong("paper_active_payout", Double.doubleToRawLongBits(activeTrade.payoutPercent));
+        }
+        editor.apply();
+    }
+
+    private void clearActiveTrade() {
+        preferences.edit().remove("paper_active_direction").remove("paper_active_entry_time")
+                .remove("paper_active_expiry_time").remove("paper_active_entry_price")
+                .remove("paper_active_stake").remove("paper_active_payout").apply();
+    }
+
+    private void persistEvent() {
+        String old = preferences.getString("paper_log", "");
+        String updated = (old.isEmpty() ? "" : old + "\n") + lastEvent;
+        String[] lines = updated.split("\\n");
+        StringBuilder limited = new StringBuilder();
+        for (int i = Math.max(0, lines.length - 8); i < lines.length; i++) {
+            if (limited.length() > 0) limited.append("\n");
+            limited.append(lines[i]);
+        }
+        preferences.edit().putString("paper_last_event", lastEvent)
+                .putString("paper_log", limited.toString()).apply();
     }
 
     private String utcDay() {
