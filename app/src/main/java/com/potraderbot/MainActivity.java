@@ -10,6 +10,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.graphics.Typeface;
 import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.RadioGroup;
+import android.widget.RadioButton;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -32,6 +35,8 @@ public class MainActivity extends Activity {
     private ApiKeyStore apiKeyStore;
     private SupabaseAuthStore authStore;
     private SupabaseAuthClient authClient;
+    private SupabaseSettingsClient settingsClient;
+    private TradingSettings currentSettings = TradingSettings.defaults();
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private TextView status, stats, log;
@@ -49,6 +54,7 @@ public class MainActivity extends Activity {
         try {
             authStore = new SupabaseAuthStore(this);
             authClient = new SupabaseAuthClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY);
+            settingsClient = new SupabaseSettingsClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY);
         } catch (RuntimeException error) {
             android.util.Log.e("GOD_OF_TRADING", "Secure auth storage unavailable", error);
         }
@@ -78,6 +84,10 @@ public class MainActivity extends Activity {
         Button accountButton = button("АККАУНТ: ВХОД / РЕГИСТРАЦИЯ");
         accountButton.setOnClickListener(v -> showAuthDialog());
         page.addView(accountButton);
+
+        Button settingsButton = button("НАСТРОЙКИ АНАЛИЗА");
+        settingsButton.setOnClickListener(v -> loadSettingsAndShowDialog());
+        page.addView(settingsButton);
 
         Button apiSettings = button("НАСТРОИТЬ API-КЛЮЧИ");
         apiSettings.setOnClickListener(v -> showApiKeyDialog());
@@ -128,22 +138,31 @@ public class MainActivity extends Activity {
         analysisTask = executor.submit(() -> {
             try {
                 long now = System.currentTimeMillis();
-                BinariumDataEngine dataEngine = new BinariumDataEngine(
-                        twelveKey, apiShKey);
-                BinariumDataEngine.Result result = dataEngine.analyze(
-                        "EUR/USD", calendarDate(-1), calendarDate(2), now);
-
+                BinariumDataEngine dataEngine = new BinariumDataEngine(twelveKey, apiShKey);
+                java.util.ArrayList<String> reports = new java.util.ArrayList<>();
+                int up = 0, down = 0;
+                for (String pair : currentSettings.selectedPairs) {
+                    if (Thread.currentThread().isInterrupted()) return;
+                    BinariumDataEngine.Result result = dataEngine.analyze(
+                            pair, calendarDate(-1), calendarDate(2), System.currentTimeMillis());
+                    if (result.signal == MarketAnalyzer.Signal.CALL) up++;
+                    else if (result.signal == MarketAnalyzer.Signal.PUT) down++;
+                    String direction = result.signal == MarketAnalyzer.Signal.CALL ? "ВВЕРХ"
+                            : result.signal == MarketAnalyzer.Signal.PUT ? "ВНИЗ" : "ОЖИДАНИЕ";
+                    reports.add(pair + " — " + direction + "\n" + result.reason
+                            + "\nСвечей: " + result.candleCount + "\n" + result.technicalReport);
+                }
+                final int upCount = up, downCount = down;
+                final String allReports = android.text.TextUtils.join("\n\n----------------\n\n", reports);
                 mainHandler.post(() -> {
                     if (!running || isFinishing()) return;
-                    status.setText(result.signal == MarketAnalyzer.Signal.CALL ? "ВВЕРХ"
-                            : result.signal == MarketAnalyzer.Signal.PUT ? "ВНИЗ" : "ОЖИДАНИЕ");
-                    status.setTextColor(result.signal == MarketAnalyzer.Signal.WAIT
-                            ? 0xFFFFC857 : 0xFF70D6A5);
-                    log.setText(result.reason + "\nПолучено свечей: " + result.candleCount
-                            + "\n" + result.technicalReport
-                            + "\nИсточник котировок: Twelve Data"
+                    status.setText("ВВЕРХ: " + upCount + " • ВНИЗ: " + downCount
+                            + " • ОЖИДАНИЕ: " + (currentSettings.selectedPairs.size()-upCount-downCount));
+                    status.setTextColor(upCount + downCount == 0 ? 0xFFFFC857 : 0xFF70D6A5);
+                    log.setText("Экспирация: " + currentSettings.expiryMinutes + " мин"
+                            + "\n" + allReports + "\n\nИсточник котировок: Twelve Data"
                             + "\nЭкономический календарь: API.SH"
-                            + "\nСделка не открывалась. Проверь котировку на Binarium вручную.");
+                            + "\nСделки автоматически не открываются.");
                     running = false;
                     analyzeButton.setEnabled(true);
                 });
@@ -163,6 +182,118 @@ public class MainActivity extends Activity {
         });
     }
 
+
+
+    private static final String[] AVAILABLE_PAIRS = {
+            "EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF", "USD/CAD",
+            "AUD/USD", "NZD/USD", "EUR/JPY", "GBP/JPY", "EUR/GBP"
+    };
+
+    private void loadSettingsAndShowDialog() {
+        if (authStore == null || !authStore.isSignedIn()) {
+            log.setText("Сначала войди в аккаунт, чтобы сохранять индивидуальные настройки между устройствами.");
+            return;
+        }
+        status.setText("ЗАГРУЗКА НАСТРОЕК...");
+        executor.submit(() -> {
+            try {
+                TradingSettings loaded = settingsClient.load(authStore.userId(), authStore.accessToken());
+                mainHandler.post(() -> {
+                    if (!isFinishing()) {
+                        currentSettings = loaded;
+                        showSettingsDialog();
+                    }
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    if (!isFinishing()) {
+                        status.setText("НАСТРОЙКИ НЕ ЗАГРУЖЕНЫ");
+                        log.setText("Не удалось получить настройки из Supabase: " + safeMessage(e));
+                    }
+                });
+            }
+        });
+    }
+
+    private void showSettingsDialog() {
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (14 * getResources().getDisplayMetrics().density);
+        layout.setPadding(pad, 0, pad, 0);
+        TextView pairsTitle = text("ВАЛЮТНЫЕ ПАРЫ (1–10)", 15, 0xFFE5EDF7, true);
+        layout.addView(pairsTitle);
+        CheckBox[] pairChecks = new CheckBox[AVAILABLE_PAIRS.length];
+        for (int i = 0; i < AVAILABLE_PAIRS.length; i++) {
+            pairChecks[i] = new CheckBox(this);
+            pairChecks[i].setText(AVAILABLE_PAIRS[i]);
+            pairChecks[i].setTextColor(0xFFE5EDF7);
+            pairChecks[i].setChecked(currentSettings.selectedPairs.contains(AVAILABLE_PAIRS[i]));
+            layout.addView(pairChecks[i]);
+        }
+        TextView expiryTitle = text("ЭКСПИРАЦИЯ", 15, 0xFFE5EDF7, true);
+        expiryTitle.setPadding(0, pad, 0, 0);
+        layout.addView(expiryTitle);
+        RadioGroup expiryGroup = new RadioGroup(this);
+        expiryGroup.setOrientation(RadioGroup.HORIZONTAL);
+        RadioButton three = new RadioButton(this);
+        three.setText("3 минуты"); three.setTextColor(0xFFE5EDF7); three.setId(3003);
+        RadioButton five = new RadioButton(this);
+        five.setText("5 минут"); five.setTextColor(0xFFE5EDF7); five.setId(3005);
+        expiryGroup.addView(three); expiryGroup.addView(five);
+        expiryGroup.check(currentSettings.expiryMinutes == 5 ? 3005 : 3003);
+        layout.addView(expiryGroup);
+        CheckBox sharing = new CheckBox(this);
+        sharing.setText("Разрешить двусторонний обмен сигналами");
+        sharing.setTextColor(0xFFE5EDF7);
+        sharing.setChecked(currentSettings.sharingEnabled);
+        layout.addView(sharing);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Настройки анализа")
+                .setView(layout).setPositiveButton("СОХРАНИТЬ", null)
+                .setNegativeButton("ОТМЕНА", null).create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            java.util.ArrayList<String> selected = new java.util.ArrayList<>();
+            for (int i=0;i<pairChecks.length;i++) if (pairChecks[i].isChecked()) selected.add(AVAILABLE_PAIRS[i]);
+            if (selected.isEmpty()) {
+                log.setText("Нужно выбрать хотя бы одну валютную пару.");
+                return;
+            }
+            int expiry = expiryGroup.getCheckedRadioButtonId() == 3005 ? 5 : 3;
+            TradingSettings next = new TradingSettings(selected, expiry, sharing.isChecked());
+            dialog.dismiss();
+            executor.submit(() -> {
+                try {
+                    settingsClient.save(authStore.userId(), authStore.accessToken(), next);
+                    currentSettings = next;
+                    mainHandler.post(() -> {
+                        if (!isFinishing()) {
+                            status.setText("НАСТРОЙКИ СОХРАНЕНЫ");
+                            log.setText("Сохранено для аккаунта: " + authStore.email()
+                                    + "\nПары: " + selected + "\nЭкспирация: " + expiry + " мин"
+                                    + "\nОбмен сигналами: " + (next.sharingEnabled ? "разрешён" : "выключен"));
+                        }
+                    });
+                } catch (Exception e) {
+                    mainHandler.post(() -> {
+                        if (!isFinishing()) {
+                            status.setText("ОШИБКА СОХРАНЕНИЯ");
+                            log.setText("Не удалось сохранить настройки: " + safeMessage(e));
+                        }
+                    });
+                }
+            });
+        }));
+        dialog.show();
+    }
+
+    private void loadSettingsAfterLogin() {
+        if (authStore == null || !authStore.isSignedIn()) return;
+        executor.submit(() -> {
+            try {
+                TradingSettings loaded = settingsClient.load(authStore.userId(), authStore.accessToken());
+                currentSettings = loaded;
+            } catch (Exception ignored) { currentSettings = TradingSettings.defaults(); }
+        });
+    }
 
     private void showAuthDialog() {
         if (authStore == null || authClient == null || !authClient.isConfigured()) {
@@ -231,7 +362,7 @@ public class MainActivity extends Activity {
             try {
                 org.json.JSONObject response = register
                         ? authClient.signUp(email, password) : authClient.signIn(email, password);
-                if (response.has("access_token")) saveAuthResponse(response);
+                if (response.has("access_token")) { saveAuthResponse(response); loadSettingsAfterLogin(); }
                 mainHandler.post(() -> {
                     if (isFinishing()) return;
                     if (response.has("access_token")) {
@@ -305,6 +436,7 @@ public class MainActivity extends Activity {
             try {
                 org.json.JSONObject response = authClient.exchangeCode(code, verifier);
                 saveAuthResponse(response);
+                loadSettingsAfterLogin();
                 authStore.saveCodeVerifier("");
                 mainHandler.post(() -> {
                     if (!isFinishing()) {
