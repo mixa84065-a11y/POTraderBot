@@ -119,7 +119,7 @@ public class MainActivity extends Activity {
                 });
             } catch (Exception error) {
                 mainHandler.post(() -> {
-                    if (isFinishing()) return;
+                    if (!running || isFinishing()) return;
                     status.setText("STATUS: DATA ERROR");
                     status.setTextColor(0xFFFF6B6B);
                     String message = error.getMessage();
