@@ -78,6 +78,14 @@ public class TwelveDataClient {
                 double close = Double.parseDouble(item.getString("close"));
                 candles.add(new Candle(date.getTime(), open, high, low, close));
             }
+            // Exclude the currently forming minute candle to avoid repainting signals.
+            if (!candles.isEmpty()) {
+                Candle latest = candles.get(candles.size() - 1);
+                long ageMillis = System.currentTimeMillis() - latest.time;
+                if (ageMillis >= 0 && ageMillis < 60000L) {
+                    candles.remove(candles.size() - 1);
+                }
+            }
             return candles;
         } finally {
             connection.disconnect();
