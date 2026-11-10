@@ -1,8 +1,8 @@
+import java.util.Properties
+
 plugins {
     id 'com.android.application'
 }
-
-import java.util.Properties
 
 def localSecrets = new Properties()
 def localPropertiesFile = rootProject.file("local.properties")
