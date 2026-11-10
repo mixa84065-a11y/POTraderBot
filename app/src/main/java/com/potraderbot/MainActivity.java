@@ -321,7 +321,7 @@ public final class MainActivity extends Activity {
         apiKeyInput = editField("Вставьте личный API-ключ");
         apiKeyInput.setInputType(0x00000081);
         settings.addView(apiKeyInput);
-        TextView platformNote = label("Котировки поступают из Twelve Data. Выбор площадки меняет только профиль интерфейса.", 11, 0xFFB9C5D5, false);
+        TextView platformNote = label("Котировки поступают из Twelve Data. Выбор площадки меняет только профиль интерфейса. Проверьте законность и доступность площадки в стране проживания: условия Binarium указывают на ограничения для резидентов ЕС.", 11, 0xFFB9C5D5, false);
         settings.addView(platformNote);
         settings.setVisibility(View.GONE);
         page.addView(settings);
@@ -717,7 +717,7 @@ public final class MainActivity extends Activity {
                 .append(decision.message).append("\n\n");
         int shown = 0;
         for (EconomicEvent event : economicEvents) {
-            if (event == null) continue;
+            if (event == null || !isNewsEventRelevant(event, symbol)) continue;
             long delta = event.timestampMillis - now;
             if (delta < -6L * 60L * 60L * 1000L) continue;
             out.append("• ").append(formatLocalNewsTime(event.timestampMillis))
@@ -735,6 +735,15 @@ public final class MainActivity extends Activity {
         if (shown == 0) out.append("В ближайшем окне нет событий высокого или среднего влияния в загруженном расписании.");
         out.append("\nОбновлено: ").append(formatLocalNewsTime(newsCalendarFetchedAt));
         newsCalendarView.setText(out.toString());
+    }
+
+    private boolean isNewsEventRelevant(EconomicEvent event, String symbol) {
+        String clean = symbol == null ? "" : symbol.trim().toUpperCase(Locale.US);
+        if (clean.matches("[A-Z]{3}/[A-Z]{3}")) {
+            String[] parts = clean.split("/");
+            return event.currency.equals(parts[0]) || event.currency.equals(parts[1]);
+        }
+        return "USD".equals(event.currency);
     }
 
     private String formatLocalNewsTime(long timestamp) {
