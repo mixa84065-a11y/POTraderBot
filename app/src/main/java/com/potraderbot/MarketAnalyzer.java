@@ -9,9 +9,14 @@ public final class MarketAnalyzer {
     public static final class Analysis {
         public final Signal signal;
         public final double ema9, ema21, rsi14;
+        public final int strength;
         public final String explanation;
         Analysis(Signal signal, double ema9, double ema21, double rsi14, String explanation) {
-            this.signal=signal; this.ema9=ema9; this.ema21=ema21; this.rsi14=rsi14; this.explanation=explanation;
+            this(signal, ema9, ema21, rsi14, 0, explanation);
+        }
+        Analysis(Signal signal, double ema9, double ema21, double rsi14, int strength, String explanation) {
+            this.signal=signal; this.ema9=ema9; this.ema21=ema21; this.rsi14=rsi14;
+            this.strength=Math.max(0, Math.min(100, strength)); this.explanation=explanation;
         }
     }
 
@@ -57,7 +62,9 @@ public final class MarketAnalyzer {
                 .append(" • EMA 21: ").append(String.format(java.util.Locale.US,"%.5f",e21))
                 .append(" • RSI 14: ").append(String.format(java.util.Locale.US,"%.2f",rsi))
                 .append("\nВероятность не заявляется: для неё нужна проверенная статистика тестирования стратегии.");
-        return new Analysis(signal,e9,e21,rsi,why.toString());
+        int alignedFactors = (trendUp || trendDown ? 1 : 0) + (rsiUp || rsiDown ? 1 : 0) + (candleUp || candleDown ? 1 : 0);
+        int strength = alignedFactors * 100 / 3;
+        return new Analysis(signal,e9,e21,rsi,strength,why.toString());
     }
 
     private void appendFactor(StringBuilder out,String text,boolean ok){
