@@ -37,8 +37,8 @@ jobs:
         run: |
           if [ -n "$TWELVE_DATA_API_KEY" ] || [ -n "$API_SH_KEY" ]; then
             {
-              printf 'TWELVE_DATA_API_KEY=%s\\n' "$TWELVE_DATA_API_KEY"
-              printf 'API_SH_KEY=%s\\n' "$API_SH_KEY"
+              printf 'TWELVE_DATA_API_KEY=%s\n' "$TWELVE_DATA_API_KEY"
+              printf 'API_SH_KEY=%s\n' "$API_SH_KEY"
             } > local.properties
           fi
 
