@@ -112,21 +112,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish signed APK to GitHub Releases
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.app_version.outputs.tag }}
-          name: DeD_GoD ${{ steps.app_version.outputs.tag }}
-          files: dist/*.apk
-          overwrite_files: true
-          make_latest: true
-          generate_release_notes: true
-
-      - name: Point release tag to the validated source commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.app_version.outputs.tag }}
-        shell: bash
-        run: |
-          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${RELEASE_TAG}" \
-            -f sha="${GITHUB_SHA}" -F force=true
+      # Release publishing is intentionally held until all v0.6.4 features pass validation.
