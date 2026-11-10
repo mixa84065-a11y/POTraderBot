@@ -69,6 +69,17 @@ public final class MainActivity extends Activity {
     private TextView signalStrengthView;
     private ProgressBar signalStrengthBar;
     private Spinner expiryInput;
+    private EditText manualStakeInput;
+    private TextView paperTradeStatusView;
+    private Spinner chartTimeframeInput;
+    private List<Candle> latestCandles = java.util.Collections.emptyList();
+    private boolean manualTradeRefresh = false;
+    private final Runnable tradeCountdownRunnable = new Runnable() {
+        @Override public void run() {
+            renderPaperTradeStatus();
+            if (paperTrading != null && paperTrading.hasActiveTrade()) handler.postDelayed(this, 1000L);
+        }
+    };
     private MarketAnalyzer.Signal displayedSignal = MarketAnalyzer.Signal.WAIT;
     private Button analyzeButton;
     private Button autoButton;
@@ -256,18 +267,56 @@ public final class MainActivity extends Activity {
         assetParams.topMargin = dp(10);
         page.addView(assetRow, assetParams);
 
+        LinearLayout quickTradePanel = panel();
+        quickTradePanel.addView(label("БЫСТРАЯ НАСТРОЙКА ВИРТУАЛЬНОЙ СДЕЛКИ", 11, 0xFFFFD45A, true));
+        quickTradePanel.addView(label("Сумма сделки (₽)", 10, 0xFFE1E8F0, false));
+        manualStakeInput = editField("Введите сумму, например 500");
+        manualStakeInput.setInputType(8194);
+        manualStakeInput.setText("500");
+        quickTradePanel.addView(manualStakeInput);
+        LinearLayout stakeQuickRow = new LinearLayout(this);
+        stakeQuickRow.setOrientation(LinearLayout.HORIZONTAL);
+        for (String value : new String[]{"100", "250", "500", "1000", "2000"}) {
+            Button quick = makeNavButton(value + " ₽");
+            quick.setTextSize(10);
+            quick.setOnClickListener(v -> manualStakeInput.setText(value));
+            LinearLayout.LayoutParams quickParams = new LinearLayout.LayoutParams(0, dp(38), 1f);
+            quickParams.setMargins(dp(2), dp(3), dp(2), dp(3));
+            stakeQuickRow.addView(quick, quickParams);
+        }
+        quickTradePanel.addView(stakeQuickRow);
+        quickTradePanel.addView(label("Экспирация", 10, 0xFFE1E8F0, false));
+        LinearLayout expiryQuickRow = new LinearLayout(this);
+        expiryQuickRow.setOrientation(LinearLayout.HORIZONTAL);
+        for (int minutes = 3; minutes <= 5; minutes++) {
+            final int selectedMinutes = minutes;
+            Button quickExpiry = makeNavButton(minutes + " мин.");
+            quickExpiry.setTextSize(12);
+            quickExpiry.setOnClickListener(v -> {
+                if (expiryInput != null) expiryInput.setSelection(selectedMinutes - 3);
+                updateExpiryQuickStyle(expiryQuickRow, selectedMinutes);
+            });
+            LinearLayout.LayoutParams expiryParams = new LinearLayout.LayoutParams(0, dp(42), 1f);
+            expiryParams.setMargins(dp(3), dp(3), dp(3), dp(3));
+            expiryQuickRow.addView(quickExpiry, expiryParams);
+        }
+        quickTradePanel.addView(expiryQuickRow);
+        paperTradeStatusView = label("Виртуальная сделка не открыта.", 11, 0xFFE1E8F0, false);
+        paperTradeStatusView.setPadding(dp(2), dp(5), dp(2), dp(2));
+        quickTradePanel.addView(paperTradeStatusView);
+        LinearLayout.LayoutParams quickPanelParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        quickPanelParams.topMargin = dp(10);
+        page.addView(quickTradePanel, quickPanelParams);
+
         LinearLayout signalButtons = new LinearLayout(this);
         signalButtons.setOrientation(LinearLayout.HORIZONTAL);
         Button upSignal = makeSignalButton("⬆  ВВЕРХ  ?", 0xFF00D83A);
         Button downSignal = makeSignalButton("⬇  ВНИЗ  ?", 0xFFFF2525);
         upSignal.setTextSize(18);
         downSignal.setTextSize(18);
-        upSignal.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("Сигнал ВВЕРХ")
-                .setMessage("Это визуальный индикатор направления аналитического сигнала. Он не отправляет торговую заявку.")
-                .setPositiveButton("Понятно", null).show());
-        downSignal.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("Сигнал ВНИЗ")
-                .setMessage("Это визуальный индикатор направления аналитического сигнала. Он не отправляет торговую заявку.")
-                .setPositiveButton("Понятно", null).show());
+        upSignal.setOnClickListener(v -> openManualPaperTrade(MarketAnalyzer.Signal.CALL));
+        downSignal.setOnClickListener(v -> openManualPaperTrade(MarketAnalyzer.Signal.PUT));
         signalButtons.addView(upSignal, new LinearLayout.LayoutParams(0, dp(70), 1f));
         LinearLayout.LayoutParams downParams = new LinearLayout.LayoutParams(0, dp(70), 1f);
         downParams.leftMargin = dp(8);
@@ -314,6 +363,23 @@ public final class MainActivity extends Activity {
         chartView = new ChartView(this);
         LinearLayout chartCard = panel();
         chartCard.addView(label("ГРАФИК И ТОЧКА ВХОДА", 12, 0xFFFFD45A, true));
+        chartTimeframeInput = new Spinner(this);
+        ArrayAdapter<String> timeframeAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
+                new String[]{"M1 • 1 минута", "M5 • 5 минут", "M15 • 15 минут", "H1 • 1 час"});
+        timeframeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        chartTimeframeInput.setAdapter(timeframeAdapter);
+        chartTimeframeInput.setSelection(0);
+        chartTimeframeInput.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                if (chartView != null && latestCandles != null && !latestCandles.isEmpty()) {
+                    List<Candle> displayCandles = aggregateCandles(latestCandles, new int[]{1,5,15,60}[position]);
+                    Candle lastDisplay = displayCandles.get(displayCandles.size() - 1);
+                    chartView.setMarketData(displayCandles, displayedSignal, lastDisplay.close, false);
+                }
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
+        });
+        chartCard.addView(chartTimeframeInput);
         chartCard.addView(chartView, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(220)));
         page.addView(chartCard);
@@ -827,7 +893,7 @@ public final class MainActivity extends Activity {
         card.addView(label("Допустимый риск на позицию (%)", 11, 0xFFE1E8F0, false));
         card.addView(riskPercentInput);
         card.addView(label("Выплата площадки (%) — укажите значение из терминала", 11, 0xFFE1E8F0, false));
-        payoutInput.setText("80");
+        payoutInput.setText("90");
         card.addView(payoutInput);
         card.addView(label("Экспирация виртуальной сделки", 11, 0xFFE1E8F0, false));
         expiryInput = new Spinner(this);
@@ -1222,7 +1288,19 @@ public final class MainActivity extends Activity {
                     analyzeButton.setEnabled(true);
                     displayedSignal = shown.signal;
                     renderNewsCalendar();
-                    if (chartView != null) chartView.setMarketData(candles, shown.signal, last.close, staleData);
+                    latestCandles = candles;
+                    List<Candle> chartCandles = aggregateCandles(candles, getChartTimeframeMinutes());
+                    Candle chartLast = chartCandles.isEmpty() ? last : chartCandles.get(chartCandles.size() - 1);
+                    if (chartView != null) chartView.setMarketData(chartCandles, shown.signal, chartLast.close, staleData);
+                    paperTrading.update(candles, symbol);
+                    renderVirtualBalance();
+                    renderPaperTradeStatus();
+                    if (!paperTrading.hasActiveTrade() && manualTradeRefresh) {
+                        manualTradeRefresh = false;
+                        autoRefreshEnabled = false;
+                        handler.removeCallbacks(refreshRunnable);
+                        if (autoButton != null) autoButton.setText("ВКЛЮЧИТЬ АВТООБНОВЛЕНИЕ (10 СЕК.)");
+                    }
                     if (quoteView != null) quoteView.setText(String.format(Locale.US, "%.5f", last.close));
                     updateInlineRisk();
                     status.setText((staleData ? "ДАННЫЕ УСТАРЕЛИ • " : autoRefreshEnabled ? "АВТО • " : "") + "СИГНАЛ: " + signalLabel(shown.signal));
@@ -1338,6 +1416,99 @@ public final class MainActivity extends Activity {
         if (signalStrengthView != null) {
             signalStrengthView.setText("СИЛА " + safe + "/100");
             signalStrengthView.setTextColor(safe >= 80 ? 0xFF70D6A5 : safe >= 50 ? 0xFFFFD45A : 0xFFFF8A80);
+        }
+    }
+
+    private void openManualPaperTrade(MarketAnalyzer.Signal direction) {
+        if (modeInput == null || modeInput.getSelectedItemPosition() != 0) {
+            new AlertDialog.Builder(this).setTitle("Доступно только в ДЕМО")
+                    .setMessage("Кнопки ВВЕРХ / ВНИЗ открывают только виртуальные сделки. В реальном режиме приложение не отправляет заявки брокеру.")
+                    .setPositiveButton("Понятно", null).show();
+            return;
+        }
+        if (latestCandles == null || latestCandles.isEmpty()) {
+            status.setText("СНАЧАЛА ПОЛУЧИТЕ СВЕЖИЕ КОТИРОВКИ");
+            status.setTextColor(0xFFFFC857);
+            return;
+        }
+        Candle last = latestCandles.get(latestCandles.size() - 1);
+        if (System.currentTimeMillis() - (last.time + 60_000L) > 180_000L) {
+            status.setText("ВХОД ЗАБЛОКИРОВАН: КОТИРОВКИ УСТАРЕЛИ");
+            status.setTextColor(0xFFFF7B72);
+            return;
+        }
+        try {
+            double stake = Double.parseDouble(manualStakeInput.getText().toString().trim().replace(',', '.'));
+            double payout = getConfiguredPayout();
+            int expiry = expiryInput == null ? 3 : expiryInput.getSelectedItemPosition() + 3;
+            String symbol = symbolInput.getText().toString().trim();
+            String result = paperTrading.openManual(latestCandles, direction, stake, payout, expiry, symbol);
+            renderVirtualBalance();
+            renderPaperTradeStatus();
+            details.setText(paperTrading.getSummary());
+            status.setText(result);
+            status.setTextColor(result.startsWith("ОТКРЫТА") ? 0xFF70D6A5 : 0xFFFFC857);
+            if (paperTrading.hasActiveTrade()) {
+                handler.removeCallbacks(tradeCountdownRunnable);
+                handler.post(tradeCountdownRunnable);
+                if (!autoRefreshEnabled) {
+                    manualTradeRefresh = true;
+                    autoRefreshEnabled = true;
+                    if (autoButton != null) autoButton.setText("АВТООБНОВЛЕНИЕ ДЛЯ ЭКСПИРАЦИИ ВКЛЮЧЕНО");
+                    handler.removeCallbacks(refreshRunnable);
+                    handler.postDelayed(refreshRunnable, AUTO_REFRESH_MS);
+                }
+            }
+        } catch (Exception error) {
+            status.setText(error.getMessage() == null ? "Проверьте сумму сделки." : error.getMessage());
+            status.setTextColor(0xFFFF7B72);
+        }
+    }
+
+    private void renderPaperTradeStatus() {
+        if (paperTradeStatusView == null || paperTrading == null) return;
+        if (!paperTrading.hasActiveTrade()) {
+            paperTradeStatusView.setText(paperTrading.getSummary());
+            return;
+        }
+        long remaining = paperTrading.getRemainingMillis();
+        long seconds = (remaining + 999L) / 1000L;
+        paperTradeStatusView.setText("СДЕЛКА ОТКРЫТА • ДО ЭКСПИРАЦИИ "
+                + String.format(Locale.US, "%02d:%02d", seconds / 60L, seconds % 60L)
+                + "\n" + paperTrading.getSummary());
+    }
+
+    private int getChartTimeframeMinutes() {
+        return chartTimeframeInput == null ? 1 : new int[]{1,5,15,60}[chartTimeframeInput.getSelectedItemPosition()];
+    }
+
+    private List<Candle> aggregateCandles(List<Candle> source, int minutes) {
+        if (source == null || source.isEmpty() || minutes <= 1) return source;
+        java.util.ArrayList<Candle> result = new java.util.ArrayList<>();
+        long interval = minutes * 60_000L;
+        long bucket = -1L, time = 0L;
+        double open = 0, high = 0, low = 0, close = 0;
+        for (Candle candle : source) {
+            long nextBucket = (candle.time / interval) * interval;
+            if (bucket != -1L && nextBucket != bucket) {
+                result.add(new Candle(Math.max(1L, time), open, high, low, close));
+                open = candle.open; high = candle.high; low = candle.low;
+            } else if (bucket == -1L) {
+                open = candle.open; high = candle.high; low = candle.low;
+            } else {
+                high = Math.max(high, candle.high); low = Math.min(low, candle.low);
+            }
+            bucket = nextBucket; time = nextBucket; close = candle.close;
+        }
+        if (bucket != -1L) result.add(new Candle(Math.max(1L, time), open, high, low, close));
+        return result;
+    }
+
+    private void updateExpiryQuickStyle(LinearLayout row, int selectedMinutes) {
+        for (int i = 0; i < row.getChildCount(); i++) {
+            Button button = (Button) row.getChildAt(i);
+            boolean selected = i + 3 == selectedMinutes;
+            button.setTextColor(selected ? 0xFF70D6A5 : 0xFFFFD45A);
         }
     }
 
