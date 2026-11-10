@@ -86,6 +86,31 @@ public class MainActivity extends Activity {
         config.setPadding(0, 12, 0, 24);
         page.addView(config);
 
+        // Keep the v0.5.9 screen hierarchy: status and market setup first,
+        // primary analysis controls next, then statistics and activity details.
+        analyzeButton = button("АНАЛИЗИРОВАТЬ");
+        analyzeButton.setOnClickListener(v -> runLiveAnalysis());
+        page.addView(analyzeButton);
+
+        Button stop = button("ОСТАНОВИТЬ АНАЛИЗ");
+        stop.setOnClickListener(v -> {
+            running = false;
+            if (analysisTask != null) analysisTask.cancel(true);
+            analyzeButton.setEnabled(true);
+            status.setText("АНАЛИЗ ОСТАНОВЛЕН");
+            status.setTextColor(0xFFFFC857);
+            log.setText("Анализ остановлен. Сделка не открывалась.");
+        });
+        page.addView(stop);
+
+        stats = text("Валютных пар выбрано: " + currentSettings.selectedPairs.size() + " / 10", 17, 0xFFFFFFFF, true);
+        stats.setPadding(0, 28, 0, 10);
+        page.addView(stats);
+
+        log = text("Нажми «АНАЛИЗИРОВАТЬ», чтобы проверить выбранные валютные пары и экономический календарь.\nСделки автоматически не открываются.", 14, 0xFFB8C6D9, false);
+        page.addView(log);
+        page.addView(text("\nВАЖНО: котировки Twelve Data могут отличаться от Binarium. Сценарные оценки не являются вероятностями или гарантией. Любое решение проверяй вручную на платформе.", 13, 0xFFFFC857, true));
+
         Button accountButton = button("АККАУНТ: ВХОД / РЕГИСТРАЦИЯ");
         accountButton.setOnClickListener(v -> showAuthDialog());
         page.addView(accountButton);
@@ -101,29 +126,6 @@ public class MainActivity extends Activity {
         Button apiSettings = button("НАСТРОИТЬ API-КЛЮЧИ");
         apiSettings.setOnClickListener(v -> showApiKeyDialog());
         page.addView(apiSettings);
-
-        analyzeButton = button("АНАЛИЗИРОВАТЬ");
-        analyzeButton.setOnClickListener(v -> runLiveAnalysis());
-        page.addView(analyzeButton);
-
-        Button stop = button("ОСТАНОВИТЬ АНАЛИЗ");
-        stop.setOnClickListener(v -> {
-            running = false;
-            if (analysisTask != null) analysisTask.cancel(true);
-            analyzeButton.setEnabled(true);
-            status.setText("STATUS: STOPPED");
-            status.setTextColor(0xFFFFC857);
-            log.setText("Analysis stopped. No trade was placed.");
-        });
-        page.addView(stop);
-
-        stats = text("Валютных пар выбрано: " + currentSettings.selectedPairs.size() + " / 10", 17, 0xFFFFFFFF, true);
-        stats.setPadding(0, 28, 0, 10);
-        page.addView(stats);
-
-        log = text("Нажми «АНАЛИЗИРОВАТЬ», чтобы проверить выбранные валютные пары и экономический календарь.\nСделки автоматически не открываются.", 14, 0xFFB8C6D9, false);
-        page.addView(log);
-        page.addView(text("\nВАЖНО: котировки Twelve Data могут отличаться от Binarium. Сценарные оценки не являются вероятностями или гарантией. Любое решение проверяй вручную на платформе.", 13, 0xFFFFC857, true));
         setContentView(scroll);
     }
 
@@ -618,7 +620,7 @@ public class MainActivity extends Activity {
                 || !"auth".equals(data.getHost())) return;
         String code = data.getQueryParameter("code");
         if (code == null || code.isEmpty()) {
-            log.setText("Google не вернул код авторизации. Проверь Redirect URL в Supabase.");
+            log.setText("Ссылка подтверждения не содержит код авторизации. Проверь шаблон письма и Redirect URL в Supabase.");
             return;
         }
         String verifier = authStore == null ? "" : authStore.codeVerifier();
@@ -645,8 +647,8 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 mainHandler.post(() -> {
                     if (!isFinishing()) {
-                        status.setText("ОШИБКА GOOGLE");
-                        log.setText("Не удалось завершить вход Google: " + safeMessage(e)
+                        status.setText("ОШИБКА АВТОРИЗАЦИИ");
+                        log.setText("Не удалось завершить авторизацию: " + safeMessage(e)
                                 + "\nПроверь callback URL com.potraderbot://auth/callback в Supabase.");
                     }
                 });
