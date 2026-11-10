@@ -70,7 +70,14 @@ public final class NewsRiskEngine {
 
     private String[] relevantCurrencies(String symbol) {
         String clean = symbol == null ? "" : symbol.trim().toUpperCase(Locale.US);
-        if (clean.matches("[A-Z]{3}/[A-Z]{3}")) return clean.split("/");
+        if (clean.matches("[A-Z]{3}/[A-Z]{3}")) {
+            String[] parts = clean.split("/");
+            // The calendar publishes CNY events; CNH is the offshore renminbi quote.
+            for (int i = 0; i < parts.length; i++) {
+                if ("CNH".equals(parts[i])) parts[i] = "CNY";
+            }
+            return parts;
+        }
         return new String[]{"USD"};
     }
 
