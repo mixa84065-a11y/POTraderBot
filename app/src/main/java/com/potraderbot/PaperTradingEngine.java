@@ -126,6 +126,50 @@ public final class PaperTradingEngine {
         return lastEvent;
     }
 
+    /** Opens a user-directed demo trade; unlike auto mode it does not require an analyzer signal. */
+    public synchronized String openManual(List<Candle> candles, MarketAnalyzer.Signal direction,
+                                          double stake, double payoutPercent, int expiryMinutes, String symbol) {
+        resetDayIfNeeded();
+        if (candles == null || candles.isEmpty()) return "Нет свежих котировок. Сначала выполните анализ.";
+        settleIfExpired(candles, symbol);
+        if (activeTrade != null) return "Уже открыта виртуальная сделка. Дождитесь её экспирации.";
+        if (direction != MarketAnalyzer.Signal.CALL && direction != MarketAnalyzer.Signal.PUT)
+            return "Неверно выбрано направление сделки.";
+        if (!Double.isFinite(stake) || stake <= 0 || stake > balance)
+            return "Сумма сделки должна быть больше нуля и не превышать виртуальный баланс.";
+        if (!Double.isFinite(payoutPercent) || payoutPercent <= 0 || payoutPercent > 1000)
+            return "Проверьте процент выплаты.";
+        if (expiryMinutes < 3 || expiryMinutes > 5)
+            return "Доступная экспирация: 3, 4 или 5 минут.";
+        if (tradesToday >= MAX_TRADES_PER_DAY)
+            return "Достигнут дневной лимит виртуальных сделок (" + MAX_TRADES_PER_DAY + ").";
+        if (consecutiveLosses >= MAX_CONSECUTIVE_LOSSES)
+            return "Пауза: достигнут лимит " + MAX_CONSECUTIVE_LOSSES + " убытков подряд.";
+        Candle last = candles.get(candles.size() - 1);
+        long entryTime = Math.max(System.currentTimeMillis(), last.time + 60_000L);
+        long expiryTime = entryTime + expiryMinutes * 60_000L;
+        activeTrade = new Trade(direction, entryTime, expiryTime, last.close, stake, payoutPercent, symbol);
+        tradesToday++;
+        save();
+        lastEvent = "ОТКРЫТА ВИРТУАЛЬНАЯ " + (direction == MarketAnalyzer.Signal.CALL ? "ВВЕРХ" : "ВНИЗ")
+                + " • ставка " + format(stake) + " • выплата " + format(payoutPercent)
+                + "% • вход " + format(last.close) + " • экспирация " + expiryMinutes + " мин.";
+        persistEvent();
+        return lastEvent;
+    }
+
+    /** Refreshes an open demo trade using the newest one-minute candles without opening another. */
+    public synchronized String update(List<Candle> candles, String symbol) {
+        if (candles != null && !candles.isEmpty()) settleIfExpired(candles, symbol);
+        return lastEvent;
+    }
+
+    public synchronized boolean hasActiveTrade() { return activeTrade != null; }
+
+    public synchronized long getRemainingMillis() {
+        return activeTrade == null ? 0L : Math.max(0L, activeTrade.expiryTime - System.currentTimeMillis());
+    }
+
     private void settleIfExpired(List<Candle> candles, String symbol) {
         if (activeTrade == null || !activeTrade.symbol.equalsIgnoreCase(symbol == null ? "" : symbol)) return;
         Candle expiryCandle = null;
