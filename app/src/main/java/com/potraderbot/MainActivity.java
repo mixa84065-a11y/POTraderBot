@@ -149,6 +149,9 @@ public class MainActivity extends Activity {
                 int up = 0, down = 0;
                 java.util.List<SupabaseSharingClient.Connection> shareContacts = new java.util.ArrayList<>();
                 if (currentSettings.sharingEnabled && authStore != null && authStore.isSignedIn()) {
+                    try { refreshStoredSession(); } catch (Exception ignored) { }
+                }
+                if (currentSettings.sharingEnabled && authStore != null && authStore.isSignedIn()) {
                     try {
                         for (SupabaseSharingClient.Connection c : sharingClient.connections(authStore.userId(), authStore.accessToken()))
                             if ("accepted".equals(c.status)) shareContacts.add(c);
@@ -219,6 +222,7 @@ public class MainActivity extends Activity {
         status.setText("ЗАГРУЗКА НАСТРОЕК...");
         executor.submit(() -> {
             try {
+                refreshStoredSession();
                 TradingSettings loaded = settingsClient.load(authStore.userId(), authStore.accessToken());
                 mainHandler.post(() -> {
                     if (!isFinishing()) {
@@ -311,6 +315,7 @@ public class MainActivity extends Activity {
         if (authStore == null || !authStore.isSignedIn()) return;
         executor.submit(() -> {
             try {
+                refreshStoredSession();
                 TradingSettings loaded = settingsClient.load(authStore.userId(), authStore.accessToken());
                 currentSettings = loaded;
             } catch (Exception ignored) { currentSettings = TradingSettings.defaults(); }
@@ -326,6 +331,7 @@ public class MainActivity extends Activity {
         status.setText("ЗАГРУЗКА КОНТАКТОВ...");
         executor.submit(() -> {
             try {
+                refreshStoredSession();
                 java.util.List<SupabaseSharingClient.Connection> contacts =
                         sharingClient.connections(authStore.userId(), authStore.accessToken());
                 String signals = sharingClient.recentSignals(authStore.userId(), authStore.accessToken());
@@ -556,6 +562,13 @@ public class MainActivity extends Activity {
                 }
             });
         });
+    }
+
+
+    private void refreshStoredSession() throws Exception {
+        if (authStore == null || authClient == null || authStore.refreshToken().isEmpty()) return;
+        org.json.JSONObject refreshed = authClient.refreshSession(authStore.refreshToken());
+        saveAuthResponse(refreshed);
     }
 
     private void saveAuthResponse(org.json.JSONObject response) {
