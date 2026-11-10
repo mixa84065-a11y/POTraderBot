@@ -151,11 +151,12 @@ public final class PaperTradingEngine {
     }
 
     public synchronized String getSummary() {
+        SimpleDateFormat expiryFormat = new SimpleDateFormat("HH:mm:ss", Locale.US);
+        expiryFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
         String active = activeTrade == null ? "Нет активной виртуальной сделки."
                 : "Активна " + (activeTrade.direction == MarketAnalyzer.Signal.CALL ? "ВВЕРХ" : "ВНИЗ")
                 + " • вход " + format(activeTrade.entryPrice) + " • ставка " + format(activeTrade.stake)
-                + " • актив " + activeTrade.symbol + " • экспирация " + new SimpleDateFormat("HH:mm:ss", Locale.US)
-                    .format(new Date(activeTrade.expiryTime)) + " UTC.";
+                + " • актив " + activeTrade.symbol + " • экспирация " + expiryFormat.format(new Date(activeTrade.expiryTime)) + " UTC.";
         String history = preferences.getString("paper_log", "");
         return "ДЕМО-СИМУЛЯЦИЯ (только виртуально, без связи с брокером)\n"
                 + "Виртуальный баланс: " + format(balance) + "\n"
