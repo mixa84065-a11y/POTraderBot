@@ -722,11 +722,13 @@ public final class MainActivity extends Activity {
             if (delta < -6L * 60L * 60L * 1000L) continue;
             out.append("• ").append(formatLocalNewsTime(event.timestampMillis))
                     .append("  ").append(event.currency).append("  ")
-                    .append(event.impact.toUpperCase(Locale.US)).append("\n")
+                    .append("high".equals(event.impact) ? "ВЫСОКОЕ" : "СРЕДНЕЕ").append("\n")
                     .append(event.title);
             if (!event.forecast.isEmpty()) out.append("  | прогноз: ").append(event.forecast);
             if (!event.previous.isEmpty()) out.append("  | пред.: ").append(event.previous);
             if (!event.actual.isEmpty()) out.append("  | факт: ").append(event.actual);
+            String surprise = event.surpriseText();
+            if (!surprise.isEmpty()) out.append("  | ").append(surprise);
             if ("tentative".equals(event.status)) out.append("  | время предварительное");
             out.append("\n\n");
             shown++;
