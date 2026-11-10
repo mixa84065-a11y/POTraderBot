@@ -35,14 +35,18 @@ public final class MarketAnalyzer {
         appendFactor(why,"RSI 14 в зоне 32–50",rsiDown);
         appendFactor(why,"последняя свеча бычья и выше предыдущего закрытия",candleUp);
         appendFactor(why,"последняя свеча медвежья и ниже предыдущего закрытия",candleDown);
-        if(why.charAt(why.length()-1)==' ') why.append("нет полного совпадения условий");
+        if(!trendUp && !trendDown && !rsiUp && !rsiDown && !candleUp && !candleDown) why.append("нет совпадений по проверенным условиям");
         why.append("\nПРОТИВОРЕЧИЯ / НЕСОВПАДЕНИЯ: ");
         if(signal==Signal.CALL || signal==Signal.PUT) why.append("встречных условий среди EMA, RSI и последней свечи не выявлено.");
         else {
             boolean anyMissing=false;
             if(!trendUp && !trendDown){why.append("EMA 9 и EMA 21 не задают направление; ");anyMissing=true;}
-            if(!rsiUp && !rsiDown){why.append("RSI вне рабочих зон 32–68; ");anyMissing=true;}
-            if(!candleUp && !candleDown){why.append("последняя свеча не подтвердила импульс; ");anyMissing=true;}
+            if(trendUp && !rsiUp){why.append("RSI не подтверждает восходящий тренд; ");anyMissing=true;}
+            if(trendDown && !rsiDown){why.append("RSI не подтверждает нисходящий тренд; ");anyMissing=true;}
+            if(trendUp && !candleUp){why.append("свеча не подтвердила движение вверх; ");anyMissing=true;}
+            if(trendDown && !candleDown){why.append("свеча не подтвердила движение вниз; ");anyMissing=true;}
+            if(!rsiUp && !rsiDown && (trendUp || trendDown)){why.append("RSI вне рабочих зон 32–68; ");anyMissing=true;}
+            if(!candleUp && !candleDown && !trendUp && !trendDown){why.append("последняя свеча не подтвердила импульс; ");anyMissing=true;}
             if(!anyMissing) why.append("три условия не совпали в одном направлении.");
         }
         why.append("\nРЕШЕНИЕ: ");
