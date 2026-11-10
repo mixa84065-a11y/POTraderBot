@@ -21,12 +21,9 @@ public final class NewsCalendarClient {
     private static final int CONNECT_TIMEOUT_MS = 10_000;
     private static final int READ_TIMEOUT_MS = 12_000;
 
-    public List<EconomicEvent> fetchForSymbol(String symbol) throws Exception {
-        String currencies = currenciesForSymbol(symbol);
+    public List<EconomicEvent> fetchAll() throws Exception {
+        // Download all supported currencies once; the risk engine filters by the selected asset.
         String query = "?impact=high,medium&days=2&format=json";
-        if (!currencies.isEmpty()) {
-            query += "&currency=" + java.net.URLEncoder.encode(currencies, "UTF-8");
-        }
         HttpURLConnection connection = (HttpURLConnection) new URL(ENDPOINT + query).openConnection();
         connection.setRequestMethod("GET");
         connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
