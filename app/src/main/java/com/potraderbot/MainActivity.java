@@ -47,6 +47,14 @@ public final class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final MarketDataClient dataClient = new MarketDataClient();
     private final MarketAnalyzer analyzer = new MarketAnalyzer();
+    private final NewsCalendarClient newsCalendarClient = new NewsCalendarClient();
+    private final NewsRiskEngine newsRiskEngine = new NewsRiskEngine();
+    private volatile List<EconomicEvent> economicEvents = java.util.Collections.emptyList();
+    private volatile long newsCalendarFetchedAt = 0L;
+    private volatile boolean newsCalendarFetchInProgress = false;
+    private long newsCalendarLastAttemptAt = 0L;
+    private TextView newsCalendarView;
+    private Button newsRefreshButton;
 
     private EditText symbolInput;
     private EditText apiKeyInput;
@@ -91,6 +99,7 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         applyImmersiveMode();
         buildScreen();
+        refreshEconomicCalendar();
         checkForUpdate();
         handler.postDelayed(updateCheckRunnable, UPDATE_CHECK_MS);
     }
@@ -220,6 +229,7 @@ public final class MainActivity extends Activity {
                         symbolInput.setText(symbol);
                         assetButton.setText(symbol + "  ▾");
                         quoteView.setText("—");
+                        renderNewsCalendar();
                         dialog.dismiss();
                     })
                     .setNegativeButton("ЗАКРЫТЬ", null).show();
@@ -297,6 +307,7 @@ public final class MainActivity extends Activity {
         detailsCard.addView(label("ОБОСНОВАНИЕ АНАЛИЗА", 12, 0xFFFFD45A, true));
         detailsCard.addView(details);
         page.addView(detailsCard);
+        page.addView(buildNewsPanel());
         page.addView(buildInlineRiskPanel());
 
         LinearLayout settings = new LinearLayout(this);
@@ -613,6 +624,122 @@ public final class MainActivity extends Activity {
                 box.addView(info);
         }
         return box;
+    }
+
+    private LinearLayout buildNewsPanel() {
+        LinearLayout card = panel();
+        card.addView(label("ЭКОНОМИЧЕСКИЕ НОВОСТИ И ФИЛЬТР РИСКА", 12, 0xFFFFD45A, true));
+        newsCalendarView = label("Загрузка экономического календаря…", 12, 0xFFE1E8F0, false);
+        newsCalendarView.setPadding(dp(2), dp(8), dp(2), dp(6));
+        card.addView(newsCalendarView);
+        newsRefreshButton = makeNavButton("⟳  ОБНОВИТЬ КАЛЕНДАРЬ");
+        newsRefreshButton.setOnClickListener(v -> refreshEconomicCalendar());
+        card.addView(newsRefreshButton);
+        card.addView(label("Источник: ShowMyTrades Economic Calendar • обновление не чаще 15 минут. Время событий показано по часовому поясу телефона.", 9, 0xFFB9C5D5, false));
+        renderNewsCalendar();
+        return card;
+    }
+
+    private void refreshEconomicCalendar() {
+        if (newsCalendarFetchInProgress) return;
+        long now = System.currentTimeMillis();
+        if (newsCalendarFetchedAt > 0L && now - newsCalendarFetchedAt < 15L * 60L * 1000L) {
+            renderNewsCalendar();
+            if (newsCalendarView != null) {
+                newsCalendarView.setText(newsCalendarView.getText() + "\n\nКалендарь взят из кэша: повторный запрос будет доступен через 15 минут.");
+            }
+            return;
+        }
+        if (newsCalendarLastAttemptAt > 0L && now - newsCalendarLastAttemptAt < 60_000L) {
+            if (newsCalendarView != null) newsCalendarView.setText("Повторный запрос доступен через минуту.\n" + newsCalendarView.getText());
+            return;
+        }
+        newsCalendarLastAttemptAt = now;
+        newsCalendarFetchInProgress = true;
+        if (newsRefreshButton != null) {
+            newsRefreshButton.setEnabled(false);
+            newsRefreshButton.setText("ЗАГРУЗКА КАЛЕНДАРЯ…");
+        }
+        if (newsCalendarView != null) newsCalendarView.setText("Получаем расписание важных событий…");
+        executor.execute(() -> {
+            try {
+                List<EconomicEvent> loaded = newsCalendarClient.fetchAll();
+                long fetchedAt = System.currentTimeMillis();
+                runOnUiThread(() -> {
+                    economicEvents = loaded;
+                    newsCalendarFetchedAt = fetchedAt;
+                    newsCalendarFetchInProgress = false;
+                    if (newsRefreshButton != null) {
+                        newsRefreshButton.setEnabled(true);
+                        newsRefreshButton.setText("⟳  ОБНОВИТЬ КАЛЕНДАРЬ");
+                    }
+                    renderNewsCalendar();
+                });
+            } catch (Exception error) {
+                String message = error.getMessage() == null ? "Источник календаря временно недоступен." : error.getMessage();
+                runOnUiThread(() -> {
+                    newsCalendarFetchInProgress = false;
+                    if (newsRefreshButton != null) {
+                        newsRefreshButton.setEnabled(true);
+                        newsRefreshButton.setText("ПОВТОРИТЬ ЗАГРУЗКУ КАЛЕНДАРЯ");
+                    }
+                    if (newsCalendarView != null) {
+                        newsCalendarView.setText("КАЛЕНДАРЬ НЕ ОБНОВЛЁН\n" + message
+                                + (newsCalendarFetchedAt > 0L ? "\nПоследняя успешная загрузка: "
+                                + formatLocalNewsTime(newsCalendarFetchedAt) : "")
+                                + "\nНовый вход будет заблокирован, пока свежесть календаря не подтверждена.");
+                    }
+                });
+            }
+        });
+    }
+
+    private void renderNewsCalendar() {
+        if (newsCalendarView == null) return;
+        long now = System.currentTimeMillis();
+        if (newsCalendarFetchedAt <= 0L) {
+            if (!newsCalendarFetchInProgress) {
+                newsCalendarView.setText("КАЛЕНДАРЬ ЕЩЁ НЕ ЗАГРУЖЕН. До подтверждения свежести новостного фона новые сигналы будут переведены в ЖДАТЬ.");
+            }
+            return;
+        }
+        long age = now - newsCalendarFetchedAt;
+        if (age > 30L * 60L * 1000L) {
+            newsCalendarView.setText("КАЛЕНДАРЬ УСТАРЕЛ: последняя успешная загрузка "
+                    + formatLocalNewsTime(newsCalendarFetchedAt)
+                    + ". Обновите календарь; до этого новые сигналы будут ЖДАТЬ.");
+            return;
+        }
+        String symbol = symbolInput == null ? "EUR/USD" : symbolInput.getText().toString().trim();
+        NewsRiskEngine.Decision decision = newsRiskEngine.evaluate(economicEvents, symbol, now);
+        StringBuilder out = new StringBuilder();
+        out.append(decision.blocked ? "⛔ " : decision.warning ? "⚠ " : "✓ ")
+                .append(decision.message).append("\n\n");
+        int shown = 0;
+        for (EconomicEvent event : economicEvents) {
+            if (event == null) continue;
+            long delta = event.timestampMillis - now;
+            if (delta < -6L * 60L * 60L * 1000L) continue;
+            out.append("• ").append(formatLocalNewsTime(event.timestampMillis))
+                    .append("  ").append(event.currency).append("  ")
+                    .append(event.impact.toUpperCase(Locale.US)).append("\n")
+                    .append(event.title);
+            if (!event.forecast.isEmpty()) out.append("  | прогноз: ").append(event.forecast);
+            if (!event.previous.isEmpty()) out.append("  | пред.: ").append(event.previous);
+            if (!event.actual.isEmpty()) out.append("  | факт: ").append(event.actual);
+            if ("tentative".equals(event.status)) out.append("  | время предварительное");
+            out.append("\n\n");
+            shown++;
+            if (shown >= 5) break;
+        }
+        if (shown == 0) out.append("В ближайшем окне нет событий высокого или среднего влияния в загруженном расписании.");
+        out.append("\nОбновлено: ").append(formatLocalNewsTime(newsCalendarFetchedAt));
+        newsCalendarView.setText(out.toString());
+    }
+
+    private String formatLocalNewsTime(long timestamp) {
+        java.text.SimpleDateFormat format = new java.text.SimpleDateFormat("HH:mm dd.MM", Locale.getDefault());
+        return format.format(new java.util.Date(timestamp));
     }
 
     private LinearLayout buildInlineRiskPanel() {
@@ -991,6 +1118,27 @@ public final class MainActivity extends Activity {
             try {
                 List<Candle> candles = dataClient.fetchOneMinuteCandles(symbol, key);
                 MarketAnalyzer.Analysis result = analyzer.analyze(candles);
+                long calendarAge = System.currentTimeMillis() - newsCalendarFetchedAt;
+                boolean calendarFresh = newsCalendarFetchedAt > 0L && calendarAge >= 0L
+                        && calendarAge <= 30L * 60L * 1000L;
+                if (!calendarFresh) {
+                    result = new MarketAnalyzer.Analysis(MarketAnalyzer.Signal.WAIT,
+                            result.ema9, result.ema21, result.rsi14, 0,
+                            "НОВОСТНОЙ ФИЛЬТР: свежесть экономического календаря не подтверждена. "
+                                    + "Новые входы заблокированы до успешного обновления расписания.");
+                } else {
+                    NewsRiskEngine.Decision newsDecision = newsRiskEngine.evaluate(
+                            economicEvents, symbol, System.currentTimeMillis());
+                    if (newsDecision.blocked) {
+                        result = new MarketAnalyzer.Analysis(MarketAnalyzer.Signal.WAIT,
+                                result.ema9, result.ema21, result.rsi14, 0,
+                                result.explanation + "\n\n" + newsDecision.message);
+                    } else if (newsDecision.warning) {
+                        result = new MarketAnalyzer.Analysis(result.signal,
+                                result.ema9, result.ema21, result.rsi14, result.strength,
+                                result.explanation + "\n\n" + newsDecision.message);
+                    }
+                }
                 Candle last = candles.get(candles.size() - 1);
                 boolean stale = System.currentTimeMillis() - (last.time + 60_000L) > 180_000L;
                 if (stale) result = new MarketAnalyzer.Analysis(MarketAnalyzer.Signal.WAIT, result.ema9,
@@ -1002,6 +1150,7 @@ public final class MainActivity extends Activity {
                     requestInProgress = false;
                     analyzeButton.setEnabled(true);
                     displayedSignal = shown.signal;
+                    renderNewsCalendar();
                     if (chartView != null) chartView.setMarketData(candles, shown.signal, last.close, staleData);
                     if (quoteView != null) quoteView.setText(String.format(Locale.US, "%.5f", last.close));
                     updateInlineRisk();
