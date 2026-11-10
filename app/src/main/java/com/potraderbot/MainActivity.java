@@ -54,11 +54,11 @@ public class MainActivity extends Activity {
         config.setPadding(0, 12, 0, 24);
         page.addView(config);
 
-        analyzeButton = button("ANALYZE BINARIUM DATA");
+        analyzeButton = button("АНАЛИЗИРОВАТЬ");
         analyzeButton.setOnClickListener(v -> runLiveAnalysis());
         page.addView(analyzeButton);
 
-        Button stop = button("STOP ANALYSIS");
+        Button stop = button("ОСТАНОВИТЬ АНАЛИЗ");
         stop.setOnClickListener(v -> {
             running = false;
             if (analysisTask != null) analysisTask.cancel(true);
@@ -73,7 +73,7 @@ public class MainActivity extends Activity {
         stats.setPadding(0, 28, 0, 10);
         page.addView(stats);
 
-        log = text("Press ANALYZE to load current one-minute candles and check the economic calendar.\nNo automatic trades are placed.", 14, 0xFFB8C6D9, false);
+        log = text("Нажми «АНАЛИЗИРОВАТЬ», чтобы загрузить актуальные минутные свечи и проверить экономический календарь.\nСделки автоматически не открываются.", 14, 0xFFB8C6D9, false);
         page.addView(log);
         page.addView(text("\nIMPORTANT: Market data comes from Twelve Data and may differ from Binarium quotes. Signals are informational, not a guarantee. Trades must be checked and confirmed manually in Binarium.", 13, 0xFFFFC857, true));
         setContentView(scroll);
