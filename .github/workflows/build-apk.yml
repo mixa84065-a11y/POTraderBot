@@ -30,18 +30,6 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Configure market data API keys
-        env:
-          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
-          API_SH_KEY: ${{ secrets.API_SH_KEY }}
-        run: |
-          if [ -n "$TWELVE_DATA_API_KEY" ] || [ -n "$API_SH_KEY" ]; then
-            {
-              printf 'TWELVE_DATA_API_KEY=%s\n' "$TWELVE_DATA_API_KEY"
-              printf 'API_SH_KEY=%s\n' "$API_SH_KEY"
-            } > local.properties
-          fi
-
       - name: Restore stable Android signing key
         if: ${{ env.SIGNING_CONFIGURED == 'true' }}
         env:
