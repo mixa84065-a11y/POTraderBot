@@ -598,6 +598,7 @@ public final class MainActivity extends Activity {
         riskBalanceInput.addTextChangedListener(watcher);
         riskPercentInput.addTextChangedListener(watcher);
         payoutInput.addTextChangedListener(watcher);
+        updateInlineRisk();
         return card;
     }
 
@@ -611,9 +612,9 @@ public final class MainActivity extends Activity {
             }
             double stake = balance * percent / 100.0;
             StringBuilder out = new StringBuilder();
-            out.append("Текущий сигнал: ").append(signalLabel(displayedSignal)).append("\\n")
+            out.append("Текущий сигнал: ").append(signalLabel(displayedSignal)).append("\n")
                     .append(String.format(Locale.getDefault(),
-                            "Размер позиции / максимальный убыток при полной потере ставки: %.2f (%.2f%% баланса)\\n",
+                            "Размер позиции / максимальный убыток при полной потере ставки: %.2f (%.2f%% баланса)\n",
                             stake, percent));
             String payoutText = payoutInput.getText().toString().trim();
             if (!payoutText.isEmpty()) {
@@ -621,15 +622,15 @@ public final class MainActivity extends Activity {
                 if (!Double.isFinite(payout) || payout <= 0 || payout > 1000) throw new NumberFormatException();
                 double profit = stake * payout / 100.0;
                 out.append(String.format(Locale.getDefault(),
-                        "Потенциальная чистая прибыль при указанной выплате: %.2f\\nРиск : прибыль = 1 : %.2f",
+                        "Потенциальная чистая прибыль при указанной выплате: %.2f\nРиск : прибыль = 1 : %.2f",
                         profit, payout / 100.0));
             } else {
                 out.append("Выплата не указана — отношение риска к прибыли не рассчитывается.");
             }
-            if (displayedSignal == MarketAnalyzer.Signal.WAIT) out.append("\\nВХОД НЕ РЕКОМЕНДОВАН: система показывает ЖДАТЬ.");
-            if (percent > 5) out.append("\\nОПАСНО: риск выше 5% баланса на одну позицию.");
-            else if (percent > 2) out.append("\\nПРЕДУПРЕЖДЕНИЕ: риск выше 2% баланса.");
-            else out.append("\\nПроверьте размер ставки и условия выплаты на площадке.");
+            if (displayedSignal == MarketAnalyzer.Signal.WAIT) out.append("\nВХОД НЕ РЕКОМЕНДОВАН: система показывает ЖДАТЬ.");
+            if (percent > 5) out.append("\nОПАСНО: риск выше 5% баланса на одну позицию.");
+            else if (percent > 2) out.append("\nПРЕДУПРЕЖДЕНИЕ: риск выше 2% баланса.");
+            else out.append("\nПроверьте размер ставки и условия выплаты на площадке.");
             riskCalculationView.setText(out.toString());
         } catch (Exception e) {
             riskCalculationView.setText("Проверьте ввод: баланс должен быть больше нуля, риск — от 0 до 100%, выплата — положительной.");
@@ -918,17 +919,17 @@ public final class MainActivity extends Activity {
                     if (chartView != null) chartView.setMarketData(candles, shown.signal, last.close, staleData);
                     updateInlineRisk();
                     status.setText((staleData ? "ДАННЫЕ УСТАРЕЛИ • " : autoRefreshEnabled ? "АВТО • " : "") + "СИГНАЛ: " + signalLabel(shown.signal));
-                    status.setTextColor(result.signal == MarketAnalyzer.Signal.WAIT ? 0xFFFFC857 : 0xFF70D6A5);
-                    signalDisplayView.setText(signalLabel(result.signal) + (result.signal == MarketAnalyzer.Signal.CALL ? "  ▲" : result.signal == MarketAnalyzer.Signal.PUT ? "  ▼" : "  ◷"));
-                    signalDisplayView.setTextColor(result.signal == MarketAnalyzer.Signal.WAIT ? 0xFFFFC857
-                            : result.signal == MarketAnalyzer.Signal.CALL ? 0xFF00E676 : 0xFFFF5252);
-                    waitSignalView.setText(result.explanation);
+                    status.setTextColor(shown.signal == MarketAnalyzer.Signal.WAIT ? 0xFFFFC857 : 0xFF70D6A5);
+                    signalDisplayView.setText(signalLabel(shown.signal) + (shown.signal == MarketAnalyzer.Signal.CALL ? "  ▲" : shown.signal == MarketAnalyzer.Signal.PUT ? "  ▼" : "  ◷"));
+                    signalDisplayView.setTextColor(shown.signal == MarketAnalyzer.Signal.WAIT ? 0xFFFFC857
+                            : shown.signal == MarketAnalyzer.Signal.CALL ? 0xFF00E676 : 0xFFFF5252);
+                    waitSignalView.setText(shown.explanation);
                     String analysisText = String.format(Locale.US,
                             "Режим: %s\nПлощадка в интерфейсе: %s\nИсточник котировок: Twelve Data\nПара: %s\nЗакрытых свечей: %d\nПоследняя свеча UTC: %tF %tR\nЦена закрытия: %.5f\n\nEMA 9: %.5f\nEMA 21: %.5f\nRSI 14: %.2f\n\n%s\n\nЭто аналитический сигнал, а не команда на сделку.",
                             mode, platform, symbol.toUpperCase(Locale.US), candles.size(), last.time, last.time,
-                            last.close, result.ema9, result.ema21, result.rsi14, result.explanation);
-                    if (paperAutoEnabled) paperTrading.process(candles, result.signal);
-                    details.setText(analysisText + (staleData ? "\\n\\nСИГНАЛ ЗАБЛОКИРОВАН ИЗ-ЗА УСТАРЕВШИХ ДАННЫХ." : "") + (paperAutoEnabled ? "\n\n" + paperTrading.getSummary() : ""));
+                            last.close, shown.ema9, shown.ema21, shown.rsi14, shown.explanation);
+                    if (paperAutoEnabled && !staleData) paperTrading.process(candles, shown.signal);
+                    details.setText(analysisText + (staleData ? "\n\nСИГНАЛ ЗАБЛОКИРОВАН ИЗ-ЗА УСТАРЕВШИХ ДАННЫХ." : "") + (paperAutoEnabled ? "\n\n" + paperTrading.getSummary() : ""));
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
