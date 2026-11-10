@@ -17,6 +17,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.ScrollView;
@@ -57,6 +58,9 @@ public final class MainActivity extends Activity {
     private ChartView chartView;
     private EditText riskBalanceInput, riskPercentInput, payoutInput;
     private TextView riskCalculationView;
+    private TextView signalStrengthView;
+    private ProgressBar signalStrengthBar;
+    private Spinner expiryInput;
     private MarketAnalyzer.Signal displayedSignal = MarketAnalyzer.Signal.WAIT;
     private Button analyzeButton;
     private Button autoButton;
@@ -245,6 +249,21 @@ public final class MainActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         signalButtonsParams.topMargin = dp(10);
         page.addView(signalButtons, signalButtonsParams);
+        LinearLayout strengthRow = new LinearLayout(this);
+        strengthRow.setOrientation(LinearLayout.HORIZONTAL);
+        strengthRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        signalStrengthBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        signalStrengthBar.setMax(100);
+        signalStrengthBar.setProgress(0);
+        signalStrengthBar.setProgressTintList(ColorStateList.valueOf(0xFFFFC857));
+        strengthRow.addView(signalStrengthBar, new LinearLayout.LayoutParams(0, dp(5), 1f));
+        signalStrengthView = label("СИЛА 0/100", 10, 0xFFFFD45A, true);
+        LinearLayout.LayoutParams strengthTextParams = new LinearLayout.LayoutParams(dp(92), dp(24));
+        strengthTextParams.leftMargin = dp(8);
+        strengthRow.addView(signalStrengthView, strengthTextParams);
+        page.addView(strengthRow);
+        TextView strengthNote = label("Совпадение факторов анализа, не вероятность выигрыша", 9, 0xFFB9C5D5, false);
+        page.addView(strengthNote);
         signalDisplayView = label("ЖДАТЬ  ◷", 20, 0xFFFFC857, true);
         signalDisplayView.setGravity(android.view.Gravity.CENTER);
         signalDisplayView.setPadding(dp(0), dp(6), dp(0), dp(2));
@@ -314,6 +333,7 @@ public final class MainActivity extends Activity {
             @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
                 preferences.edit().putInt("trading_mode", position).apply();
                 updateModeStyle.run();
+                if (position != 0 && paperAutoEnabled) stopPaperAuto("Автосимуляция остановлена: выбран реальный счёт. Реальные сделки не отправляются.");
                 if (paperButton != null && !paperAutoEnabled) paperButton.setText("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ");
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
@@ -611,7 +631,15 @@ public final class MainActivity extends Activity {
         card.addView(label("Допустимый риск на позицию (%)", 11, 0xFFE1E8F0, false));
         card.addView(riskPercentInput);
         card.addView(label("Выплата площадки (%) — укажите значение из терминала", 11, 0xFFE1E8F0, false));
+        payoutInput.setText("80");
         card.addView(payoutInput);
+        card.addView(label("Экспирация виртуальной сделки", 11, 0xFFE1E8F0, false));
+        expiryInput = new Spinner(this);
+        ArrayAdapter<String> expiryAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
+                new String[]{"3 минуты", "4 минуты", "5 минут"});
+        expiryAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        expiryInput.setAdapter(expiryAdapter);
+        card.addView(expiryInput);
         riskCalculationView = label("После анализа здесь появится расчёт лимита риска.", 12, 0xFFE1E8F0, false);
         riskCalculationView.setPadding(dp(2), dp(8), dp(2), dp(2));
         card.addView(riskCalculationView);
@@ -869,6 +897,17 @@ public final class MainActivity extends Activity {
     }
 
     private void togglePaperAuto() {
+        if (!paperAutoEnabled && modeInput.getSelectedItemPosition() != 0) {
+            new AlertDialog.Builder(this).setTitle("Автосимуляция недоступна")
+                    .setMessage("Виртуальная автоторговля разрешена только в режиме ДЕМО. В режиме реального счёта доступны только сигналы.")
+                    .setPositiveButton("Понятно", null).show();
+            return;
+        }
+        if (!paperAutoEnabled && apiKeyInput.getText().toString().trim().isEmpty()) {
+            status.setText("ДЛЯ ДЕМО-СИМУЛЯЦИИ НУЖЕН API-КЛЮЧ");
+            status.setTextColor(0xFFFFC857);
+            return;
+        }
         paperAutoEnabled = !paperAutoEnabled;
         if (paperAutoEnabled) {
             paperButton.setText("ОСТАНОВИТЬ АВТОСИМУЛЯЦИЮ");
@@ -885,6 +924,18 @@ public final class MainActivity extends Activity {
             paperButton.setText("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ");
             autoButton.setText("ВКЛЮЧИТЬ АВТООБНОВЛЕНИЕ (10 СЕК.)");
             status.setText("АВТОСИМУЛЯЦИЯ: ОСТАНОВЛЕНА");
+            status.setTextColor(0xFFFFC857);
+        }
+    }
+
+    private void stopPaperAuto(String message) {
+        paperAutoEnabled = false;
+        autoRefreshEnabled = false;
+        handler.removeCallbacks(refreshRunnable);
+        if (paperButton != null) paperButton.setText("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ");
+        if (autoButton != null) autoButton.setText("ВКЛЮЧИТЬ АВТООБНОВЛЕНИЕ (10 СЕК.)");
+        if (status != null) {
+            status.setText(message);
             status.setTextColor(0xFFFFC857);
         }
     }
@@ -954,13 +1005,26 @@ public final class MainActivity extends Activity {
                             "Режим: %s\nПлощадка в интерфейсе: %s\nИсточник котировок: Twelve Data\nПара: %s\nЗакрытых свечей: %d\nПоследняя свеча UTC: %tF %tR\nЦена закрытия: %.5f\n\nEMA 9: %.5f\nEMA 21: %.5f\nRSI 14: %.2f\n\n%s\n\nЭто аналитический сигнал, а не команда на сделку.",
                             mode, platform, symbol.toUpperCase(Locale.US), candles.size(), last.time, last.time,
                             last.close, shown.ema9, shown.ema21, shown.rsi14, shown.explanation);
-                    if (paperAutoEnabled && !staleData) paperTrading.process(candles, shown.signal);
+                    if (paperAutoEnabled && modeInput.getSelectedItemPosition() == 0 && !staleData) {
+                        double stake = getConfiguredStake();
+                        double payout = getConfiguredPayout();
+                        int expiryMinutes = expiryInput == null ? 3 : expiryInput.getSelectedItemPosition() + 3;
+                        paperTrading.process(candles, shown.signal, stake, payout, expiryMinutes);
+                    }
+                    updateSignalStrength(shown.strength);
                     details.setText(analysisText + (staleData ? "\n\nСИГНАЛ ЗАБЛОКИРОВАН ИЗ-ЗА УСТАРЕВШИХ ДАННЫХ." : "") + (paperAutoEnabled ? "\n\n" + paperTrading.getSummary() : ""));
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     requestInProgress = false;
                     analyzeButton.setEnabled(true);
+                    displayedSignal = MarketAnalyzer.Signal.WAIT;
+                    updateInlineRisk();
+                    updateSignalStrength(0);
+                    if (signalDisplayView != null) { signalDisplayView.setText("ЖДАТЬ  ◷"); signalDisplayView.setTextColor(0xFFFFC857); }
+                    if (waitSignalView != null) waitSignalView.setText("Нет подтверждённых свежих котировок. Старый сигнал сброшен; дождитесь успешной загрузки.");
+                    if (quoteView != null) quoteView.setText("—");
+                    if (chartView != null) chartView.setMarketData(null, MarketAnalyzer.Signal.WAIT, 0, true);
                     status.setText(autoRefreshEnabled ? "АВТООБНОВЛЕНИЕ: ОШИБКА" : "СТАТУС: ОШИБКА ЗАГРУЗКИ");
                     status.setTextColor(0xFFFF7B72);
                     details.setText(e.getMessage() == null ? "Не удалось получить котировки." : e.getMessage());
@@ -1028,6 +1092,30 @@ public final class MainActivity extends Activity {
                 if (connection != null) connection.disconnect();
             }
         });
+    }
+
+    private void updateSignalStrength(int strength) {
+        int safe = Math.max(0, Math.min(100, strength));
+        if (signalStrengthBar != null) signalStrengthBar.setProgress(safe);
+        if (signalStrengthView != null) {
+            signalStrengthView.setText("СИЛА " + safe + "/100");
+            signalStrengthView.setTextColor(safe >= 80 ? 0xFF70D6A5 : safe >= 50 ? 0xFFFFD45A : 0xFFFF8A80);
+        }
+    }
+
+    private double getConfiguredStake() {
+        double balance = Double.parseDouble(riskBalanceInput.getText().toString().trim().replace(',', '.'));
+        double percent = Double.parseDouble(riskPercentInput.getText().toString().trim().replace(',', '.'));
+        if (!Double.isFinite(balance) || !Double.isFinite(percent) || balance <= 0 || percent <= 0 || percent > 100)
+            throw new IllegalArgumentException("Проверьте баланс и процент риска в калькуляторе.");
+        return balance * percent / 100.0;
+    }
+
+    private double getConfiguredPayout() {
+        double payout = Double.parseDouble(payoutInput.getText().toString().trim().replace(',', '.'));
+        if (!Double.isFinite(payout) || payout <= 0 || payout > 1000)
+            throw new IllegalArgumentException("Выплата должна быть больше 0 и не выше 1000%.");
+        return payout;
     }
 
     private void openUpdate() {
@@ -1110,6 +1198,13 @@ public final class MainActivity extends Activity {
                 .setPositiveButton("Понятно", null).show());
         row.addView(help, new LinearLayout.LayoutParams(dp(40), dp(40)));
         parent.addView(row);
+    }
+
+    @Override protected void onDestroy() {
+        handler.removeCallbacks(refreshRunnable);
+        handler.removeCallbacks(updateCheckRunnable);
+        executor.shutdownNow();
+        super.onDestroy();
     }
 
     private void applyImmersiveMode() {
