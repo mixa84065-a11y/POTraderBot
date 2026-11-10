@@ -105,8 +105,9 @@ public class MarketAnalyzer {
         else if (candlePattern < 0) bear += 8;
         if (candlePattern != 0) add(why, candlePattern > 0 ? "Свечная модель: бычье подтверждение" : "Свечная модель: медвежье подтверждение");
 
-        if (breakout > 0) { bull += 10; add(why, "Подтверждённый пробой локального максимума"); }
-        else if (breakout < 0) { bear += 10; add(why, "Подтверждённый пробой локального минимума"); }
+        // Rejection codes (+2/-2) must be handled before directional comparisons.
+        if (breakout == 1) { bull += 10; add(why, "Подтверждённый пробой локального максимума"); }
+        else if (breakout == -1) { bear += 10; add(why, "Подтверждённый пробой локального минимума"); }
         else if (breakout == 2) add(why, "Возможный ложный пробой вверх");
         else if (breakout == -2) add(why, "Возможный ложный пробой вниз");
 
@@ -276,17 +277,35 @@ public class MarketAnalyzer {
     }
 
     private static List<Candle> aggregate(List<Candle> source, int minutes) {
+        // Align higher-timeframe bars to UTC clock boundaries (00, 05, 10...),
+        // not to the arbitrary first candle returned by the data provider.
         List<Candle> out = new ArrayList<>();
-        int complete = source.size() / minutes * minutes;
-        for (int i = 0; i < complete; i += minutes) {
+        if (source == null || source.isEmpty() || minutes <= 0) return out;
+        final long minuteMs = 60000L;
+        final long bucketMs = minutes * minuteMs;
+        int i = 0;
+        while (i < source.size()) {
             Candle first = source.get(i);
+            long bucket = Math.floorDiv(first.time, bucketMs);
+            long bucketStart = bucket * bucketMs;
+            int j = i;
             double high = -Double.MAX_VALUE, low = Double.MAX_VALUE;
-            for (int j = i; j < i + minutes; j++) {
-                high = Math.max(high, source.get(j).high);
-                low = Math.min(low, source.get(j).low);
+            boolean contiguous = true;
+            while (j < source.size()
+                    && Math.floorDiv(source.get(j).time, bucketMs) == bucket) {
+                Candle x = source.get(j);
+                if (j > i && x.time - source.get(j - 1).time != minuteMs) contiguous = false;
+                high = Math.max(high, x.high);
+                low = Math.min(low, x.low);
+                j++;
             }
-            Candle last = source.get(i + minutes - 1);
-            out.add(new Candle(first.time, first.open, high, low, last.close));
+            if (contiguous && j - i == minutes
+                    && first.time == bucketStart
+                    && source.get(j - 1).time == bucketStart + (minutes - 1) * minuteMs) {
+                Candle last = source.get(j - 1);
+                out.add(new Candle(bucketStart, first.open, high, low, last.close));
+            }
+            i = j;
         }
         return out;
     }
