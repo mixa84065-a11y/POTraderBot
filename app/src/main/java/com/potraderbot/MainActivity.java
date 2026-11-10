@@ -451,7 +451,6 @@ public final class MainActivity extends Activity {
 
         updateButton = makeNavButton("⟳  ПРОВЕРИТЬ ОБНОВЛЕНИЯ");
         updateButton.setOnClickListener(v -> checkForUpdate());
-        hamburger.setOnClickListener(v -> showFeatureMenu(settings));
         menuButton.setOnClickListener(v -> showFeatureMenu(settings));
         setContentView(root);
     }
