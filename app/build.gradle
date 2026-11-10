@@ -9,6 +9,10 @@ android {
     compileSdk 36
 
     defaultConfig {
+        def supabaseUrl = System.getenv("SUPABASE_URL") ?: ""
+        def supabaseAnonKey = System.getenv("SUPABASE_ANON_KEY") ?: ""
+        buildConfigField "String", "SUPABASE_URL", "\"${supabaseUrl}\""
+        buildConfigField "String", "SUPABASE_ANON_KEY", "\"${supabaseAnonKey}\""
         applicationId 'com.potraderbot'
         minSdk 23
         targetSdk 35
