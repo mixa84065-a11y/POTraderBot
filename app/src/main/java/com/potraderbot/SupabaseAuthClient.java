@@ -54,10 +54,12 @@ public final class SupabaseAuthClient {
         return request("/auth/v1/token?grant_type=pkce", body, null);
     }
 
-    public String googleAuthUrl(String redirectTo) throws Exception {
+    public String googleAuthUrl(String redirectTo, String codeChallenge) throws Exception {
         if (!isConfigured()) throw new IllegalStateException("Supabase не настроен");
         return baseUrl + "/auth/v1/authorize?provider=google&redirect_to="
-                + java.net.URLEncoder.encode(redirectTo, "UTF-8");
+                + java.net.URLEncoder.encode(redirectTo, "UTF-8")
+                + "&code_challenge=" + java.net.URLEncoder.encode(codeChallenge, "UTF-8")
+                + "&code_challenge_method=s256";
     }
 
     private JSONObject request(String path, JSONObject body, String bearer) throws Exception {
