@@ -5,8 +5,8 @@ import java.util.List;
 /** Rejects incomplete, malformed or stale one-minute market data before analysis. */
 public class CandleSeriesValidator {
     public String validate(List<Candle> candles, long nowUtcMillis) {
-        if (candles == null || candles.size() < 30) {
-            return "Недостаточно реальных свечей: требуется минимум 30";
+        if (candles == null || candles.size() < 60) {
+            return "Недостаточно реальных свечей: требуется минимум 60";
         }
         long previousTime = -1L;
         for (Candle candle : candles) {
