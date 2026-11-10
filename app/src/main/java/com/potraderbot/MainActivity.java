@@ -467,25 +467,12 @@ public class MainActivity extends Activity {
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("GOD OF TRADING — аккаунт")
                 .setMessage("Личный аккаунт приложения. Данные брокерских аккаунтов не нужны.")
                 .setView(fields).setPositiveButton("ВОЙТИ", null)
-                .setNeutralButton("РЕГИСТРАЦИЯ", null)
-                .setNegativeButton("GOOGLE", null).create();
+                .setNeutralButton("РЕГИСТРАЦИЯ", null).create();
         dialog.setOnShowListener(ignored -> {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v ->
                     runEmailAuth(email.getText().toString(), password.getText().toString(), false, dialog));
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v ->
                     runEmailAuth(email.getText().toString(), password.getText().toString(), true, dialog));
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> {
-                try {
-                    String verifier = createCodeVerifier();
-                    String challenge = createCodeChallenge(verifier);
-                    authStore.saveCodeVerifier(verifier);
-                    String url = authClient.googleAuthUrl("com.potraderbot://auth/callback", challenge);
-                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
-                    dialog.dismiss();
-                } catch (Exception e) {
-                    log.setText("Не удалось начать вход Google: " + safeMessage(e));
-                }
-            });
         });
         dialog.show();
     }
