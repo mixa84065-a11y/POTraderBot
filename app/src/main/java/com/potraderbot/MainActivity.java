@@ -75,11 +75,11 @@ public class MainActivity extends Activity {
         page.addView(title);
         page.addView(text("Binarium • manual analysis only", 14, 0xFF9FB0C5, false));
 
-        status = text("STATUS: READY", 20, 0xFFFFC857, true);
+        status = text("ГОТОВО", 20, 0xFFFFC857, true);
         status.setPadding(0, 36, 0, 12);
         page.addView(status);
 
-        TextView config = text("EUR/USD • 1-minute candles • 3-minute expiry\nMulti-factor analysis • max 10 manual records/day\nPause after 2 consecutive recorded losses", 15, 0xFFE5EDF7, false);
+        TextView config = text("До 10 валютных пар • свечи 1 минута • экспирация 3 или 5 минут\nМногофакторный анализ • только обычный рынок\nТолько ручные решения — без автоматического открытия сделок", 15, 0xFFE5EDF7, false);
         config.setPadding(0, 12, 0, 24);
         page.addView(config);
 
@@ -114,13 +114,13 @@ public class MainActivity extends Activity {
         });
         page.addView(stop);
 
-        stats = text("Manual trades recorded: " + engine.getTradesToday() + " / 10", 17, 0xFFFFFFFF, true);
+        stats = text("Валютных пар выбрано: " + currentSettings.selectedPairs.size() + " / 10", 17, 0xFFFFFFFF, true);
         stats.setPadding(0, 28, 0, 10);
         page.addView(stats);
 
-        log = text("Нажми «АНАЛИЗИРОВАТЬ», чтобы выполнить многофакторный анализ рынка и проверить экономический календарь.\nСделки автоматически не открываются.", 14, 0xFFB8C6D9, false);
+        log = text("Нажми «АНАЛИЗИРОВАТЬ», чтобы проверить выбранные валютные пары и экономический календарь.\nСделки автоматически не открываются.", 14, 0xFFB8C6D9, false);
         page.addView(log);
-        page.addView(text("\nIMPORTANT: Market data comes from Twelve Data and may differ from Binarium quotes. Scenario scores are heuristic, not calibrated probabilities. Signals are informational, not a guarantee. Trades must be checked and confirmed manually in Binarium.", 13, 0xFFFFC857, true));
+        page.addView(text("\nВАЖНО: котировки Twelve Data могут отличаться от Binarium. Сценарные оценки не являются вероятностями или гарантией. Любое решение проверяй вручную на платформе.", 13, 0xFFFFC857, true));
         setContentView(scroll);
     }
 
@@ -227,6 +227,7 @@ public class MainActivity extends Activity {
                 mainHandler.post(() -> {
                     if (!isFinishing()) {
                         currentSettings = loaded;
+                        stats.setText("Валютных пар выбрано: " + currentSettings.selectedPairs.size() + " / 10");
                         showSettingsDialog();
                     }
                 });
@@ -293,6 +294,7 @@ public class MainActivity extends Activity {
                     mainHandler.post(() -> {
                         if (!isFinishing()) {
                             status.setText("НАСТРОЙКИ СОХРАНЕНЫ");
+                            stats.setText("Валютных пар выбрано: " + currentSettings.selectedPairs.size() + " / 10");
                             log.setText("Сохранено для аккаунта: " + authStore.email()
                                     + "\nПары: " + selected + "\nЭкспирация: " + expiry + " мин"
                                     + "\nОбмен сигналами: " + (next.sharingEnabled ? "разрешён" : "выключен"));
