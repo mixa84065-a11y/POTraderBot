@@ -118,7 +118,8 @@ public class MainActivity extends Activity {
 
                 mainHandler.post(() -> {
                     if (!running || isFinishing()) return;
-                    status.setText(result.signal == MarketAnalyzer.Signal.CALL ? "ВВЕРХ"\n                            : result.signal == MarketAnalyzer.Signal.PUT ? "ВНИЗ" : "ОЖИДАНИЕ");
+                    status.setText(result.signal == MarketAnalyzer.Signal.CALL ? "ВВЕРХ"
+                            : result.signal == MarketAnalyzer.Signal.PUT ? "ВНИЗ" : "ОЖИДАНИЕ");
                     status.setTextColor(result.signal == MarketAnalyzer.Signal.WAIT
                             ? 0xFFFFC857 : 0xFF70D6A5);
                     log.setText(result.reason + "\nПолучено свечей: " + result.candleCount
