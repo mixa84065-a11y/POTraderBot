@@ -31,8 +31,9 @@ public class TwelveDataClient {
 
     public List<Candle> fetchOneMinuteCandles(String symbol, int outputSize) throws Exception {
         int size = Math.max(60, Math.min(outputSize, 500));
+        // The parser treats timestamps as UTC, so request UTC explicitly.
         String query = "?symbol=" + URLEncoder.encode(symbol, "UTF-8")
-                + "&interval=1min&outputsize=" + size;
+                + "&interval=1min&outputsize=" + size + "&timezone=UTC&order=asc";
         HttpURLConnection connection = (HttpURLConnection) new URL(ENDPOINT + query).openConnection();
         connection.setRequestMethod("GET");
         connection.setConnectTimeout(10000);
@@ -57,6 +58,7 @@ public class TwelveDataClient {
 
             List<Candle> candles = new ArrayList<>();
             SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
+            format.setLenient(false);
             format.setTimeZone(TimeZone.getTimeZone("UTC"));
             for (int i = values.length() - 1; i >= 0; i--) {
                 JSONObject item = values.optJSONObject(i);
@@ -69,7 +71,7 @@ public class TwelveDataClient {
                         Double.parseDouble(item.getString("low")),
                         Double.parseDouble(item.getString("close"))));
             }
-            // Exclude the currently forming minute candle.
+            // Keep only closed candles; never generate a signal from the current minute.
             if (!candles.isEmpty()) {
                 Candle latest = candles.get(candles.size() - 1);
                 long age = System.currentTimeMillis() - latest.time;
