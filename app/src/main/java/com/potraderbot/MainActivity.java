@@ -665,10 +665,10 @@ public final class MainActivity extends Activity {
             try {
                 List<EconomicEvent> loaded = newsCalendarClient.fetchAll();
                 long fetchedAt = System.currentTimeMillis();
+                economicEvents = loaded;
+                newsCalendarFetchedAt = fetchedAt;
+                newsCalendarFetchInProgress = false;
                 runOnUiThread(() -> {
-                    economicEvents = loaded;
-                    newsCalendarFetchedAt = fetchedAt;
-                    newsCalendarFetchInProgress = false;
                     if (newsRefreshButton != null) {
                         newsRefreshButton.setEnabled(true);
                         newsRefreshButton.setText("⟳  ОБНОВИТЬ КАЛЕНДАРЬ");
