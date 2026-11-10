@@ -35,15 +35,17 @@ public final class PaperTradingEngine {
         final double entryPrice;
         final double stake;
         final double payoutPercent;
+        final String symbol;
 
         Trade(MarketAnalyzer.Signal direction, long entryTime, long expiryTime,
-              double entryPrice, double stake, double payoutPercent) {
+              double entryPrice, double stake, double payoutPercent, String symbol) {
             this.direction = direction;
             this.entryTime = entryTime;
             this.expiryTime = expiryTime;
             this.entryPrice = entryPrice;
             this.stake = stake;
             this.payoutPercent = payoutPercent;
+            this.symbol = symbol == null ? "" : symbol;
         }
     }
 
@@ -56,24 +58,27 @@ public final class PaperTradingEngine {
         wins = preferences.getInt("paper_wins", 0);
         losses = preferences.getInt("paper_losses", 0);
         restoreActiveTrade();
+        lastProcessedCandle = preferences.getLong("paper_last_processed_candle", -1L);
         lastEvent = preferences.getString("paper_last_event", "Автосимуляция выключена.");
     }
 
     public synchronized String process(List<Candle> candles, MarketAnalyzer.Signal signal,
-                                       double stake, double payoutPercent, int expiryMinutes) {
+                                       double stake, double payoutPercent, int expiryMinutes, String symbol) {
         resetDayIfNeeded();
         if (candles == null || candles.isEmpty()) return lastEvent;
+        settleIfExpired(candles, symbol);
+        if (activeTrade != null && !activeTrade.symbol.equalsIgnoreCase(symbol == null ? "" : symbol)) return lastEvent;
         if (!Double.isFinite(stake) || stake <= 0 || stake > balance
                 || !Double.isFinite(payoutPercent) || payoutPercent <= 0 || payoutPercent > 1000
                 || expiryMinutes < 3 || expiryMinutes > 5) {
             lastEvent = "Сделка не открыта: проверьте виртуальную ставку, выплату и экспирацию 3–5 минут.";
+            persistEvent();
             return lastEvent;
         }
-
-        settleIfExpired(candles);
         Candle last = candles.get(candles.size() - 1);
         if (last.time == lastProcessedCandle) return lastEvent;
         lastProcessedCandle = last.time;
+        preferences.edit().putLong("paper_last_processed_candle", lastProcessedCandle).apply();
 
         if (activeTrade != null) return lastEvent;
         if (tradesToday >= MAX_TRADES_PER_DAY) {
@@ -99,7 +104,7 @@ public final class PaperTradingEngine {
 
         long entryTime = last.time + 60_000L;
         long expiryTime = entryTime + expiryMinutes * 60_000L;
-        activeTrade = new Trade(signal, entryTime, expiryTime, last.close, stake, payoutPercent);
+        activeTrade = new Trade(signal, entryTime, expiryTime, last.close, stake, payoutPercent, symbol);
         tradesToday++;
         save();
         lastEvent = "ОТКРЫТА ВИРТУАЛЬНАЯ " + (signal == MarketAnalyzer.Signal.CALL ? "ВВЕРХ" : "ВНИЗ")
@@ -109,8 +114,8 @@ public final class PaperTradingEngine {
         return lastEvent;
     }
 
-    private void settleIfExpired(List<Candle> candles) {
-        if (activeTrade == null) return;
+    private void settleIfExpired(List<Candle> candles, String symbol) {
+        if (activeTrade == null || !activeTrade.symbol.equalsIgnoreCase(symbol == null ? "" : symbol)) return;
         Candle expiryCandle = null;
         for (Candle candle : candles) {
             if (candle.time + 60_000L >= activeTrade.expiryTime) {
@@ -149,7 +154,7 @@ public final class PaperTradingEngine {
         String active = activeTrade == null ? "Нет активной виртуальной сделки."
                 : "Активна " + (activeTrade.direction == MarketAnalyzer.Signal.CALL ? "ВВЕРХ" : "ВНИЗ")
                 + " • вход " + format(activeTrade.entryPrice) + " • ставка " + format(activeTrade.stake)
-                + " • экспирация " + new SimpleDateFormat("HH:mm:ss", Locale.US)
+                + " • актив " + activeTrade.symbol + " • экспирация " + new SimpleDateFormat("HH:mm:ss", Locale.US)
                     .format(new Date(activeTrade.expiryTime)) + " UTC.";
         String history = preferences.getString("paper_log", "");
         return "ДЕМО-СИМУЛЯЦИЯ (только виртуально, без связи с брокером)\n"
@@ -169,6 +174,7 @@ public final class PaperTradingEngine {
         losses = 0;
         activeTrade = null;
         lastProcessedCandle = -1L;
+        preferences.edit().remove("paper_last_processed_candle").apply();
         lastEvent = "Виртуальный счёт сброшен.";
         preferences.edit().remove("paper_active_direction").remove("paper_active_entry_time")
                 .remove("paper_active_expiry_time").remove("paper_active_entry_price")
@@ -188,7 +194,8 @@ public final class PaperTradingEngine {
                     preferences.getLong("paper_active_expiry_time", 0L),
                     Double.longBitsToDouble(preferences.getLong("paper_active_entry_price", 0L)),
                     Double.longBitsToDouble(preferences.getLong("paper_active_stake", 0L)),
-                    Double.longBitsToDouble(preferences.getLong("paper_active_payout", 0L)));
+                    Double.longBitsToDouble(preferences.getLong("paper_active_payout", 0L)),
+                    preferences.getString("paper_active_symbol", ""));
         } catch (Exception ignored) {
             activeTrade = null;
             clearActiveTrade();
@@ -218,17 +225,19 @@ public final class PaperTradingEngine {
                 .putInt("paper_wins", wins)
                 .putInt("paper_losses", losses)
                 .putString("paper_day", dayKey);
+        editor.putLong("paper_last_processed_candle", lastProcessedCandle);
         if (activeTrade == null) {
             editor.remove("paper_active_direction").remove("paper_active_entry_time")
                     .remove("paper_active_expiry_time").remove("paper_active_entry_price")
-                    .remove("paper_active_stake").remove("paper_active_payout");
+                    .remove("paper_active_stake").remove("paper_active_payout").remove("paper_active_symbol");
         } else {
             editor.putString("paper_active_direction", activeTrade.direction.name())
                     .putLong("paper_active_entry_time", activeTrade.entryTime)
                     .putLong("paper_active_expiry_time", activeTrade.expiryTime)
                     .putLong("paper_active_entry_price", Double.doubleToRawLongBits(activeTrade.entryPrice))
                     .putLong("paper_active_stake", Double.doubleToRawLongBits(activeTrade.stake))
-                    .putLong("paper_active_payout", Double.doubleToRawLongBits(activeTrade.payoutPercent));
+                    .putLong("paper_active_payout", Double.doubleToRawLongBits(activeTrade.payoutPercent))
+                    .putString("paper_active_symbol", activeTrade.symbol);
         }
         editor.apply();
     }
@@ -236,7 +245,7 @@ public final class PaperTradingEngine {
     private void clearActiveTrade() {
         preferences.edit().remove("paper_active_direction").remove("paper_active_entry_time")
                 .remove("paper_active_expiry_time").remove("paper_active_entry_price")
-                .remove("paper_active_stake").remove("paper_active_payout").apply();
+                .remove("paper_active_stake").remove("paper_active_payout").remove("paper_active_symbol").apply();
     }
 
     private void persistEvent() {
