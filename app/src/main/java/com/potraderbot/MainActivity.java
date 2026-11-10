@@ -1212,13 +1212,6 @@ public final class MainActivity extends Activity {
         parent.addView(row);
     }
 
-    @Override protected void onDestroy() {
-        handler.removeCallbacks(refreshRunnable);
-        handler.removeCallbacks(updateCheckRunnable);
-        executor.shutdownNow();
-        super.onDestroy();
-    }
-
     private void applyImmersiveMode() {
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
