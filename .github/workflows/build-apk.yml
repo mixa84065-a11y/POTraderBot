@@ -50,6 +50,8 @@ jobs:
 
       - name: Build signed release APK
         env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -61,7 +63,7 @@ jobs:
         run: |
           VERSION_NAME=$(awk -F"'" '/versionName/ {print $2; exit}' app/build.gradle)
           VERSION_CODE=$(awk '/versionCode/ {gsub(/[^0-9]/, "", $0); print; exit}' app/build.gradle)
-          if [ "$VERSION_NAME" != "0.6.3" ] || [ "$VERSION_CODE" != "15" ]; then
+          if [ "$VERSION_NAME" != "0.6.4" ] || [ "$VERSION_CODE" != "16" ]; then
             echo "Unexpected app version: name=$VERSION_NAME code=$VERSION_CODE"
             exit 1
           fi
@@ -98,9 +100,9 @@ jobs:
           printf '%s\n' "$BADGING" | grep -E "^(package:|sdkVersion:|targetSdkVersion:)"
           PACKAGE_LINE=$(printf '%s\n' "$BADGING" | grep "^package:")
           [[ "$PACKAGE_LINE" == *"name='com.potraderbot'"* ]]
-          [[ "$PACKAGE_LINE" == *"versionCode='15'"* ]]
-          [[ "$PACKAGE_LINE" == *"versionName='0.6.3'"* ]]
-          echo "APK_VALIDATION=passed; signer matches installed v0.5.9; versionCode=15"
+          [[ "$PACKAGE_LINE" == *"versionCode='16'"* ]]
+          [[ "$PACKAGE_LINE" == *"versionName='0.6.4'"* ]]
+          echo "APK_VALIDATION=passed; signer matches installed v0.5.9; versionCode=16"
 
       - name: Upload versioned APK artifact
         uses: actions/upload-artifact@v4
