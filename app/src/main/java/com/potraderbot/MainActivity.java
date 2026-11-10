@@ -277,8 +277,7 @@ public final class MainActivity extends Activity {
         updateModeStyle.run();
         platformInput.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
-                preferences.edit().putInt("platform_index", position).apply();
-                refreshPlatformTabs(position);
+                preferences.edit().putInt("platform_index", position).apply();                refreshPlatformTabs(position);
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { }
         });
@@ -557,8 +556,7 @@ public final class MainActivity extends Activity {
                 String asia = clock.format(now);
                 clock.setTimeZone(java.util.TimeZone.getTimeZone("Europe/London"));
                 String london = clock.format(now);
-                clock.setTimeZone(java.util.TimeZone.getTimeZone("America/New_York"));
-                String newYork = clock.format(now);
+                clock.setTimeZone(java.util.TimeZone.getTimeZone("America/New_York"));                String newYork = clock.format(now);
                 info = label("АЗИЯ  •  Токио: " + asia + "\nЛОНДОН: " + london + "\nНЬЮ-ЙОРК: " + newYork + "\nВремя указано по часовым поясам городов.", 12, 0xFFE0E0E0, false);
                 box.addView(info);
                 break;
@@ -609,22 +607,27 @@ public final class MainActivity extends Activity {
 
     private Button makeModeButton(String title, String subtitle, int accent) {
         Button button = new Button(this);
-        button.setText(title + "\n" + subtitle);
+        button.setText(title + "\\n" + subtitle);
         button.setAllCaps(false);
         button.setTextSize(15);
         button.setTypeface(null, Typeface.BOLD);
         button.setTextColor(0xFFFFFFFF);
+        button.setPadding(dp(6), dp(5), dp(6), dp(5));
+        button.setMinHeight(dp(76));
         return button;
     }
 
     private void styleModeButton(Button button, boolean selected, int accent) {
-        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-        bg.setColor(selected ? (accent == 0xFF168BFF ? 0xFF09284B : 0xFF421010) : 0xFF101010);
-        bg.setCornerRadius(22);
-        bg.setStroke(selected ? 4 : 2, accent);
+        int top = accent == 0xFF168BFF ? 0xFF0756A8 : 0xFF9C160D;
+        int bottom = accent == 0xFF168BFF ? 0xFF031A39 : 0xFF3D0808;
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{selected ? top : 0xFF191919, selected ? bottom : 0xFF080808});
+        bg.setCornerRadius(dp(20));
+        bg.setStroke(dp(selected ? 3 : 1), accent);
         button.setBackground(bg);
         button.setTextColor(selected ? 0xFFFFFFFF : 0xFFBFC5CE);
-        button.setElevation(selected ? 8 : 2);
+        button.setElevation(dp(selected ? 7 : 2));
     }
 
     private Button makePlatformButton(String text) {
@@ -675,8 +678,15 @@ public final class MainActivity extends Activity {
         button.setAllCaps(false);
         button.setTextSize(13);
         button.setTypeface(null, Typeface.BOLD);
-        button.setTextColor(0xFF10151C);
-        button.setBackgroundTintList(ColorStateList.valueOf(0xFFFFC72C));
+        button.setTextColor(0xFF171006);
+        button.setPadding(dp(12), dp(8), dp(12), dp(8));
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0xFFFFE89A, 0xFFFFC72C, 0xFFB87908});
+        bg.setCornerRadius(dp(16));
+        bg.setStroke(dp(1), 0xFFFFF0B8);
+        button.setBackground(bg);
+        button.setElevation(dp(4));
         return button;
     }
 
@@ -710,21 +720,18 @@ public final class MainActivity extends Activity {
         Button button = new Button(this);
         button.setText(text);
         button.setAllCaps(false);
-        button.setTextSize(27);
+        button.setTextSize(25);
         button.setTypeface(null, Typeface.BOLD);
-        button.setTextColor(0xFFFFF3D6);
-        android.graphics.drawable.GradientDrawable border = new android.graphics.drawable.GradientDrawable();
-        border.setColor(0xFF050505);
-        border.setCornerRadius(28);
-        border.setStroke(4, color);
+        button.setTextColor(0xFFFFFFFF);
+        button.setPadding(dp(8), dp(4), dp(8), dp(4));
+        android.graphics.drawable.GradientDrawable border = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{color == 0xFF00D83A ? 0xFF0A6A12 : 0xFF8A0808,
+                          color == 0xFF00D83A ? 0xFF063508 : 0xFF430404});
+        border.setCornerRadius(dp(24));
+        border.setStroke(dp(3), color);
         button.setBackground(border);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(88));
-        params.topMargin = 7;
-        params.bottomMargin = 7;
-        button.setLayoutParams(params);
-        button.setClickable(false);
-        button.setFocusable(false);
+        button.setElevation(dp(7));
         return button;
     }
 
@@ -733,12 +740,16 @@ public final class MainActivity extends Activity {
         button.setText(text);
         button.setTextSize(12);
         button.setAllCaps(false);
+        button.setTypeface(null, Typeface.BOLD);
         button.setTextColor(0xFFFFD45A);
-        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-        bg.setColor(0xFF111111);
-        bg.setCornerRadius(14);
-        bg.setStroke(2, 0xFFB88924);
+        button.setPadding(dp(8), dp(4), dp(8), dp(4));
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0xFF292014, 0xFF080808, 0xFF17110A});
+        bg.setCornerRadius(dp(14));
+        bg.setStroke(dp(2), 0xFFFFC72C);
         button.setBackground(bg);
+        button.setElevation(dp(3));
         return button;
     }
 
@@ -837,8 +848,7 @@ public final class MainActivity extends Activity {
         final String symbol = symbolInput.getText().toString().trim();
         final String key = apiKeyInput.getText().toString().trim();
         final String platform = platformInput.getSelectedItem().toString();
-        final String mode = modeInput.getSelectedItem().toString();
-        if (key.isEmpty()) {
+        final String mode = modeInput.getSelectedItem().toString();        if (key.isEmpty()) {
             status.setText("СТАТУС: НУЖЕН API-КЛЮЧ");
             status.setTextColor(0xFFFFC857);
             if (automatic) {
