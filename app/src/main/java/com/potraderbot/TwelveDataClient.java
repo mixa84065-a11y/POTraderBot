@@ -33,7 +33,7 @@ public class TwelveDataClient {
         int size = Math.max(60, Math.min(outputSize, 500));
         // The parser treats timestamps as UTC, so request UTC explicitly.
         String query = "?symbol=" + URLEncoder.encode(symbol, "UTF-8")
-                + "&interval=1min&outputsize=" + size + "&timezone=UTC&order=asc";
+                + "&interval=1min&outputsize=" + size + "&timezone=UTC&order=desc";
         HttpURLConnection connection = (HttpURLConnection) new URL(ENDPOINT + query).openConnection();
         connection.setRequestMethod("GET");
         connection.setConnectTimeout(10000);
