@@ -2,19 +2,32 @@ package com.potraderbot;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.graphics.Typeface;
-import android.view.Gravity;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import java.util.ArrayList;
+
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
+import java.util.TimeZone;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class MainActivity extends Activity {
     private final TradeEngine engine = new TradeEngine();
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private TextView status, stats, log;
-    private boolean running = false;
+    private Button analyzeButton;
+    private volatile boolean running = false;
+    private Future<?> analysisTask;
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -29,74 +42,103 @@ public class MainActivity extends Activity {
         page.setBackgroundColor(0xFF101827);
         scroll.addView(page);
 
-        TextView title = text("PO TRADER BOT", 26, 0xFFFFFFFF, true);
+        TextView title = text("GOD OF TRADING", 26, 0xFFFFFFFF, true);
         page.addView(title);
-        page.addView(text("Android prototype • simulation only", 14, 0xFF9FB0C5, false));
+        page.addView(text("Binarium • manual analysis only", 14, 0xFF9FB0C5, false));
 
-        status = text("STATUS: STOPPED", 20, 0xFFFFC857, true);
+        status = text("STATUS: READY", 20, 0xFFFFC857, true);
         status.setPadding(0, 36, 0, 12);
         page.addView(status);
 
-        TextView config = text("EUR/USD • 1-minute candles • 3-minute expiry\nEMA 9/21 + RSI 14 • max 10 simulated trades/day\nPause after 2 consecutive simulated losses", 15, 0xFFE5EDF7, false);
+        TextView config = text("EUR/USD • 1-minute candles • 3-minute expiry\nEMA 9/21 + RSI 14 • max 10 manual records/day\nPause after 2 consecutive recorded losses", 15, 0xFFE5EDF7, false);
         config.setPadding(0, 12, 0, 24);
         page.addView(config);
 
-        Button start = button("START ANALYSIS (SAMPLE DATA)");
-        start.setOnClickListener(v -> runSampleAnalysis());
-        page.addView(start);
+        analyzeButton = button("ANALYZE BINARIUM DATA");
+        analyzeButton.setOnClickListener(v -> runLiveAnalysis());
+        page.addView(analyzeButton);
 
-        Button stop = button("STOP BOT");
+        Button stop = button("STOP ANALYSIS");
         stop.setOnClickListener(v -> {
             running = false;
+            if (analysisTask != null) analysisTask.cancel(true);
+            analyzeButton.setEnabled(true);
             status.setText("STATUS: STOPPED");
             status.setTextColor(0xFFFFC857);
+            log.setText("Analysis stopped. No trade was placed.");
         });
         page.addView(stop);
 
-        stats = text("Trades: 0 / 10", 17, 0xFFFFFFFF, true);
+        stats = text("Manual trades recorded: " + engine.getTradesToday() + " / 10", 17, 0xFFFFFFFF, true);
         stats.setPadding(0, 28, 0, 10);
         page.addView(stats);
 
-        log = text("No trades recorded.\nSample candles are synthetic and do not represent live market prices.", 14, 0xFFB8C6D9, false);
+        log = text("Press ANALYZE to load current one-minute candles and check the economic calendar.\nNo automatic trades are placed.", 14, 0xFFB8C6D9, false);
         page.addView(log);
-        page.addView(text("\nIMPORTANT: This prototype does not connect to Pocket Option, read its app screen, or place trades. Do not enter account credentials.", 13, 0xFFFFC857, true));
+        page.addView(text("\nIMPORTANT: Market data comes from Twelve Data and may differ from Binarium quotes. Signals are informational, not a guarantee. Trades must be checked and confirmed manually in Binarium.", 13, 0xFFFFC857, true));
         setContentView(scroll);
     }
 
-    private void runSampleAnalysis() {
-        running = true;
-        List<Candle> candles = makeSyntheticCandles();
-        MarketAnalyzer.Signal signal = new MarketAnalyzer().analyze(candles);
-        status.setText("SIMULATION SIGNAL: " + signal);
-        status.setTextColor(signal == MarketAnalyzer.Signal.WAIT ? 0xFFFFC857 : 0xFF70D6A5);
-
-        if (signal != MarketAnalyzer.Signal.WAIT && !engine.isPaused()) {
-            Candle last = candles.get(candles.size() - 1);
-            // Deliberately do not fabricate a trade outcome or auto-place an order.
-            log.setText("Signal generated from synthetic sample candles: " + signal
-                    + "\nSample close: " + last.close
-                    + "\nNo trade was placed. Add a verified live/demo data feed before performance testing.");
-        } else {
-            log.setText("No entry. The strategy requires confirmation or the risk guard is active."
-                    + "\nNo trade was placed.");
+    private void runLiveAnalysis() {
+        if (running) return;
+        if (BuildConfig.TWELVE_DATA_API_KEY.trim().isEmpty()
+                || BuildConfig.API_SH_KEY.trim().isEmpty()) {
+            status.setText("STATUS: API KEYS REQUIRED");
+            status.setTextColor(0xFFFFC857);
+            log.setText("Для анализа нужны оба ключа. Добавь их локально в local.properties: "
+                    + "TWELVE_DATA_API_KEY=... и API_SH_KEY=... . "
+                    + "Не публикуй этот файл в GitHub и не отправляй ключи в чат.");
+            return;
         }
-        stats.setText("Simulated trades recorded: " + engine.getTradesToday() + " / 10");
+
+        running = true;
+        analyzeButton.setEnabled(false);
+        status.setText("STATUS: LOADING MARKET DATA...");
+        status.setTextColor(0xFFFFC857);
+        log.setText("Запрашиваю минутные свечи и экономический календарь. Сделки не открываются.");
+
+        analysisTask = executor.submit(() -> {
+            try {
+                long now = System.currentTimeMillis();
+                BinariumDataEngine dataEngine = new BinariumDataEngine(
+                        BuildConfig.TWELVE_DATA_API_KEY, BuildConfig.API_SH_KEY);
+                BinariumDataEngine.Result result = dataEngine.analyze(
+                        "EUR/USD", calendarDate(-1), calendarDate(2), now);
+
+                mainHandler.post(() -> {
+                    if (!running || isFinishing()) return;
+                    status.setText("SIGNAL: " + result.signal);
+                    status.setTextColor(result.signal == MarketAnalyzer.Signal.WAIT
+                            ? 0xFFFFC857 : 0xFF70D6A5);
+                    log.setText(result.reason + "\nПолучено свечей: " + result.candleCount
+                            + "\nИсточник котировок: Twelve Data"
+                            + "\nЭкономический календарь: API.SH"
+                            + "\nСделка не открывалась. Проверь котировку на Binarium вручную.");
+                    running = false;
+                    analyzeButton.setEnabled(true);
+                });
+            } catch (Exception error) {
+                mainHandler.post(() -> {
+                    if (isFinishing()) return;
+                    status.setText("STATUS: DATA ERROR");
+                    status.setTextColor(0xFFFF6B6B);
+                    String message = error.getMessage();
+                    log.setText("Не удалось выполнить анализ: "
+                            + (message == null ? error.getClass().getSimpleName() : message)
+                            + "\nПроверь API-ключи, интернет и доступность сервисов. Сигнал не сформирован.");
+                    running = false;
+                    analyzeButton.setEnabled(true);
+                });
+            }
+        });
     }
 
-    private List<Candle> makeSyntheticCandles() {
-        List<Candle> list = new ArrayList<>();
-        double p = 1.0800;
-        long now = System.currentTimeMillis();
-        for (int i = 0; i < 40; i++) {
-            double open = p;
-            double delta = Math.sin(i * 0.7) * 0.00012 + (i % 7 == 0 ? -0.00004 : 0.000025);
-            double close = open + delta;
-            double high = Math.max(open, close) + 0.00005;
-            double low = Math.min(open, close) - 0.00005;
-            list.add(new Candle(now - (40 - i) * 60_000L, open, high, low, close));
-            p = close;
-        }
-        return list;
+    private String calendarDate(int dayOffset) {
+        Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"), Locale.US);
+        calendar.add(Calendar.DAY_OF_YEAR, dayOffset);
+        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+        format.setTimeZone(TimeZone.getTimeZone("UTC"));
+        return format.format(new Date(calendar.getTimeInMillis()));
     }
 
     private TextView text(String value, int size, int color, boolean bold) {
@@ -113,5 +155,11 @@ public class MainActivity extends Activity {
         b.setText(label);
         b.setAllCaps(false);
         return b;
+    }
+
+    @Override protected void onDestroy() {
+        running = false;
+        executor.shutdownNow();
+        super.onDestroy();
     }
 }
