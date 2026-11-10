@@ -11,6 +11,8 @@ import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.net.Uri;
 import android.view.View;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -51,6 +53,10 @@ public final class MainActivity extends Activity {
     private Spinner modeInput;
     private TextView status;
     private TextView details;
+    private ChartView chartView;
+    private EditText riskBalanceInput, riskPercentInput, payoutInput;
+    private TextView riskCalculationView;
+    private MarketAnalyzer.Signal displayedSignal = MarketAnalyzer.Signal.WAIT;
     private Button analyzeButton;
     private Button autoButton;
     private Button updateButton;
@@ -234,11 +240,20 @@ public final class MainActivity extends Activity {
         paperButton = makeAccentButton("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ");
         paperButton.setOnClickListener(v -> togglePaperAuto());
 
+        chartView = new ChartView(this);
+        LinearLayout chartCard = panel();
+        chartCard.addView(label("ГРАФИК И ТОЧКА ВХОДА", 12, 0xFFFFD45A, true));
+        chartCard.addView(chartView, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(220)));
+        page.addView(chartCard);
+
         details = label("Укажите API-ключ Twelve Data через меню ⋮ и запустите анализ.", 12, 0xFFE1E8F0, false);
         details.setPadding(dp(10), dp(8), dp(10), dp(8));
         LinearLayout detailsCard = panel();
+        detailsCard.addView(label("ОБОСНОВАНИЕ АНАЛИЗА", 12, 0xFFFFD45A, true));
         detailsCard.addView(details);
         page.addView(detailsCard);
+        page.addView(buildInlineRiskPanel());
 
         LinearLayout settings = new LinearLayout(this);
         settings.setOrientation(LinearLayout.VERTICAL);
@@ -478,9 +493,7 @@ public final class MainActivity extends Activity {
             case 1:
                 info = label("Контроль риска и лимитов. Пока это информационный раздел: автоматическая блокировка сделок не подключена.", 12, 0xFFE0E0E0, false);
                 box.addView(info);
-                Button risk = makeNavButton("ОТКРЫТЬ КАЛЬКУЛЯТОР РИСКА");
-                risk.setOnClickListener(v -> openRiskCalculator());
-                box.addView(risk);
+                box.addView(label("Калькулятор встроен в результат анализа на главном экране и пересчитывается вместе с текущим сигналом.", 12, 0xFFE0E0E0, false));
                 break;
             case 2:
                 info = label("Раздел уведомлений подготовлен в интерфейсе. Push-уведомления о сигналах ещё не подключены.", 12, 0xFFE0E0E0, false);
@@ -508,9 +521,7 @@ public final class MainActivity extends Activity {
             case 7:
                 info = label("Рассчитайте ориентировочный размер риска для учебной сделки. Расчёт не отправляет ордера.", 12, 0xFFE0E0E0, false);
                 box.addView(info);
-                Button calculator = makeNavButton("РАССЧИТАТЬ РИСК");
-                calculator.setOnClickListener(v -> openRiskCalculator());
-                box.addView(calculator);
+                box.addView(label("Поля калькулятора находятся непосредственно под графиком и объяснением последнего анализа.", 12, 0xFFE0E0E0, false));
                 break;
             case 8:
                 java.text.SimpleDateFormat clock = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
@@ -559,38 +570,70 @@ public final class MainActivity extends Activity {
         return box;
     }
 
-    private void openRiskCalculator() {
-        LinearLayout form = new LinearLayout(this);
-        form.setOrientation(LinearLayout.VERTICAL);
-        form.setPadding(dp(16), dp(8), dp(16), dp(4));
-        EditText balance = editField("Размер счёта, например 20000");
-        balance.setInputType(8194);
-        balance.setText("20000");
-        EditText percent = editField("Риск в процентах, например 1");
-        percent.setInputType(8194);
-        percent.setText("1");
-        form.addView(label("Размер счёта", 12, 0xFFFFD45A, true));
-        form.addView(balance);
-        form.addView(label("Допустимый риск (%)", 12, 0xFFFFD45A, true));
-        form.addView(percent);
-        new AlertDialog.Builder(this).setTitle("Калькулятор риска")
-                .setView(form)
-                .setPositiveButton("Рассчитать", (d, w) -> {
-                    try {
-                        double amount = Double.parseDouble(balance.getText().toString().replace(',', '.'));
-                        double rate = Double.parseDouble(percent.getText().toString().replace(',', '.'));
-                        if (amount <= 0 || rate <= 0 || rate > 100) throw new NumberFormatException();
-                        double risk = amount * rate / 100.0;
-                        new AlertDialog.Builder(this).setTitle("Расчёт риска")
-                                .setMessage(String.format(java.util.Locale.US,
-                                        "Ориентировочный лимит риска: %.2f\nЭто расчёт для планирования, не гарантия ограничения убытка.", risk))
-                                .setPositiveButton("Понятно", null).show();
-                    } catch (Exception e) {
-                        new AlertDialog.Builder(this).setTitle("Проверьте значения")
-                                .setMessage("Введите положительную сумму и риск от 0 до 100%.")
-                                .setPositiveButton("Понятно", null).show();
-                    }
-                }).setNegativeButton("Отмена", null).show();
+    private LinearLayout buildInlineRiskPanel() {
+        LinearLayout card = panel();
+        card.addView(label("КАЛЬКУЛЯТОР РИСКА • К ЭТОМУ СИГНАЛУ", 12, 0xFFFFD45A, true));
+        riskBalanceInput = editField("Баланс счёта");
+        riskBalanceInput.setInputType(8194);
+        riskBalanceInput.setText("20000");
+        riskPercentInput = editField("Риск на позицию (%)");
+        riskPercentInput.setInputType(8194);
+        riskPercentInput.setText("1");
+        payoutInput = editField("Выплата площадки (%) — необязательно");
+        payoutInput.setInputType(8194);
+        card.addView(label("Баланс счёта", 11, 0xFFE1E8F0, false));
+        card.addView(riskBalanceInput);
+        card.addView(label("Допустимый риск на позицию (%)", 11, 0xFFE1E8F0, false));
+        card.addView(riskPercentInput);
+        card.addView(label("Выплата площадки (%) — укажите значение из терминала", 11, 0xFFE1E8F0, false));
+        card.addView(payoutInput);
+        riskCalculationView = label("После анализа здесь появится расчёт лимита риска.", 12, 0xFFE1E8F0, false);
+        riskCalculationView.setPadding(dp(2), dp(8), dp(2), dp(2));
+        card.addView(riskCalculationView);
+        TextWatcher watcher = new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { updateInlineRisk(); }
+            @Override public void afterTextChanged(Editable e) { }
+        };
+        riskBalanceInput.addTextChangedListener(watcher);
+        riskPercentInput.addTextChangedListener(watcher);
+        payoutInput.addTextChangedListener(watcher);
+        return card;
+    }
+
+    private void updateInlineRisk() {
+        if (riskCalculationView == null || riskBalanceInput == null || riskPercentInput == null) return;
+        try {
+            double balance = Double.parseDouble(riskBalanceInput.getText().toString().trim().replace(',', '.'));
+            double percent = Double.parseDouble(riskPercentInput.getText().toString().trim().replace(',', '.'));
+            if (!Double.isFinite(balance) || !Double.isFinite(percent) || balance <= 0 || percent <= 0 || percent > 100) {
+                throw new NumberFormatException();
+            }
+            double stake = balance * percent / 100.0;
+            StringBuilder out = new StringBuilder();
+            out.append("Текущий сигнал: ").append(signalLabel(displayedSignal)).append("\\n")
+                    .append(String.format(Locale.getDefault(),
+                            "Размер позиции / максимальный убыток при полной потере ставки: %.2f (%.2f%% баланса)\\n",
+                            stake, percent));
+            String payoutText = payoutInput.getText().toString().trim();
+            if (!payoutText.isEmpty()) {
+                double payout = Double.parseDouble(payoutText.replace(',', '.'));
+                if (!Double.isFinite(payout) || payout <= 0 || payout > 1000) throw new NumberFormatException();
+                double profit = stake * payout / 100.0;
+                out.append(String.format(Locale.getDefault(),
+                        "Потенциальная чистая прибыль при указанной выплате: %.2f\\nРиск : прибыль = 1 : %.2f",
+                        profit, payout / 100.0));
+            } else {
+                out.append("Выплата не указана — отношение риска к прибыли не рассчитывается.");
+            }
+            if (displayedSignal == MarketAnalyzer.Signal.WAIT) out.append("\\nВХОД НЕ РЕКОМЕНДОВАН: система показывает ЖДАТЬ.");
+            if (percent > 5) out.append("\\nОПАСНО: риск выше 5% баланса на одну позицию.");
+            else if (percent > 2) out.append("\\nПРЕДУПРЕЖДЕНИЕ: риск выше 2% баланса.");
+            else out.append("\\nПроверьте размер ставки и условия выплаты на площадке.");
+            riskCalculationView.setText(out.toString());
+        } catch (Exception e) {
+            riskCalculationView.setText("Проверьте ввод: баланс должен быть больше нуля, риск — от 0 до 100%, выплата — положительной.");
+        }
     }
 
     private TextView waitSignalView;
@@ -862,10 +905,19 @@ public final class MainActivity extends Activity {
                 List<Candle> candles = dataClient.fetchOneMinuteCandles(symbol, key);
                 MarketAnalyzer.Analysis result = analyzer.analyze(candles);
                 Candle last = candles.get(candles.size() - 1);
+                boolean stale = System.currentTimeMillis() - (last.time + 60_000L) > 180_000L;
+                if (stale) result = new MarketAnalyzer.Analysis(MarketAnalyzer.Signal.WAIT, result.ema9,
+                        result.ema21, result.rsi14,
+                        "Котировки устарели: последняя закрытая минутная свеча старше 3 минут. Новый вход заблокирован.");
+                final MarketAnalyzer.Analysis shown = result;
+                final boolean staleData = stale;
                 runOnUiThread(() -> {
                     requestInProgress = false;
                     analyzeButton.setEnabled(true);
-                    status.setText((autoRefreshEnabled ? "АВТО • " : "") + "СИГНАЛ: " + signalLabel(result.signal));
+                    displayedSignal = shown.signal;
+                    if (chartView != null) chartView.setMarketData(candles, shown.signal, last.close, staleData);
+                    updateInlineRisk();
+                    status.setText((staleData ? "ДАННЫЕ УСТАРЕЛИ • " : autoRefreshEnabled ? "АВТО • " : "") + "СИГНАЛ: " + signalLabel(shown.signal));
                     status.setTextColor(result.signal == MarketAnalyzer.Signal.WAIT ? 0xFFFFC857 : 0xFF70D6A5);
                     signalDisplayView.setText(signalLabel(result.signal) + (result.signal == MarketAnalyzer.Signal.CALL ? "  ▲" : result.signal == MarketAnalyzer.Signal.PUT ? "  ▼" : "  ◷"));
                     signalDisplayView.setTextColor(result.signal == MarketAnalyzer.Signal.WAIT ? 0xFFFFC857
@@ -876,7 +928,7 @@ public final class MainActivity extends Activity {
                             mode, platform, symbol.toUpperCase(Locale.US), candles.size(), last.time, last.time,
                             last.close, result.ema9, result.ema21, result.rsi14, result.explanation);
                     if (paperAutoEnabled) paperTrading.process(candles, result.signal);
-                    details.setText(analysisText + (paperAutoEnabled ? "\n\n" + paperTrading.getSummary() : ""));
+                    details.setText(analysisText + (staleData ? "\\n\\nСИГНАЛ ЗАБЛОКИРОВАН ИЗ-ЗА УСТАРЕВШИХ ДАННЫХ." : "") + (paperAutoEnabled ? "\n\n" + paperTrading.getSummary() : ""));
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
