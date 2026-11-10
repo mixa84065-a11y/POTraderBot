@@ -1,5 +1,5 @@
 -- GOD OF TRADING: private, opt-in, two-way signal sharing.
--- Apply in Supabase SQL Editor after enabling Google provider in Authentication.
+-- Apply in Supabase SQL Editor; user accounts use email and password.
 
 create extension if not exists pgcrypto;
 
