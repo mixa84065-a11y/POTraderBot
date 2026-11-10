@@ -301,7 +301,7 @@ public final class MainActivity extends Activity {
             Button help = makeTinyHelp(i == 0 ? "Pocket Option" : i == 1 ? "Binarium" : "Универсальный",
                     "Выбор площадки меняет только профиль интерфейса и ссылку открытия. Приложение не подключается к аккаунту и не отправляет сделки.");
             item.addView(help, new LinearLayout.LayoutParams(dp(30), dp(26)));
-            LinearLayout.LayoutParams itemParams = new LinearLayout.LayoutParams(0, dp(78), 1f);
+            LinearLayout.LayoutParams itemParams = new LinearLayout.LayoutParams(0, dp(84), 1f);
             if (i > 0) itemParams.leftMargin = dp(6);
             platformNav.addView(item, itemParams);
         }
