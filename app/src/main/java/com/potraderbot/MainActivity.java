@@ -136,7 +136,7 @@ public final class MainActivity extends Activity {
         header.addView(hamburger, new LinearLayout.LayoutParams(dp(46), dp(48)));
         LinearLayout brand = new LinearLayout(this);
         brand.setOrientation(LinearLayout.VERTICAL);
-        TextView title = label("GOD OF TRADING", 25, 0xFFFFD36A, true);
+        TextView title = label("GoD of Trading", 25, 0xFFFFD36A, true);
         title.setShadowLayer(10, 0, 0, 0xFFFFA000);
         TextView subtitle = label("СИЛА В АНАЛИЗЕ", 12, 0xFFFFD45A, true);
         TextView sloganTop = label("— Торгуй грамотно, управляй рынком —", 10, 0xFFE7E7E7, true);
@@ -395,7 +395,7 @@ public final class MainActivity extends Activity {
                 if (action == 0) showFeatureMenu(settings);
                 else if (action == 1) showToolSettings(settings);
                 else if (action == 2) new AlertDialog.Builder(this)
-                        .setTitle("GOD OF TRADING")
+                        .setTitle("GoD of Trading")
                         .setMessage("Помощник для анализа рынка и тестирования стратегий. Приложение показывает аналитические сигналы и не подключается к торговому аккаунту и не совершает сделки.")
                         .setPositiveButton("Понятно", null).show();
                 else checkForUpdate();
@@ -463,7 +463,7 @@ public final class MainActivity extends Activity {
         scroll.addView(container);
 
         final AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("GOD OF TRADING • МЕНЮ")
+                .setTitle("GoD of Trading • МЕНЮ")
                 .setView(scroll)
                 .setNegativeButton("Закрыть", null)
                 .create();
@@ -908,6 +908,14 @@ public final class MainActivity extends Activity {
             status.setTextColor(0xFFFFC857);
             return;
         }
+        if (!paperAutoEnabled) {
+            try { getConfiguredStake(); getConfiguredPayout(); }
+            catch (Exception invalidRisk) {
+                status.setText(invalidRisk.getMessage() == null ? "ПРОВЕРЬТЕ НАСТРОЙКИ РИСКА" : invalidRisk.getMessage());
+                status.setTextColor(0xFFFF7B72);
+                return;
+            }
+        }
         paperAutoEnabled = !paperAutoEnabled;
         if (paperAutoEnabled) {
             paperButton.setText("ОСТАНОВИТЬ АВТОСИМУЛЯЦИЮ");
@@ -1006,10 +1014,14 @@ public final class MainActivity extends Activity {
                             mode, platform, symbol.toUpperCase(Locale.US), candles.size(), last.time, last.time,
                             last.close, shown.ema9, shown.ema21, shown.rsi14, shown.explanation);
                     if (paperAutoEnabled && modeInput.getSelectedItemPosition() == 0 && !staleData) {
-                        double stake = getConfiguredStake();
-                        double payout = getConfiguredPayout();
-                        int expiryMinutes = expiryInput == null ? 3 : expiryInput.getSelectedItemPosition() + 3;
-                        paperTrading.process(candles, shown.signal, stake, payout, expiryMinutes);
+                        try {
+                            double stake = getConfiguredStake();
+                            double payout = getConfiguredPayout();
+                            int expiryMinutes = expiryInput == null ? 3 : expiryInput.getSelectedItemPosition() + 3;
+                            paperTrading.process(candles, shown.signal, stake, payout, expiryMinutes);
+                        } catch (Exception invalidRisk) {
+                            stopPaperAuto(invalidRisk.getMessage() == null ? "Автосимуляция остановлена: проверьте риск." : invalidRisk.getMessage());
+                        }
                     }
                     updateSignalStrength(shown.strength);
                     details.setText(analysisText + (staleData ? "\n\nСИГНАЛ ЗАБЛОКИРОВАН ИЗ-ЗА УСТАРЕВШИХ ДАННЫХ." : "") + (paperAutoEnabled ? "\n\n" + paperTrading.getSummary() : ""));
