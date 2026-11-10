@@ -146,7 +146,7 @@ public final class MainActivity extends Activity {
         LinearLayout modeRow = new LinearLayout(this);
         modeRow.setOrientation(LinearLayout.HORIZONTAL);
         Button demoMode = makeModeButton("♟  ДЕМО", "Учебный режим", 0xFF168BFF);
-        Button realMode = makeModeButton("▤  РЕАЛЬНЫЙ\nСЧЁТ", "Только сигналы", 0xFFFF3434);
+        Button realMode = makeModeButton("▤  РЕАЛЬНЫЙ\nСЧЁТ", "", 0xFFFF3434);
         modeRow.addView(demoMode, new LinearLayout.LayoutParams(0, dp(76), 1f));
         LinearLayout.LayoutParams realModeParams = new LinearLayout.LayoutParams(0, dp(76), 1f);
         realModeParams.leftMargin = dp(7);
@@ -225,6 +225,10 @@ public final class MainActivity extends Activity {
 
         analyzeButton = makeAccentButton("⟳  НОВЫЙ АНАЛИЗ");
         analyzeButton.setOnClickListener(v -> loadAndAnalyze(false));
+        LinearLayout.LayoutParams analyzeParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(54));
+        analyzeParams.topMargin = dp(8);
+        page.addView(analyzeButton, analyzeParams);
         autoButton = makeAccentButton("ВКЛЮЧИТЬ АВТООБНОВЛЕНИЕ");
         autoButton.setOnClickListener(v -> toggleAutoRefresh());
         paperButton = makeAccentButton("ВКЛЮЧИТЬ АВТОСИМУЛЯЦИЮ");
@@ -310,47 +314,6 @@ public final class MainActivity extends Activity {
         page.addView(platformNav, platformParams);
         refreshPlatformTabs(platformInput.getSelectedItemPosition());
 
-        TextView featuresCaption = label("ИНСТРУМЕНТЫ АНАЛИЗА", 11, 0xFFFFD45A, true);
-        featuresCaption.setGravity(android.view.Gravity.CENTER);
-        featuresCaption.setPadding(0, dp(12), 0, dp(5));
-        page.addView(featuresCaption);
-
-        LinearLayout featureRow = new LinearLayout(this);
-        featureRow.setOrientation(LinearLayout.HORIZONTAL);
-        String[] featureIcons = {"◔", "▥", "▦", "◷", "↗"};
-        String[] featureNames = {"Сила\nсигнала", "Объяснение\nсигнала", "Калькулятор\nриска", "Часы\nсессий", "Умный\nжурнал"};
-        int[] featureIndexes = {5, 6, 7, 8, 9};
-        for (int i = 0; i < featureNames.length; i++) {
-            final int featureIndex = featureIndexes[i];
-            LinearLayout tile = new LinearLayout(this);
-            tile.setOrientation(LinearLayout.VERTICAL);
-            tile.setGravity(android.view.Gravity.CENTER);
-            tile.setPadding(dp(5), dp(7), dp(5), dp(6));
-            android.graphics.drawable.GradientDrawable tileBg = new android.graphics.drawable.GradientDrawable();
-            tileBg.setColor(0xE9101010);
-            tileBg.setCornerRadius(dp(12));
-            tileBg.setStroke(dp(1), 0xFFB88924);
-            tile.setBackground(tileBg);
-            TextView glyph = label(featureIcons[i], 20, 0xFFFFD45A, true);
-            glyph.setGravity(android.view.Gravity.CENTER);
-            tile.addView(glyph);
-            TextView tileLabel = label(featureNames[i], 8, 0xFFF3E7C8, true);
-            tileLabel.setGravity(android.view.Gravity.CENTER);
-            tile.addView(tileLabel);
-            Button help = makeTinyHelp(featureNames[i].replace("\n", " "),
-                    "Открыть описание и инструменты этого раздела.");
-            tile.addView(help, new LinearLayout.LayoutParams(dp(22), dp(22)));
-            tile.setOnClickListener(v -> new AlertDialog.Builder(this)
-                    .setTitle(featureNames[featureIndex == 5 ? 0 : featureIndex == 6 ? 1 : featureIndex == 7 ? 2 : featureIndex == 8 ? 3 : 4].replace("\n", " "))
-                    .setView(featureContent(featureIndex))
-                    .setPositiveButton("Готово", null).show());
-            LinearLayout.LayoutParams tileParams = new LinearLayout.LayoutParams(0, dp(98), 1f);
-            if (i > 0) tileParams.leftMargin = dp(3);
-            featureRow.addView(tile, tileParams);
-        }
-        page.addView(featureRow, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(102)));
-
         TextView disclaimer = label("— ТОРГУЙ ГРАМОТНО, УПРАВЛЯЙ РЫНКОМ —", 11, 0xFFFFC72C, true);
         disclaimer.setGravity(android.view.Gravity.CENTER);
         disclaimer.setPadding(dp(2), dp(10), dp(2), dp(4));
@@ -426,7 +389,7 @@ public final class MainActivity extends Activity {
 
     private void showFeatureMenu(LinearLayout settings) {
         final String[] names = {
-                "График и анализ", "Риск-менеджмент и блокировка", "Уведомления",
+                "Риск-менеджмент и блокировка", "Уведомления",
                 "Журнал сделок и статистика", "Аналитика через трансляцию",
                 "Индикатор силы сигнала", "Объяснение сигнала", "Калькулятор риска",
                 "Часы торговых сессий", "Умный журнал", "Обучение"
@@ -463,7 +426,7 @@ public final class MainActivity extends Activity {
             content.setOrientation(LinearLayout.VERTICAL);
             content.setPadding(dp(8), dp(4), dp(8), dp(10));
             content.setVisibility(View.GONE);
-            content.addView(featureContent(index));
+            content.addView(featureContent(index + 1));
             card.addView(content);
             heading.setOnClickListener(v -> {
                 boolean opening = content.getVisibility() != View.VISIBLE;
@@ -636,7 +599,8 @@ public final class MainActivity extends Activity {
 
     private Button makeModeButton(String title, String subtitle, int accent) {
         Button button = new Button(this);
-        button.setText(title + "\\n" + subtitle);
+        button.setText(subtitle == null || subtitle.isEmpty()
+                ? title : title + "\n" + subtitle);
         button.setAllCaps(false);
         button.setTextSize(15);
         button.setTypeface(null, Typeface.BOLD);
