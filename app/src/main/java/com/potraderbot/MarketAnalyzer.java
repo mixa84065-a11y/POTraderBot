@@ -8,78 +8,59 @@ public final class MarketAnalyzer {
 
     public static final class Analysis {
         public final Signal signal;
-        public final double ema9;
-        public final double ema21;
-        public final double rsi14;
+        public final double ema9, ema21, rsi14;
         public final String explanation;
-
         Analysis(Signal signal, double ema9, double ema21, double rsi14, String explanation) {
-            this.signal = signal;
-            this.ema9 = ema9;
-            this.ema21 = ema21;
-            this.rsi14 = rsi14;
-            this.explanation = explanation;
+            this.signal=signal; this.ema9=ema9; this.ema21=ema21; this.rsi14=rsi14; this.explanation=explanation;
         }
     }
 
     public Analysis analyze(List<Candle> candles) {
-        if (candles == null || candles.size() < 30) {
-            return new Analysis(Signal.WAIT, 0, 0, 0, "Недостаточно закрытых свечей (нужно минимум 30).");
-        }
-        for (int i = 1; i < candles.size(); i++) {
-            if (candles.get(i).time <= candles.get(i - 1).time) {
-                return new Analysis(Signal.WAIT, 0, 0, 0, "Свечи пришли не в хронологическом порядке.");
-            }
-        }
-
-        double ema9 = ema(candles, 9);
-        double ema21 = ema(candles, 21);
-        double rsi = rsiWilder(candles, 14);
-        Candle last = candles.get(candles.size() - 1);
-        Candle previous = candles.get(candles.size() - 2);
-        boolean bullish = last.close > last.open && last.close > previous.close;
-        boolean bearish = last.close < last.open && last.close < previous.close;
-
-        if (ema9 > ema21 && rsi >= 50 && rsi <= 68 && bullish) {
-            return new Analysis(Signal.CALL, ema9, ema21, rsi,
-                    "EMA 9 выше EMA 21, RSI в допустимой зоне, последняя свеча бычья.");
-        }
-        if (ema9 < ema21 && rsi >= 32 && rsi <= 50 && bearish) {
-            return new Analysis(Signal.PUT, ema9, ema21, rsi,
-                    "EMA 9 ниже EMA 21, RSI в допустимой зоне, последняя свеча медвежья.");
-        }
-        return new Analysis(Signal.WAIT, ema9, ema21, rsi,
-                "Условия стратегии не совпали. Лучше пропустить вход.");
+        if(candles==null || candles.size()<30) return new Analysis(Signal.WAIT,0,0,0,"Недостаточно закрытых свечей (нужно минимум 30).");
+        for(int i=1;i<candles.size();i++) if(candles.get(i).time<=candles.get(i-1).time)
+            return new Analysis(Signal.WAIT,0,0,0,"Свечи пришли не в хронологическом порядке.");
+        double e9=ema(candles,9), e21=ema(candles,21), rsi=rsiWilder(candles,14);
+        Candle last=candles.get(candles.size()-1), prev=candles.get(candles.size()-2);
+        boolean trendUp=e9>e21, trendDown=e9<e21;
+        boolean rsiUp=rsi>=50 && rsi<=68, rsiDown=rsi>=32 && rsi<=50;
+        boolean candleUp=last.close>last.open && last.close>prev.close;
+        boolean candleDown=last.close<last.open && last.close<prev.close;
+        Signal signal=trendUp&&rsiUp&&candleUp?Signal.CALL:
+                trendDown&&rsiDown&&candleDown?Signal.PUT:Signal.WAIT;
+        StringBuilder why=new StringBuilder();
+        why.append("ПОДТВЕРЖДЕНИЯ: ");
+        appendFactor(why,"EMA 9 выше EMA 21",trendUp);
+        appendFactor(why,"EMA 9 ниже EMA 21",trendDown);
+        appendFactor(why,"RSI 14 в зоне 50–68",rsiUp);
+        appendFactor(why,"RSI 14 в зоне 32–50",rsiDown);
+        appendFactor(why,"последняя свеча бычья и выше предыдущего закрытия",candleUp);
+        appendFactor(why,"последняя свеча медвежья и ниже предыдущего закрытия",candleDown);
+        if(why.charAt(why.length()-1)==' ') why.append("нет полного совпадения условий");
+        why.append("\nРЕШЕНИЕ: ");
+        if(signal==Signal.CALL) why.append("ВВЕРХ — совпали тренд, RSI и импульс свечи.");
+        else if(signal==Signal.PUT) why.append("ВНИЗ — совпали тренд, RSI и импульс свечи.");
+        else why.append("ЖДАТЬ — нет одновременного подтверждения всех трёх условий.");
+        why.append("\nEMA 9: ").append(String.format(java.util.Locale.US,"%.5f",e9))
+                .append(" • EMA 21: ").append(String.format(java.util.Locale.US,"%.5f",e21))
+                .append(" • RSI 14: ").append(String.format(java.util.Locale.US,"%.2f",rsi))
+                .append("\nВероятность не заявляется: для неё нужна проверенная статистика тестирования стратегии.");
+        return new Analysis(signal,e9,e21,rsi,why.toString());
     }
 
-    private double ema(List<Candle> candles, int period) {
-        double multiplier = 2.0 / (period + 1.0);
-        double value = candles.get(0).close;
-        for (int i = 1; i < candles.size(); i++) {
-            value = candles.get(i).close * multiplier + value * (1.0 - multiplier);
-        }
-        return value;
+    private void appendFactor(StringBuilder out,String text,boolean ok){
+        if(ok) out.append("✓ ").append(text).append("; ");
     }
-
-    private double rsiWilder(List<Candle> candles, int period) {
-        double gains = 0;
-        double losses = 0;
-        for (int i = 1; i <= period; i++) {
-            double change = candles.get(i).close - candles.get(i - 1).close;
-            if (change > 0) gains += change;
-            else losses -= change;
-        }
-        double averageGain = gains / period;
-        double averageLoss = losses / period;
-        for (int i = period + 1; i < candles.size(); i++) {
-            double change = candles.get(i).close - candles.get(i - 1).close;
-            double gain = Math.max(change, 0);
-            double loss = Math.max(-change, 0);
-            averageGain = (averageGain * (period - 1) + gain) / period;
-            averageLoss = (averageLoss * (period - 1) + loss) / period;
-        }
-        if (averageLoss == 0) return averageGain == 0 ? 50 : 100;
-        double rs = averageGain / averageLoss;
-        return 100.0 - (100.0 / (1.0 + rs));
+    private double ema(List<Candle> c,int period){
+        double k=2.0/(period+1.0),v=c.get(0).close;
+        for(int i=1;i<c.size();i++) v=c.get(i).close*k+v*(1-k);
+        return v;
+    }
+    private double rsiWilder(List<Candle> c,int period){
+        double gains=0,losses=0;
+        for(int i=1;i<=period;i++){double d=c.get(i).close-c.get(i-1).close;if(d>0)gains+=d;else losses-=d;}
+        double ag=gains/period,al=losses/period;
+        for(int i=period+1;i<c.size();i++){double d=c.get(i).close-c.get(i-1).close;ag=(ag*(period-1)+Math.max(d,0))/period;al=(al*(period-1)+Math.max(-d,0))/period;}
+        if(al==0)return ag==0?50:100;
+        double rs=ag/al;return 100.0-(100.0/(1.0+rs));
     }
 }
