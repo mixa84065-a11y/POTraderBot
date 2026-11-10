@@ -13,8 +13,8 @@ public class CandleSeriesValidator {
             if (candle == null || candle.time <= previousTime) {
                 return "Нарушен порядок или время свечей";
             }
-            if (!Double.isFinite(candle.open) || !Double.isFinite(candle.high)
-                    || !Double.isFinite(candle.low) || !Double.isFinite(candle.close)
+            if (!isFinite(candle.open) || !isFinite(candle.high)
+                    || !isFinite(candle.low) || !isFinite(candle.close)
                     || candle.low <= 0 || candle.high < candle.low
                     || candle.high < Math.max(candle.open, candle.close)
                     || candle.low > Math.min(candle.open, candle.close)) {
@@ -27,5 +27,9 @@ public class CandleSeriesValidator {
             return "Котировки устарели или время источника не совпадает";
         }
         return null;
+    }
+
+    private boolean isFinite(double value) {
+        return !Double.isNaN(value) && !Double.isInfinite(value);
     }
 }
