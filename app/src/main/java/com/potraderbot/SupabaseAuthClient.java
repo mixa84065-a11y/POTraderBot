@@ -72,6 +72,13 @@ public final class SupabaseAuthClient {
         request("/auth/v1/logout", null, accessToken);
     }
 
+
+    public JSONObject refreshSession(String refreshToken) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("refresh_token", refreshToken);
+        return request("/auth/v1/token?grant_type=refresh_token", body, null);
+    }
+
     public JSONObject exchangeCode(String code, String codeVerifier) throws Exception {
         JSONObject body = new JSONObject();
         body.put("auth_code", code);
