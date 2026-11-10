@@ -50,24 +50,6 @@ jobs:
         if: ${{ env.SIGNING_CONFIGURED != 'true' }}
         run: gradle --no-daemon :app:assembleDebug
 
-      - name: Upload signed APK artifact
-        if: ${{ env.SIGNING_CONFIGURED == 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: DeD_GoD-release-APK
-          path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload temporary debug APK artifact
-        if: ${{ env.SIGNING_CONFIGURED != 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: DeD_GoD-debug-APK
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 14
-
       - name: Read app version
         id: app_version
         shell: bash
@@ -80,13 +62,32 @@ jobs:
           echo "version=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION_NAME" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare versioned APK filename
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "$SIGNING_CONFIGURED" = "true" ]; then
+            cp app/build/outputs/apk/release/*.apk "dist/DeD_GoD-v${{ steps.app_version.outputs.version }}.apk"
+          else
+            cp app/build/outputs/apk/debug/app-debug.apk "dist/DeD_GoD-v${{ steps.app_version.outputs.version }}-debug.apk"
+          fi
+          ls -lah dist/
+
+      - name: Upload versioned APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeD_GoD-v${{ steps.app_version.outputs.version }}-APK
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Publish signed APK to GitHub Releases
         if: ${{ env.SIGNING_CONFIGURED == 'true' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.app_version.outputs.tag }}
           name: DeD_GoD ${{ steps.app_version.outputs.tag }}
-          files: app/build/outputs/apk/release/*.apk
+          files: dist/*.apk
           overwrite_files: true
           make_latest: true
           generate_release_notes: true
@@ -97,7 +98,7 @@ jobs:
         with:
           tag_name: ${{ steps.app_version.outputs.tag }}
           name: DeD_GoD ${{ steps.app_version.outputs.tag }} (debug signing)
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: dist/*.apk
           overwrite_files: true
           make_latest: true
           generate_release_notes: true
