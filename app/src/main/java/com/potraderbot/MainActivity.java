@@ -36,6 +36,7 @@ public class MainActivity extends Activity {
     private SupabaseAuthStore authStore;
     private SupabaseAuthClient authClient;
     private SupabaseSettingsClient settingsClient;
+    private SupabaseSharingClient sharingClient;
     private TradingSettings currentSettings = TradingSettings.defaults();
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -55,6 +56,7 @@ public class MainActivity extends Activity {
             authStore = new SupabaseAuthStore(this);
             authClient = new SupabaseAuthClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY);
             settingsClient = new SupabaseSettingsClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY);
+            sharingClient = new SupabaseSharingClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY);
         } catch (RuntimeException error) {
             android.util.Log.e("GOD_OF_TRADING", "Secure auth storage unavailable", error);
         }
@@ -88,6 +90,10 @@ public class MainActivity extends Activity {
         Button settingsButton = button("НАСТРОЙКИ АНАЛИЗА");
         settingsButton.setOnClickListener(v -> loadSettingsAndShowDialog());
         page.addView(settingsButton);
+
+        Button sharingButton = button("ОБМЕН СИГНАЛАМИ");
+        sharingButton.setOnClickListener(v -> showSharingDialog());
+        page.addView(sharingButton);
 
         Button apiSettings = button("НАСТРОИТЬ API-КЛЮЧИ");
         apiSettings.setOnClickListener(v -> showApiKeyDialog());
@@ -141,12 +147,28 @@ public class MainActivity extends Activity {
                 BinariumDataEngine dataEngine = new BinariumDataEngine(twelveKey, apiShKey);
                 java.util.ArrayList<String> reports = new java.util.ArrayList<>();
                 int up = 0, down = 0;
+                java.util.List<SupabaseSharingClient.Connection> shareContacts = new java.util.ArrayList<>();
+                if (currentSettings.sharingEnabled && authStore != null && authStore.isSignedIn()) {
+                    try {
+                        for (SupabaseSharingClient.Connection c : sharingClient.connections(authStore.userId(), authStore.accessToken()))
+                            if ("accepted".equals(c.status)) shareContacts.add(c);
+                    } catch (Exception ignored) { }
+                }
                 for (String pair : currentSettings.selectedPairs) {
                     if (Thread.currentThread().isInterrupted()) return;
                     BinariumDataEngine.Result result = dataEngine.analyze(
                             pair, calendarDate(-1), calendarDate(2), System.currentTimeMillis());
                     if (result.signal == MarketAnalyzer.Signal.CALL) up++;
                     else if (result.signal == MarketAnalyzer.Signal.PUT) down++;
+                    if (result.signal != MarketAnalyzer.Signal.WAIT && currentSettings.sharingEnabled) {
+                        for (SupabaseSharingClient.Connection contact : shareContacts) {
+                            try {
+                                sharingClient.sendSignal(authStore.userId(), contact.otherUser(authStore.userId()),
+                                        contact.id, pair, result.signal.name(), currentSettings.expiryMinutes,
+                                        result.reason, authStore.accessToken());
+                            } catch (Exception ignored) { }
+                        }
+                    }
                     String direction = result.signal == MarketAnalyzer.Signal.CALL ? "ВВЕРХ"
                             : result.signal == MarketAnalyzer.Signal.PUT ? "ВНИЗ" : "ОЖИДАНИЕ";
                     reports.add(pair + " — " + direction + "\n" + result.reason
@@ -292,6 +314,111 @@ public class MainActivity extends Activity {
                 TradingSettings loaded = settingsClient.load(authStore.userId(), authStore.accessToken());
                 currentSettings = loaded;
             } catch (Exception ignored) { currentSettings = TradingSettings.defaults(); }
+        });
+    }
+
+
+    private void showSharingDialog() {
+        if (authStore == null || !authStore.isSignedIn()) {
+            log.setText("Для обмена сигналами сначала войди в аккаунт GOD OF TRADING.");
+            return;
+        }
+        status.setText("ЗАГРУЗКА КОНТАКТОВ...");
+        executor.submit(() -> {
+            try {
+                java.util.List<SupabaseSharingClient.Connection> contacts =
+                        sharingClient.connections(authStore.userId(), authStore.accessToken());
+                String signals = sharingClient.recentSignals(authStore.userId(), authStore.accessToken());
+                mainHandler.post(() -> {
+                    if (isFinishing()) return;
+                    LinearLayout layout = new LinearLayout(this);
+                    layout.setOrientation(LinearLayout.VERTICAL);
+                    int pad = (int)(14 * getResources().getDisplayMetrics().density);
+                    layout.setPadding(pad, 0, pad, 0);
+                    TextView idLabel = text("ТВОЙ ID ДЛЯ ПРИГЛАШЕНИЯ ДРУГА:\n" + authStore.userId(), 12, 0xFFE5EDF7, false);
+                    layout.addView(idLabel);
+                    EditText friendId = new EditText(this);
+                    friendId.setSingleLine(true);
+                    friendId.setHint("UUID аккаунта друга");
+                    layout.addView(friendId);
+                    TextView contactLabel = text("ПОДКЛЮЧЕНИЯ", 14, 0xFFE5EDF7, true);
+                    contactLabel.setPadding(0, pad, 0, 4);
+                    layout.addView(contactLabel);
+                    for (SupabaseSharingClient.Connection c : contacts) {
+                        String state = c.status.equals("accepted") ? "подключён"
+                                : c.status.equals("pending") ? (c.incoming(authStore.userId()) ? "входящее приглашение" : "ожидает ответа")
+                                : c.status;
+                        TextView row = text(c.otherUser(authStore.userId()) + " — " + state, 12, 0xFFB8C6D9, false);
+                        layout.addView(row);
+                        if (c.status.equals("pending") && c.incoming(authStore.userId())) {
+                            Button accept = button("ПРИНЯТЬ ПРИГЛАШЕНИЕ");
+                            accept.setOnClickListener(v -> respondToConnection(c.id, "accepted"));
+                            layout.addView(accept);
+                            Button reject = button("ОТКЛОНИТЬ");
+                            reject.setOnClickListener(v -> respondToConnection(c.id, "rejected"));
+                            layout.addView(reject);
+                        }
+                    }
+                    TextView historyTitle = text("ПОСЛЕДНИЕ СИГНАЛЫ", 14, 0xFFE5EDF7, true);
+                    historyTitle.setPadding(0, pad, 0, 4);
+                    layout.addView(historyTitle);
+                    TextView history = text(signals.isEmpty() ? "Пока нет переданных сигналов." : signals, 11, 0xFFB8C6D9, false);
+                    layout.addView(history);
+                    AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Двусторонний обмен")
+                            .setView(layout).setPositiveButton("ОТПРАВИТЬ ПРИГЛАШЕНИЕ", null)
+                            .setNegativeButton("ЗАКРЫТЬ", null).create();
+                    dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                        String target = friendId.getText().toString().trim();
+                        if (target.isEmpty()) {
+                            log.setText("Вставь UUID аккаунта друга.");
+                            return;
+                        }
+                        dialog.dismiss();
+                        executor.submit(() -> {
+                            try {
+                                sharingClient.requestConnection(authStore.userId(), target, authStore.accessToken());
+                                mainHandler.post(() -> {
+                                    if (!isFinishing()) {
+                                        status.setText("ПРИГЛАШЕНИЕ ОТПРАВЛЕНО");
+                                        log.setText("Запрос отправлен. Друг должен войти в свой аккаунт и принять приглашение.");
+                                    }
+                                });
+                            } catch (Exception e) {
+                                mainHandler.post(() -> {
+                                    if (!isFinishing()) log.setText("Не удалось отправить приглашение: " + safeMessage(e));
+                                });
+                            }
+                        });
+                    }));
+                    dialog.show();
+                    status.setText("ОБМЕН СИГНАЛАМИ");
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    if (!isFinishing()) {
+                        status.setText("ОШИБКА ОБМЕНА");
+                        log.setText("Не удалось загрузить подключения: " + safeMessage(e));
+                    }
+                });
+            }
+        });
+    }
+
+    private void respondToConnection(String connectionId, String response) {
+        executor.submit(() -> {
+            try {
+                sharingClient.respond(connectionId, response, authStore.accessToken());
+                mainHandler.post(() -> {
+                    if (!isFinishing()) {
+                        status.setText(response.equals("accepted") ? "ДРУГ ПОДКЛЮЧЁН" : "ПРИГЛАШЕНИЕ ОТКЛОНЕНО");
+                        log.setText("Статус подключения обновлён. Открой «ОБМЕН СИГНАЛАМИ», чтобы обновить список.");
+                    }
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    if (!isFinishing()) log.setText("Не удалось обновить подключение: " + safeMessage(e));
+                });
+            }
         });
     }
 
