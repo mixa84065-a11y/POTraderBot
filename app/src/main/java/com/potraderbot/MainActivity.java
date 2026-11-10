@@ -139,24 +139,32 @@ public final class MainActivity extends Activity {
 
         LinearLayout header = new LinearLayout(this);
         header.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        Button hamburger = makeNavButton("☰");
-        hamburger.setTextSize(22);
-        hamburger.setPadding(dp(0), dp(0), dp(0), dp(0));
-        header.addView(hamburger, new LinearLayout.LayoutParams(dp(46), dp(48)));
+        LinearLayout accountHeader = new LinearLayout(this);
+        accountHeader.setOrientation(LinearLayout.VERTICAL);
+        accountHeader.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        Button accountButton = makeNavButton("ЛИЧНЫЙ КАБИНЕТ");
+        accountButton.setTextSize(9);
+        accountButton.setPadding(dp(2), dp(1), dp(2), dp(1));
+        accountHeader.addView(accountButton, new LinearLayout.LayoutParams(dp(112), dp(38)));
+        TextView virtualCurrency = label("₽ ВИРТУАЛЬНЫЙ СЧЁТ", 8, 0xFFB9C5D5, true);
+        virtualCurrency.setGravity(android.view.Gravity.CENTER);
+        accountHeader.addView(virtualCurrency, new LinearLayout.LayoutParams(dp(112), dp(17)));
+        header.addView(accountHeader, new LinearLayout.LayoutParams(dp(118), dp(56)));
         LinearLayout brand = new LinearLayout(this);
         brand.setOrientation(LinearLayout.VERTICAL);
-        TextView title = label("GoD of Trading", 25, 0xFFFFD36A, true);
+        TextView title = label("GoD of Trading", 22, 0xFFFFD36A, true);
         title.setShadowLayer(10, 0, 0, 0xFFFFA000);
-        TextView subtitle = label("СИЛА В АНАЛИЗЕ", 12, 0xFFFFD45A, true);
-        TextView sloganTop = label("— Торгуй грамотно, управляй рынком —", 10, 0xFFE7E7E7, true);
+        TextView subtitle = label("СИЛА В АНАЛИЗЕ", 11, 0xFFFFD45A, true);
+        TextView sloganTop = label("— Торгуй грамотно, управляй рынком —", 9, 0xFFE7E7E7, true);
         brand.addView(title);
         brand.addView(subtitle);
         brand.addView(sloganTop);
         header.addView(brand, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         Button menuButton = makeNavButton("⋮");
-        menuButton.setTextSize(28);
-        header.addView(menuButton, new LinearLayout.LayoutParams(dp(48), dp(52)));
+        menuButton.setTextSize(26);
+        header.addView(menuButton, new LinearLayout.LayoutParams(dp(38), dp(52)));
         page.addView(header);
+        accountButton.setOnClickListener(v -> showPersonalAccount());
 
         status = label("●  ОЖИДАНИЕ ДАННЫХ", 12, 0xFFFFC857, true);
         status.setGravity(android.view.Gravity.CENTER);
@@ -318,9 +326,25 @@ public final class MainActivity extends Activity {
         symbolInput.setText("EUR/USD");
         settings.addView(symbolInput);
         settings.addView(label("API-КЛЮЧ TWELVE DATA", 12, 0xFFFFD45A, true));
-        apiKeyInput = editField("Вставьте личный API-ключ");
+        apiKeyInput = editField("Вставьте личный API-ключ Twelve Data");
         apiKeyInput.setInputType(0x00000081);
+        apiKeyInput.setText(preferences.getString("twelve_data_api_key", ""));
         settings.addView(apiKeyInput);
+        Button saveApiKeyButton = makeAccentButton("СОХРАНИТЬ API-КЛЮЧ");
+        saveApiKeyButton.setOnClickListener(v -> {
+            String enteredKey = apiKeyInput.getText().toString().trim();
+            if (enteredKey.isEmpty()) {
+                new AlertDialog.Builder(this).setMessage("Вставьте API-ключ Twelve Data.")
+                        .setPositiveButton("Понятно", null).show();
+                return;
+            }
+            preferences.edit().putString("twelve_data_api_key", enteredKey).apply();
+            status.setText("API-КЛЮЧ СОХРАНЁН НА ЭТОМ УСТРОЙСТВЕ");
+            status.setTextColor(0xFF80BFFF);
+            new AlertDialog.Builder(this).setMessage("API-ключ сохранён. Теперь можно запускать анализ.")
+                    .setPositiveButton("Хорошо", null).show();
+        });
+        settings.addView(saveApiKeyButton);
         TextView platformNote = label("Котировки поступают из Twelve Data. Выбор площадки меняет только профиль интерфейса. Проверьте законность и доступность площадки в стране проживания: условия Binarium указывают на ограничения для резидентов ЕС.", 11, 0xFFB9C5D5, false);
         settings.addView(platformNote);
         settings.setVisibility(View.GONE);
@@ -433,6 +457,19 @@ public final class MainActivity extends Activity {
     }
 
 
+    private void showPersonalAccount() {
+        double balance = paperTrading == null ? 20000.0 : paperTrading.getVirtualBalance();
+        String summary = paperTrading == null ? "Журнал демо-сделок недоступен." : paperTrading.getSummary();
+        String message = String.format(Locale.getDefault(),
+                "ВИРТУАЛЬНЫЙ БАЛАНС\n%.2f ₽\n\nРежим: ДЕМО\n\n%s\n\nЭто учебный счёт. Реальные средства и сделки не используются.",
+                balance, summary);
+        new AlertDialog.Builder(this)
+                .setTitle("ЛИЧНЫЙ КАБИНЕТ")
+                .setMessage(message)
+                .setPositiveButton("ЗАКРЫТЬ", null)
+                .show();
+    }
+
     private void showToolSettings(LinearLayout settings) {
         android.view.ViewParent parent = settings.getParent();
         android.view.ViewGroup settingsParent = parent instanceof android.view.ViewGroup
@@ -447,6 +484,13 @@ public final class MainActivity extends Activity {
                 .setPositiveButton("Сохранить", null)
                 .setNegativeButton("Закрыть", null)
                 .create();
+        settingsDialog.setOnShowListener(d -> settingsDialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    String enteredKey = apiKeyInput == null ? "" : apiKeyInput.getText().toString().trim();
+                    getSharedPreferences("po_trader_settings", MODE_PRIVATE).edit()
+                            .putString("twelve_data_api_key", enteredKey).apply();
+                    settingsDialog.dismiss();
+                }));
         settingsDialog.setOnDismissListener(d -> {
             settings.setVisibility(View.GONE);
             if (settingsParent != null && settings.getParent() == null) {
@@ -1107,7 +1151,9 @@ public final class MainActivity extends Activity {
 
     private void loadAndAnalyze(boolean automatic) {
         final String symbol = symbolInput.getText().toString().trim();
-        final String key = apiKeyInput.getText().toString().trim();
+        final String key = apiKeyInput.getText().toString().trim().isEmpty()
+                ? getSharedPreferences("po_trader_settings", MODE_PRIVATE).getString("twelve_data_api_key", "")
+                : apiKeyInput.getText().toString().trim();
         final String platform = platformInput.getSelectedItem().toString();
         final String mode = modeInput.getSelectedItem().toString();        if (key.isEmpty()) {
             status.setText("СТАТУС: НУЖЕН API-КЛЮЧ");
