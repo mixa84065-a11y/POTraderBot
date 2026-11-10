@@ -22,11 +22,15 @@ public final class SupabaseAuthClient {
         return baseUrl.startsWith("https://") && !anonKey.isEmpty();
     }
 
-    public JSONObject signUp(String email, String password) throws Exception {
+    public JSONObject signUp(String email, String password, String redirectTo, String codeChallenge) throws Exception {
         JSONObject body = new JSONObject();
         body.put("email", email);
         body.put("password", password);
-        return request("/auth/v1/signup", body, null);
+        body.put("code_challenge", codeChallenge);
+        body.put("code_challenge_method", "s256");
+        String path = "/auth/v1/signup?redirect_to="
+                + java.net.URLEncoder.encode(redirectTo, "UTF-8");
+        return request(path, body, null);
     }
 
     public JSONObject signIn(String email, String password) throws Exception {
@@ -36,11 +40,14 @@ public final class SupabaseAuthClient {
         return request("/auth/v1/token?grant_type=password", body, null);
     }
 
-    public void sendPasswordReset(String email, String redirectTo) throws Exception {
+    public void sendPasswordReset(String email, String redirectTo, String codeChallenge) throws Exception {
         JSONObject body = new JSONObject();
         body.put("email", email);
-        request("/auth/v1/recover?redirect_to=" + java.net.URLEncoder.encode(redirectTo, "UTF-8"),
-                body, null);
+        String path = "/auth/v1/recover?redirect_to="
+                + java.net.URLEncoder.encode(redirectTo, "UTF-8")
+                + "&code_challenge=" + java.net.URLEncoder.encode(codeChallenge, "UTF-8")
+                + "&code_challenge_method=s256";
+        request(path, body, null);
     }
 
 
