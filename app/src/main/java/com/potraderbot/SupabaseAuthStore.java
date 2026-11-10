@@ -31,6 +31,8 @@ public final class SupabaseAuthStore {
     public String refreshToken() { return prefs.getString("refresh_token", ""); }
     public String email() { return prefs.getString("email", ""); }
     public String userId() { return prefs.getString("user_id", ""); }
+    public void saveCodeVerifier(String verifier) { prefs.edit().putString("pkce_verifier", clean(verifier)).apply(); }
+    public String codeVerifier() { return prefs.getString("pkce_verifier", ""); }
     public boolean isSignedIn() { return !accessToken().isEmpty(); }
     public void clear() { prefs.edit().clear().apply(); }
     private static String clean(String s) { return s == null ? "" : s.trim(); }
