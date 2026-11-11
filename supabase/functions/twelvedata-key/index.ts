@@ -13,12 +13,12 @@ Deno.serve(async(req:Request)=>{
  if(ue||!u.user) return new Response(JSON.stringify({error:"Invalid session"}),{status:401,headers:h});
  const admin=createClient(url,service,{auth:{persistSession:false,autoRefreshToken:false}}), uid=u.user.id;
  if(req.method==="GET"){
-  const {data,error}=await admin.schema("private").rpc("has_twelvedata_key",{p_user_id:uid});
+  const {data,error}=await admin.rpc("has_twelvedata_key",{p_user_id:uid});
   if(error) return new Response(JSON.stringify({error:"Unable to read key status"}),{status:500,headers:h});
   return new Response(JSON.stringify({configured:data===true}),{headers:h});
  }
  if(req.method==="DELETE"){
-  const {error}=await admin.schema("private").rpc("delete_twelvedata_key",{p_user_id:uid});
+  const {error}=await admin.rpc("delete_twelvedata_key",{p_user_id:uid});
   if(error) return new Response(JSON.stringify({error:"Unable to remove key"}),{status:500,headers:h});
   return new Response(JSON.stringify({configured:false}),{headers:h});
  }
@@ -30,7 +30,7 @@ Deno.serve(async(req:Request)=>{
   const res=await fetch(check,{signal:AbortSignal.timeout(12000)}), data=await res.json();
   if(!res.ok||data.status==="error"||!Array.isArray(data.values)) return new Response(JSON.stringify({error:typeof data.message==="string"?data.message:"Twelve Data rejected this key"}),{status:422,headers:h});
  }catch{return new Response(JSON.stringify({error:"Could not verify key with Twelve Data"}),{status:502,headers:h});}
- const {error}=await admin.schema("private").rpc("save_twelvedata_key",{p_user_id:uid,p_api_key:key});
+ const {error}=await admin.rpc("save_twelvedata_key",{p_user_id:uid,p_api_key:key});
  if(error) return new Response(JSON.stringify({error:"Validation passed, secure storage failed"}),{status:500,headers:h});
  return new Response(JSON.stringify({configured:true}),{headers:h});
 });
