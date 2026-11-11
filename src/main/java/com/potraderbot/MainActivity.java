@@ -262,7 +262,7 @@ public class MainActivity extends Activity {
                     chart.setMarketData(latestCandles,quoteFresh);
                     JSONObject q=fs.optJSONObject("quote");
                     String price=q==null?"":q.optString("price","");
-                    String status=quoteFresh?"Котировка актуальна":"Нет актуальной котировки";
+                    String status=fs.optBoolean("key_required",false)?"Добавьте личный API-ключ Twelve Data в настройках":(quoteFresh?"Котировка актуальна":"Нет актуальной котировки");
                     if(!demoEnabled)status+=" • демо-инструмент ещё не включён";
                     if(!price.isEmpty())status+=" • "+price;
                     quoteText.setText(status);
@@ -326,12 +326,11 @@ public class MainActivity extends Activity {
     }
 
     private void showMenu(){
-        String[] items={"API-ключ Twelve Data","Обновить данные","Терминал Bybit","Telegram-бот","Выйти из аккаунта"};
+        String[] items={"API-ключ Twelve Data","Обновить данные","Telegram-бот","Выйти из аккаунта"};
         new AlertDialog.Builder(this).setTitle("Настройки").setItems(items,(d,which)->{
             if(which==0)showTwelveDataSettings();
             else if(which==1)refreshData();
-            else if(which==2)new AlertDialog.Builder(this).setTitle("Терминал Bybit").setMessage("Подготовлено место для встроенного терминала. График, стакан и торговые операции будут добавлены отдельным обновлением. Сейчас внешние сайты не открываются, реальные сделки не выполняются.").setPositiveButton("ПОНЯТНО",null).show();
-            else if(which==3)new AlertDialog.Builder(this).setMessage("Ссылка на Telegram-бот ещё не настроена.").setPositiveButton("ОК",null).show();
+            else if(which==2)new AlertDialog.Builder(this).setMessage("Ссылка на Telegram-бот ещё не настроена.").setPositiveButton("ОК",null).show();
             else logout();
         }).show();
     }
