@@ -21,7 +21,7 @@ public final class MarketAnalyzer {
             JSONObject c=candles.optJSONObject(i);
             if(c==null) return new Result("НЕТ СИГНАЛА",0,"В данных графика обнаружена ошибка. Анализ временно недоступен.");
             close[i]=c.optDouble("close",Double.NaN);
-            if(!Double.isFinite(close[i]) || close[i]<=0)
+            if((Double.isNaN(close[i]) || Double.isInfinite(close[i])) || close[i]<=0)
                 return new Result("НЕТ СИГНАЛА",0,"Котировки неполные. Анализ временно недоступен.");
         }
         double ema9=ema(close,9), ema21=ema(close,21), rsi=rsi(close,14);
