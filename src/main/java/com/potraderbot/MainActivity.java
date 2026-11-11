@@ -326,13 +326,53 @@ public class MainActivity extends Activity {
     }
 
     private void showMenu(){
-        String[] items={"Обновить данные","Терминал Bybit","Telegram-бот","Выйти из аккаунта"};
+        String[] items={"API-ключ Twelve Data","Обновить данные","Терминал Bybit","Telegram-бот","Выйти из аккаунта"};
         new AlertDialog.Builder(this).setTitle("Настройки").setItems(items,(d,which)->{
-            if(which==0)refreshData();
-            else if(which==1)new AlertDialog.Builder(this).setTitle("Терминал Bybit").setMessage("Подготовлено место для встроенного терминала. График, стакан и торговые операции будут добавлены отдельным обновлением. Сейчас внешние сайты не открываются, реальные сделки не выполняются.").setPositiveButton("ПОНЯТНО",null).show();
-            else if(which==2)new AlertDialog.Builder(this).setMessage("Ссылка на Telegram-бот ещё не настроена.").setPositiveButton("ОК",null).show();
+            if(which==0)showTwelveDataSettings();
+            else if(which==1)refreshData();
+            else if(which==2)new AlertDialog.Builder(this).setTitle("Терминал Bybit").setMessage("Подготовлено место для встроенного терминала. График, стакан и торговые операции будут добавлены отдельным обновлением. Сейчас внешние сайты не открываются, реальные сделки не выполняются.").setPositiveButton("ПОНЯТНО",null).show();
+            else if(which==3)new AlertDialog.Builder(this).setMessage("Ссылка на Telegram-бот ещё не настроена.").setPositiveButton("ОК",null).show();
             else logout();
         }).show();
+    }
+
+
+    private void showTwelveDataSettings(){
+        LinearLayout box=vertical();box.setPadding(dp(8),dp(4),dp(8),0);
+        TextView info=label("У каждого аккаунта свой ключ. Он проверяется и сохраняется отдельно в зашифрованном хранилище. Другие пользователи его не видят.",12,MUTED,false);
+        box.addView(info);
+        EditText keyInput=new EditText(this);keyInput.setSingleLine(true);keyInput.setHint("Вставьте личный API-ключ");keyInput.setTextColor(TEXT);keyInput.setHintTextColor(MUTED);
+        keyInput.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        LinearLayout.LayoutParams kp=new LinearLayout.LayoutParams(-1,dp(52));kp.topMargin=dp(10);box.addView(keyInput,kp);
+        TextView status=label("Проверяем настройки ключа…",11,MUTED,false);status.setPadding(0,dp(8),0,0);box.addView(status);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Twelve Data — личный ключ").setView(box)
+            .setPositiveButton("СОХРАНИТЬ",null).setNegativeButton("ЗАКРЫТЬ",null)
+            .setNeutralButton("УДАЛИТЬ КЛЮЧ",null).create();
+        dialog.setOnShowListener(ignored->{
+            Button save=dialog.getButton(AlertDialog.BUTTON_POSITIVE), remove=dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+            save.setOnClickListener(v->{
+                String value=keyInput.getText().toString().trim();
+                if(value.length()<8){status.setText("Введите действующий ключ Twelve Data.");return;}
+                save.setEnabled(false);status.setText("Проверяем ключ и сохраняем…");
+                io.execute(()->{
+                    try{SupabaseApi.saveTwelveDataKey(accessToken,value);runOnUiThread(()->{status.setText("Ключ сохранён для этого аккаунта.");keyInput.setText("");save.setEnabled(true);Toast.makeText(this,"API-ключ подключён",Toast.LENGTH_SHORT).show();});}
+                    catch(Exception e){runOnUiThread(()->{status.setText("Не удалось сохранить: "+e.getMessage());save.setEnabled(true);});}
+                });
+            });
+            remove.setOnClickListener(v->{
+                remove.setEnabled(false);status.setText("Удаляем ключ…");
+                io.execute(()->{
+                    try{SupabaseApi.deleteTwelveDataKey(accessToken);runOnUiThread(()->{status.setText("Личный ключ удалён.");keyInput.setText("");remove.setEnabled(true);});}
+                    catch(Exception e){runOnUiThread(()->{status.setText("Не удалось удалить: "+e.getMessage());remove.setEnabled(true);});}
+                });
+            });
+        });
+        dialog.show();
+        io.execute(()->{
+            try{boolean configured=SupabaseApi.getTwelveDataKeyStatus(accessToken).optBoolean("configured",false);
+                runOnUiThread(()->status.setText(configured?"Для этого аккаунта уже сохранён личный ключ. Повторный ввод заменит его.":"Личный ключ ещё не добавлен."));
+            }catch(Exception e){runOnUiThread(()->status.setText("Не удалось проверить статус ключа."));}
+        });
     }
 
     private void logout(){
