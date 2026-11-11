@@ -219,7 +219,8 @@ public class MainActivity extends Activity {
         footer.setGravity(Gravity.CENTER);footer.setPadding(0,dp(14),0,dp(6));content.addView(footer);
         page(content);
         updateExpiryButtons();
-        refreshData();
+        handler.removeCallbacks(poll);
+        handler.post(poll);
     }
 
     private void addExpiry(int seconds,String title){
@@ -304,7 +305,7 @@ public class MainActivity extends Activity {
         io.execute(()->{
             try{
                 JSONObject result=SupabaseApi.openDemoTrade(token,symbol,direction,amount,expirySeconds);
-                runOnUiThread(()->Toast.makeText(this,"Демо-сделка открыта. ID: "+result.optJSONObject("trade").optString("trade_id",""),Toast.LENGTH_LONG).show());
+                runOnUiThread(()->{JSONObject trade=result.optJSONObject("trade");String id=trade==null?"":trade.optString("trade_id","");Toast.makeText(this,"Демо-сделка открыта"+(id.isEmpty()?"":" • "+id),Toast.LENGTH_LONG).show();});
             }catch(Exception e){runOnUiThread(()->Toast.makeText(this,"Сделка не открыта: "+e.getMessage(),Toast.LENGTH_LONG).show());}
             runOnUiThread(this::refreshData);
         });
