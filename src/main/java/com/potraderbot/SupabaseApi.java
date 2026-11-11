@@ -81,6 +81,11 @@ public final class SupabaseApi {
         return (JSONArray) request("GET", path, null, token);
     }
 
+    public static JSONObject getMarketSnapshot(String token, String symbol) throws Exception {
+        String encoded = java.net.URLEncoder.encode(symbol, "UTF-8");
+        return (JSONObject) request("GET", "/functions/v1/market-snapshot?symbol=" + encoded, null, token);
+    }
+
     public static JSONObject openDemoTrade(String token, String symbol, String direction, double stake, int expirySeconds) throws Exception {
         JSONObject b = new JSONObject();
         b.put("action", "open");
