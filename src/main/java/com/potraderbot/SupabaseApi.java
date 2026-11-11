@@ -86,6 +86,20 @@ public final class SupabaseApi {
         return (JSONObject) request("GET", "/functions/v1/market-snapshot?symbol=" + encoded, null, token);
     }
 
+    public static JSONObject getTwelveDataKeyStatus(String token) throws Exception {
+        return (JSONObject) request("GET", "/functions/v1/twelvedata-key", null, token);
+    }
+
+    public static JSONObject saveTwelveDataKey(String token, String apiKey) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("api_key", apiKey);
+        return (JSONObject) request("POST", "/functions/v1/twelvedata-key", body, token);
+    }
+
+    public static JSONObject deleteTwelveDataKey(String token) throws Exception {
+        return (JSONObject) request("DELETE", "/functions/v1/twelvedata-key", null, token);
+    }
+
     public static JSONObject openDemoTrade(String token, String symbol, String direction, double stake, int expirySeconds) throws Exception {
         JSONObject b = new JSONObject();
         b.put("action", "open");
