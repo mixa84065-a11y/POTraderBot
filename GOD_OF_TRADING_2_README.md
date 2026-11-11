@@ -22,8 +22,9 @@ This is a separate 2.0 workstream on `feature/god-of-trading-2.0`. The default `
 - Android CI runs unit tests before building and uploading the APK artifact.
 
 ## External configuration still required before real end-to-end testing
-- Choose a verified market-data provider and configure its API credentials on the server. No API secret is embedded in the APK.
-- Configure the market-ingestion secret and start the provider feed worker.
+- Twelve Data provider poller is implemented in `supabase/functions/twelve-data-poll/index.ts` and deployed as Edge Function `twelve-data-poll` (v1). It fetches `/quote` server-side and sends timestamped prices into the existing quote-ingestion and settlement RPCs.
+- Configure server secrets `TWELVE_DATA_API_KEY` and `TWELVE_DATA_INGEST_SECRET`; optionally set `TWELVE_DATA_SYMBOLS` (comma-separated, defaults to `EUR/USD`). The poller requires a trusted scheduler to invoke it regularly with `x-market-poll-secret`; no scheduler or credentials are configured yet.
+- Keep the API key and poll secret in Supabase secrets only. Never put them in the APK or source control.
 - Configure the EUR/USD demo market payout rate (server-side simulation setting); until enabled, order buttons remain disabled.
 - Supply the Telegram bot URL.
 - Create the admin/tester accounts and complete device-level UI/network QA.
