@@ -17,3 +17,8 @@ android {
         buildConfigField 'String', 'SUPABASE_PUBLISHABLE_KEY', '\"sb_publishable_YAOzHx7szuwIStV4XOq0Ng_dNr1j5ia\"'
     }
 }
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+}
