@@ -21,5 +21,7 @@ Deno.serve(async (req: Request) => {
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data, error } = await admin.rpc("market_ingest_quotes", { p_quotes: body.quotes });
   if (error) return new Response(JSON.stringify({ error: "Quote validation failed", detail: error.message }), { status: 422 });
-  return new Response(JSON.stringify(data), { status: 200, headers: { "Content-Type": "application/json" } });
+  const { data: settlement, error: settlementError } = await admin.rpc("demo_settle_due_trades", { p_limit: 200 });
+  if (settlementError) return new Response(JSON.stringify({ error: "Quotes stored; settlement pending", detail: settlementError.message, ingestion: data }), { status: 202, headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify({ ingestion: data, settlement }), { status: 200, headers: { "Content-Type": "application/json" } });
 });
