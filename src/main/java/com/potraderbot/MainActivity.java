@@ -326,10 +326,11 @@ public class MainActivity extends Activity {
     }
 
     private void showMenu(){
-        String[] items={"Обновить данные","Telegram-бот","Выйти из аккаунта"};
+        String[] items={"Обновить данные","Терминал Bybit","Telegram-бот","Выйти из аккаунта"};
         new AlertDialog.Builder(this).setTitle("Настройки").setItems(items,(d,which)->{
             if(which==0)refreshData();
-            else if(which==1)new AlertDialog.Builder(this).setMessage("Ссылка на Telegram-бот ещё не настроена.").setPositiveButton("ОК",null).show();
+            else if(which==1)new AlertDialog.Builder(this).setTitle("Терминал Bybit").setMessage("Подготовлено место для встроенного терминала. График, стакан и торговые операции будут добавлены отдельным обновлением. Сейчас внешние сайты не открываются, реальные сделки не выполняются.").setPositiveButton("ПОНЯТНО",null).show();
+            else if(which==2)new AlertDialog.Builder(this).setMessage("Ссылка на Telegram-бот ещё не настроена.").setPositiveButton("ОК",null).show();
             else logout();
         }).show();
     }
