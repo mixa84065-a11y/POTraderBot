@@ -5,6 +5,7 @@ plugins {
 android {
     namespace 'com.potraderbot'
     compileSdk 35
+    buildFeatures { buildConfig true }
 
     defaultConfig {
         applicationId 'com.potraderbot.godoftrading2'
@@ -12,5 +13,7 @@ android {
         targetSdk 35
         versionCode 20
         versionName '2.0.0-alpha01'
+        buildConfigField 'String', 'SUPABASE_URL', '\"https://srzemjqjgceoebvimmct.supabase.co\"'
+        buildConfigField 'String', 'SUPABASE_PUBLISHABLE_KEY', '\"sb_publishable_YAOzHx7szuwIStV4XOq0Ng_dNr1j5ia\"'
     }
 }
