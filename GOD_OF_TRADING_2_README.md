@@ -17,15 +17,14 @@ This is a separate 2.0 workstream on `feature/god-of-trading-2.0`. The default `
 - Wallet and trade-history reads are scoped by RLS to the authenticated user.
 - Server-only demo trade opening validates the user's session, market configuration, wallet balance, expiry and quote freshness, then debits the wallet atomically.
 - Server-side settlement uses the first timestamped quote at/after expiry; if no valid quote arrives within the grace window, the trade is cancelled and the stake is returned.
-- Market quote ingestion is restricted to a server secret. One-minute OHLC candles are aggregated from ingested ticks; the app never fabricates candles.
-- Market snapshot and demo-trade Edge Functions are deployed.
+- Every account's Twelve Data key is stored separately in Supabase Vault. Market snapshots read the key only inside the server function, fetch the user's own quote, and store quotes/candles under a user-specific source. Demo trades open and settle only against that user's quote feed.
+- Market snapshot and demo-trade Edge Functions are deployed. The market snapshot now performs user-scoped quote refresh and triggers settlement of due demo trades.
 - Android CI runs unit tests before building and uploading the APK artifact.
 
 ## External configuration still required before real end-to-end testing
-- Twelve Data provider poller is implemented in `supabase/functions/twelve-data-poll/index.ts` and deployed as Edge Function `twelve-data-poll` (v1). It fetches `/quote` server-side and sends timestamped prices into the existing quote-ingestion and settlement RPCs.
-- Configure server secrets `TWELVE_DATA_API_KEY` and `TWELVE_DATA_INGEST_SECRET`; optionally set `TWELVE_DATA_SYMBOLS` (comma-separated, defaults to `EUR/USD`). The poller requires a trusted scheduler to invoke it regularly with `x-market-poll-secret`; no scheduler or credentials are configured yet.
-- Keep the API key and poll secret in Supabase secrets only. Never put them in the APK or source control.
-- Configure the EUR/USD demo market payout rate (server-side simulation setting); until enabled, order buttons remain disabled.
+- The app requests the authenticated user's market snapshot. The server refreshes that user's quote no more often than every 15 seconds and backfills up to 120 one-minute candles when the account first connects.
+- The per-user quote refresh uses a private server-side Postgres connection to read the matching Vault secret; the decrypted key is never returned to the app or logged.
+- EUR/USD demo mode is enabled with an 80% simulated payout, a 30-second maximum entry quote age, and a 60-second settlement grace window. These are demo-only settings and can be tuned before wider testing.
 - Supply the Telegram bot URL.
 - Create the admin/tester accounts and complete device-level UI/network QA.
 
