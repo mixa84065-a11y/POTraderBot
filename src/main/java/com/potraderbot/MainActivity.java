@@ -11,6 +11,8 @@ import android.os.Looper;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -32,6 +34,8 @@ public class MainActivity extends Activity {
     private final Handler handler=new Handler(Looper.getMainLooper());
     private String accessToken="", refreshToken="";
     private String symbol="EUR/USD";
+    private Spinner pairSelector;
+    private TextView instrumentText;
     private int expirySeconds=180;
     private boolean quoteFresh=false, demoEnabled=false, analysisMode=false, refreshing=false;
     private JSONArray latestCandles=new JSONArray();
@@ -55,8 +59,24 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         getWindow().setStatusBarColor(NAVY);
         getWindow().setNavigationBarColor(NAVY);
+        applyImmersiveMode();
         showLogin("Проверяем сохранённую сессию…");
         restoreSession();
+    }
+
+    private void applyImmersiveMode(){
+        getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            | View.SYSTEM_UI_FLAG_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+    }
+
+    @Override public void onWindowFocusChanged(boolean hasFocus){
+        super.onWindowFocusChanged(hasFocus);
+        if(hasFocus) applyImmersiveMode();
     }
 
     @Override protected void onResume() {
@@ -171,8 +191,32 @@ public class MainActivity extends Activity {
         balanceText=label("Загрузка…",18,TEXT,true);accountPanel.addView(balanceText);
         LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(-1,-2);ap.topMargin=dp(8);content.addView(accountPanel,ap);
 
-        TextView instrument=label("EUR/USD  •  ОБЫЧНЫЙ РЫНОК  •  M1",11,MUTED,true);
-        instrument.setPadding(dp(4),dp(10),0,dp(4));content.addView(instrument);
+        TextView pairLabel=label("ВАЛЮТНАЯ ПАРА",10,MUTED,true);
+        pairLabel.setPadding(dp(4),dp(10),0,dp(3));content.addView(pairLabel);
+        pairSelector=new Spinner(this);
+        String[] pairs={"EUR/USD","GBP/USD","USD/JPY","AUD/USD","USD/CHF","USD/CAD","NZD/USD"};
+        ArrayAdapter<String> pairAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,pairs);
+        pairAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        pairSelector.setAdapter(pairAdapter);
+        pairSelector.setSelection(java.util.Arrays.asList(pairs).indexOf(symbol));
+        content.addView(pairSelector,new LinearLayout.LayoutParams(-1,dp(44)));
+        TextView pairNote=label("Доступность демо-сделок зависит от включённого потока котировок.",10,MUTED,false);
+        content.addView(pairNote);
+        instrumentText=label(symbol+"  •  ОБЫЧНЫЙ РЫНОК  •  M1",11,MUTED,true);
+        instrumentText.setPadding(dp(4),dp(6),0,dp(4));content.addView(instrumentText);
+        pairSelector.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){
+                String selected=pairs[position];
+                if(!selected.equals(symbol)){
+                    symbol=selected;quoteFresh=false;demoEnabled=false;
+                    instrumentText.setText(symbol+"  •  ОБЫЧНЫЙ РЫНОК  •  M1");
+                    upButton.setEnabled(false);downButton.setEnabled(false);
+                    quoteText.setText("Загружаем котировки для "+symbol+"…");
+                    refreshData();
+                }
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
+        });
         chart=new ChartView(this);
         int chartHeight=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?dp(175):dp(245);
         LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,chartHeight);content.addView(chart,cp);
@@ -255,7 +299,7 @@ public class MainActivity extends Activity {
                 if(fw!=null&&!fw.optString("balance","").isEmpty()){
                     try{balanceText.setText(String.format(Locale.US,"%,.2f ₽",fw.getDouble("balance")));}
                     catch(Exception ignored){balanceText.setText(fw.optString("balance")+" ₽");}
-                }else balanceText.setText("Счёт загружается");
+                }else balanceText.setText(fe==null?"Баланс не найден":"Ошибка загрузки баланса");
                 if(fs!=null){
                     latestCandles=fs.optJSONArray("candles");if(latestCandles==null)latestCandles=new JSONArray();
                     quoteFresh=fs.optBoolean("quote_fresh",false);demoEnabled=fs.optBoolean("demo_enabled",false);
@@ -272,6 +316,7 @@ public class MainActivity extends Activity {
                     strengthBar.setProgress(a.strength);
                     if(analysisMode)chart.setExpanded(true);
                 }else quoteText.setText("Рыночный поток пока недоступен"+(fe==null?"":" • "+fe));
+                if(fw==null && fe!=null) balanceText.setText("Баланс: ошибка соединения");
                 boolean canTrade=quoteFresh&&demoEnabled;
                 upButton.setEnabled(canTrade);downButton.setEnabled(canTrade);
                 if(ft!=null)renderHistory(ft);
