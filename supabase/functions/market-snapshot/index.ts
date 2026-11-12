@@ -121,7 +121,7 @@ Deno.serve(async (req: Request) => {
     );
 
     if (claimQuote.length > 0) {
-      const quoteUrl = new URL("https://api.twelvedata.com/quote");
+      const quoteUrl = new URL("https://api.twelvedata.com/price");
       quoteUrl.searchParams.set("symbol", symbol);
       quoteUrl.searchParams.set("apikey", apiKey);
       try {
@@ -129,8 +129,10 @@ Deno.serve(async (req: Request) => {
         const payload = await providerResponse.json();
         const priceValue = payload.close ?? payload.price;
         const price = typeof priceValue === "number" ? priceValue : Number(String(priceValue ?? "").trim());
-        const observedAt = parseQuoteTime(payload.timestamp, payload.datetime);
-        const observedMs = observedAt?.getTime() ?? Number.NaN;
+        // /price returns the latest available price and may omit a source timestamp.
+        // Stamp successful retrieval time; /quote timestamp is only the minute-bar open time.
+        const observedAt = parseQuoteTime(payload.timestamp, payload.datetime) ?? new Date();
+        const observedMs = observedAt.getTime();
         if (providerResponse.ok && payload.status !== "error" && !payload.code
             && Number.isFinite(price) && price > 0 && Number.isFinite(observedMs)
             && observedMs <= Date.now() + 5000 && observedMs >= Date.now() - 10 * 60 * 1000) {
@@ -177,7 +179,7 @@ Deno.serve(async (req: Request) => {
 });
 
 function parseQuoteTime(timestamp: unknown, datetime: unknown): Date | null {
-  if (typeof timestamp === "number" || (typeof timestamp === "string" && /^\\d+(?:\\.\\d+)?$/.test(timestamp.trim()))) {
+  if (typeof timestamp === "number" || (typeof timestamp === "string" && /^\d+(?:\.\d+)?$/.test(timestamp.trim()))) {
     const numeric = Number(timestamp);
     if (Number.isFinite(numeric) && numeric > 0) {
       // Accept Unix seconds and Unix milliseconds.
