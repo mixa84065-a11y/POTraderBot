@@ -380,7 +380,7 @@ public class MainActivity extends Activity {
 
                 // One automatic demo entry per explicit ANALYSIS request.
                 // "strength" is a heuristic model score, not a calibrated win probability.
-                if(canTrade && !activeTradeSymbols.contains(symbol) && !openingTradeSymbols.contains(symbol)
+                if(quoteFresh && demoEnabled && !activeTradeSymbols.contains(symbol) && !openingTradeSymbols.contains(symbol)
                         && !autoTradeSubmitted && a.strength>70
                         && ("ВВЕРХ".equals(a.direction) || "ВНИЗ".equals(a.direction))) {
                     autoTradeSubmitted=true;
