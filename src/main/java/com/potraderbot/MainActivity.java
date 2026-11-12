@@ -390,10 +390,10 @@ public class MainActivity extends Activity {
         double winRate=decisive==0?0.0:(wins*100.0/decisive);
         String pnl=(net>0?"+":"")+String.format(Locale.US,"%,.2f",net)+" ₽";
         String summary="Закрыто: "+closed+"   •   Победы: "+wins+"   •   Поражения: "+losses
-            +"\\nПроцент побед: "+String.format(Locale.US,"%.1f",winRate)+"%"
+            +"\nПроцент побед: "+String.format(Locale.US,"%.1f",winRate)+"%"
             +"   •   Ничьих: "+draws
-            +"\\nЧистый результат: "+pnl
-            +"\\nОткрыто: "+open+"   •   Отменено: "+cancelled;
+            +"\nЧистый результат: "+pnl
+            +"\nОткрыто: "+open+"   •   Отменено: "+cancelled;
         statsText.setText(summary);
     }
 
