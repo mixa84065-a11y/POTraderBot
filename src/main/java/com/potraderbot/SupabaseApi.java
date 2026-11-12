@@ -88,7 +88,7 @@ public final class SupabaseApi {
     }
 
     public static JSONArray getTrades(String token) throws Exception {
-        String path = "/rest/v1/demo_trades?select=id,symbol,direction,stake,expiry_seconds,entry_price,exit_price,status,pnl,opened_at,expires_at&order=opened_at.desc&limit=20";
+        String path = "/rest/v1/demo_trades?select=id,symbol,direction,stake,expiry_seconds,entry_price,exit_price,status,pnl,opened_at,expires_at&order=opened_at.desc&limit=1000";
         return (JSONArray) request("GET", path, null, token);
     }
 
