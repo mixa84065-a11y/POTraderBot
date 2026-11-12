@@ -58,7 +58,7 @@ Deno.serve(async (req: Request) => {
   if (error) {
     const message = error.message.includes("Котировка") || error.message.includes("Инструмент") ||
       error.message.includes("Недостаточно") || error.message.includes("виртуального") ||
-      error.message.includes("Некорректные")
+      error.message.includes("Некорректные") || error.message.includes("открытая сделка")
       ? error.message : "Не удалось открыть демо-сделку";
     return new Response(JSON.stringify({ error: message }), { status: 409, headers: cors });
   }
