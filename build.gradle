@@ -7,14 +7,29 @@ android {
     compileSdk 35
     buildFeatures { buildConfig true }
 
+    signingConfigs {
+        persistent {
+            storeFile file(System.getenv('ANDROID_KEYSTORE_PATH') ?: 'missing-upload-key.jks')
+            storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD') ?: ''
+            keyAlias System.getenv('ANDROID_KEY_ALIAS') ?: 'godoftrading2'
+            keyPassword System.getenv('ANDROID_KEY_PASSWORD') ?: ''
+        }
+    }
+
     defaultConfig {
         applicationId 'com.potraderbot.godoftrading2standalone'
         minSdk 23
         targetSdk 35
-        versionCode 21
-        versionName '2.0.0-alpha01'
+        versionCode 22
+        versionName '2.0.0-alpha02'
         buildConfigField 'String', 'SUPABASE_URL', '"https://srzemjqjgceoebvimmct.supabase.co"'
         buildConfigField 'String', 'SUPABASE_PUBLISHABLE_KEY', '"sb_publishable_YAOzHx7szuwIStV4XOq0Ng_dNr1j5ia"'
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.persistent
+        }
     }
 }
 
