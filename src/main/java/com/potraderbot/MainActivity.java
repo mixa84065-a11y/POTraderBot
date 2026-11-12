@@ -288,18 +288,20 @@ public class MainActivity extends Activity {
         if(refreshing||accessToken.isEmpty())return;
         refreshing=true;final String token=accessToken;
         io.execute(()->{
-            JSONObject wallet=null,snapshot=null;JSONArray trades=null;String error=null;
-            try{wallet=SupabaseApi.getWallet(token);}catch(Exception e){error=e.getMessage();}
-            try{trades=SupabaseApi.getTrades(token);}catch(Exception e){if(error==null)error=e.getMessage();}
-            try{snapshot=SupabaseApi.getMarketSnapshot(token,symbol);}catch(Exception e){if(error==null)error=e.getMessage();}
-            final JSONObject fw=wallet,fs=snapshot;final JSONArray ft=trades;final String fe=error;
+            JSONObject wallet=null,snapshot=null;JSONArray trades=null;
+            String walletError=null,tradesError=null,snapshotError=null;
+            try{wallet=SupabaseApi.getWallet(token);}catch(Exception e){walletError=e.getMessage();}
+            try{trades=SupabaseApi.getTrades(token);}catch(Exception e){tradesError=e.getMessage();}
+            try{snapshot=SupabaseApi.getMarketSnapshot(token,symbol);}catch(Exception e){snapshotError=e.getMessage();}
+            final JSONObject fw=wallet,fs=snapshot;final JSONArray ft=trades;
+            final String fwe=walletError,fte=tradesError,fse=snapshotError;
             runOnUiThread(()->{
                 refreshing=false;
                 if(isFinishing()||accessToken.isEmpty())return;
-                if(fw!=null&&!fw.optString("balance","").isEmpty()){
+                if(fw!=null&&fw.has("balance")&&!fw.isNull("balance")){
                     try{balanceText.setText(String.format(Locale.US,"%,.2f ₽",fw.getDouble("balance")));}
                     catch(Exception ignored){balanceText.setText(fw.optString("balance")+" ₽");}
-                }else balanceText.setText(fe==null?"Баланс не найден":"Ошибка загрузки баланса");
+                }else balanceText.setText(fwe==null?"Баланс не найден":"Ошибка баланса: "+fwe);
                 if(fs!=null){
                     latestCandles=fs.optJSONArray("candles");if(latestCandles==null)latestCandles=new JSONArray();
                     quoteFresh=fs.optBoolean("quote_fresh",false);demoEnabled=fs.optBoolean("demo_enabled",false);
@@ -315,8 +317,8 @@ public class MainActivity extends Activity {
                     signalText.setText(a.strength>50?"ОЦЕНКА НАПРАВЛЕНИЯ: "+a.direction+" • СИЛА "+a.strength+"%":"ОЦЕНКА МОДЕЛИ: НЕТ ПРЕИМУЩЕСТВА");
                     strengthBar.setProgress(a.strength);
                     if(analysisMode)chart.setExpanded(true);
-                }else quoteText.setText("Рыночный поток пока недоступен"+(fe==null?"":" • "+fe));
-                if(fw==null && fe!=null) balanceText.setText("Баланс: ошибка соединения");
+                }else quoteText.setText("Рыночный поток пока недоступен"+(fse==null?"":" • "+fse));
+                if(ft==null && fte!=null) historyText.setText("История недоступна: "+fte);
                 boolean canTrade=quoteFresh&&demoEnabled;
                 upButton.setEnabled(canTrade);downButton.setEnabled(canTrade);
                 if(ft!=null)renderHistory(ft);
