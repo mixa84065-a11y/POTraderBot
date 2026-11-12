@@ -37,7 +37,7 @@ public class MainActivity extends Activity {
     private Spinner pairSelector;
     private TextView instrumentText;
     private int expirySeconds=180;
-    private boolean quoteFresh=false, demoEnabled=false, analysisMode=false, refreshing=false, refreshingMarket=false;
+    private boolean quoteFresh=false, demoEnabled=false, analysisMode=false, refreshing=false, refreshingMarket=false, autoTradeSubmitted=false;
     private JSONArray latestCandles=new JSONArray();
     private ChartView chart;
     private TextView balanceText, quoteText, analysisText, historyText, signalText;
@@ -311,6 +311,7 @@ public class MainActivity extends Activity {
     // This is the only client path that calls Twelve Data. It runs only after ANALYSIS is pressed.
     private void fetchMarketSnapshot(){
         if(accessToken.isEmpty()||refreshingMarket)return;
+        autoTradeSubmitted=false;
         refreshingMarket=true;
         quoteFresh=false;
         if(upButton!=null)upButton.setEnabled(false);
@@ -356,6 +357,16 @@ public class MainActivity extends Activity {
                 if(analysisMode)chart.setExpanded(true);
                 boolean canTrade=quoteFresh&&demoEnabled;
                 upButton.setEnabled(canTrade);downButton.setEnabled(canTrade);
+
+                // One automatic demo entry per explicit ANALYSIS request.
+                // "strength" is a heuristic model score, not a calibrated win probability.
+                if(canTrade && !autoTradeSubmitted && a.strength>70
+                        && ("ВВЕРХ".equals(a.direction) || "ВНИЗ".equals(a.direction))) {
+                    autoTradeSubmitted=true;
+                    String autoDirection="ВВЕРХ".equals(a.direction)?"UP":"DOWN";
+                    Toast.makeText(this,"Сила сигнала "+a.strength+"% — открываю демо-сделку "+a.direction,Toast.LENGTH_LONG).show();
+                    placeTrade(autoDirection);
+                }
             });
         });
     }
@@ -394,7 +405,11 @@ public class MainActivity extends Activity {
                     Toast.makeText(this,"Демо-сделка открыта"+(id.isEmpty()?"":" • "+id),Toast.LENGTH_LONG).show();
                     scheduleExpiryQuote(token,tradeSymbol,tradeExpiry);
                 });
-            }catch(Exception e){runOnUiThread(()->Toast.makeText(this,"Сделка не открыта: "+e.getMessage(),Toast.LENGTH_LONG).show());}
+            }catch(Exception e){runOnUiThread(()->{
+                Toast.makeText(this,"Сделка не открыта: "+e.getMessage(),Toast.LENGTH_LONG).show();
+                boolean canRetry=quoteFresh&&demoEnabled;
+                upButton.setEnabled(canRetry);downButton.setEnabled(canRetry);
+            });}
             runOnUiThread(this::refreshData);
         });
     }
