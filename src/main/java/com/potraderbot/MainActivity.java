@@ -40,7 +40,7 @@ public class MainActivity extends Activity {
     private boolean quoteFresh=false, demoEnabled=false, analysisMode=false, refreshing=false, refreshingMarket=false, autoTradeSubmitted=false;
     private JSONArray latestCandles=new JSONArray();
     private ChartView chart;
-    private TextView balanceText, quoteText, analysisText, historyText, signalText;
+    private TextView balanceText, quoteText, analysisText, historyText, statsText, signalText;
     private EditText stakeInput;
     private Button upButton, downButton, analysisButton;
     private ProgressBar strengthBar;
@@ -256,6 +256,8 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(4));content.addView(strengthBar,bp);
 
         historyPanel=vertical();
+        TextView statsTitle=label("СТАТИСТИКА СДЕЛОК",11,GOLD,true);statsTitle.setPadding(dp(4),dp(12),0,dp(5));historyPanel.addView(statsTitle);
+        statsText=label("Загружаем статистику…",12,TEXT,false);statsText.setPadding(dp(10),dp(10),dp(10),dp(10));statsText.setBackgroundColor(PANEL);historyPanel.addView(statsText);
         TextView historyTitle=label("ПОСЛЕДНИЕ СДЕЛКИ",11,MUTED,true);historyTitle.setPadding(dp(4),dp(12),0,dp(5));historyPanel.addView(historyTitle);
         historyText=label("Пока нет сделок",12,TEXT,false);historyText.setPadding(dp(8),dp(8),dp(8),dp(8));historyText.setBackgroundColor(PANEL);historyPanel.addView(historyText);
         content.addView(historyPanel);
@@ -303,7 +305,7 @@ public class MainActivity extends Activity {
                     catch(Exception ignored){balanceText.setText(fw.optString("balance")+" ₽");}
                 }else balanceText.setText(fwe==null?"Баланс не найден":"Ошибка баланса: "+fwe);
                 if(ft==null && fte!=null) historyText.setText("История недоступна: "+fte);
-                if(ft!=null)renderHistory(ft);
+                if(ft!=null){renderStats(ft);renderHistory(ft);}
             });
         });
     }
@@ -369,6 +371,30 @@ public class MainActivity extends Activity {
                 }
             });
         });
+    }
+
+    private void renderStats(JSONArray trades){
+        int wins=0,losses=0,draws=0,open=0,cancelled=0;
+        double net=0.0;
+        for(int i=0;i<trades.length();i++){
+            JSONObject t=trades.optJSONObject(i);if(t==null)continue;
+            String status=t.optString("status","OPEN");
+            if("WIN".equals(status)){wins++;net+=t.optDouble("pnl",0.0);}
+            else if("LOSS".equals(status)){losses++;net+=t.optDouble("pnl",0.0);}
+            else if("DRAW".equals(status)){draws++;net+=t.optDouble("pnl",0.0);}
+            else if("OPEN".equals(status))open++;
+            else if("CANCELLED".equals(status))cancelled++;
+        }
+        int closed=wins+losses+draws;
+        int decisive=wins+losses;
+        double winRate=decisive==0?0.0:(wins*100.0/decisive);
+        String pnl=(net>0?"+":"")+String.format(Locale.US,"%,.2f",net)+" ₽";
+        String summary="Закрыто: "+closed+"   •   Победы: "+wins+"   •   Поражения: "+losses
+            +"\\nПроцент побед: "+String.format(Locale.US,"%.1f",winRate)+"%"
+            +"   •   Ничьих: "+draws
+            +"\\nЧистый результат: "+pnl
+            +"\\nОткрыто: "+open+"   •   Отменено: "+cancelled;
+        statsText.setText(summary);
     }
 
     private void renderHistory(JSONArray trades){
