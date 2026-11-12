@@ -441,7 +441,7 @@ public class MainActivity extends Activity {
         analysisButton.setText(analysisMode?"СВЕРНУТЬ АНАЛИЗ":"АНАЛИЗ");
         MarketAnalyzer.Result currentAnalysis=MarketAnalyzer.analyze(latestCandles);
         chart.setDecision(currentAnalysis.direction,currentAnalysis.strength);
-        analysisText.setText(analysisMode?"ПОЛНЫЙ АНАЛИЗ\\n"+currentAnalysis.explanation:currentAnalysis.explanation);
+        analysisText.setText(analysisMode?"ПОЛНЫЙ АНАЛИЗ\n"+currentAnalysis.explanation:currentAnalysis.explanation);
     }
 
     private void showMenu(){
