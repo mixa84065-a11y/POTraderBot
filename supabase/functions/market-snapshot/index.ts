@@ -127,12 +127,10 @@ Deno.serve(async (req: Request) => {
       try {
         const providerResponse = await fetch(quoteUrl, { signal: AbortSignal.timeout(12000) });
         const payload = await providerResponse.json();
-        const price = Number(payload.close ?? payload.price);
-        const rawTimestamp = Number(payload.timestamp);
-        const observedAt = Number.isFinite(rawTimestamp) && rawTimestamp > 0
-          ? new Date(rawTimestamp * 1000)
-          : new Date(String(payload.datetime ?? ""));
-        const observedMs = observedAt.getTime();
+        const priceValue = payload.close ?? payload.price;
+        const price = typeof priceValue === "number" ? priceValue : Number(String(priceValue ?? "").trim());
+        const observedAt = parseQuoteTime(payload.timestamp, payload.datetime);
+        const observedMs = observedAt?.getTime() ?? Number.NaN;
         if (providerResponse.ok && payload.status !== "error" && !payload.code
             && Number.isFinite(price) && price > 0 && Number.isFinite(observedMs)
             && observedMs <= Date.now() + 5000 && observedMs >= Date.now() - 10 * 60 * 1000) {
@@ -177,6 +175,26 @@ Deno.serve(async (req: Request) => {
     return respond({ error: "Market data temporarily unavailable" }, 503);
   }
 });
+
+function parseQuoteTime(timestamp: unknown, datetime: unknown): Date | null {
+  if (typeof timestamp === "number" || (typeof timestamp === "string" && /^\\d+(?:\\.\\d+)?$/.test(timestamp.trim()))) {
+    const numeric = Number(timestamp);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      // Accept Unix seconds and Unix milliseconds.
+      const millis = numeric > 1e12 ? numeric : numeric > 1e9 ? numeric * 1000 : Number.NaN;
+      if (Number.isFinite(millis)) {
+        const date = new Date(millis);
+        if (Number.isFinite(date.getTime())) return date;
+      }
+    }
+  }
+  if (typeof datetime === "string" && datetime.trim()) {
+    const normalized = datetime.trim().includes("T") ? datetime.trim() : datetime.trim().replace(" ", "T");
+    const parsed = Date.parse(normalized.endsWith("Z") ? normalized : normalized + "Z");
+    if (Number.isFinite(parsed)) return new Date(parsed);
+  }
+  return null;
+}
 
 function parseProviderDate(value: unknown): string | null {
   if (typeof value !== "string") return null;
