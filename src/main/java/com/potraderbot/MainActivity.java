@@ -450,7 +450,8 @@ public class MainActivity extends Activity {
         chart.getLayoutParams().height=chartHeight;chart.requestLayout();
         accountPanel.setVisibility(analysisMode?View.GONE:View.VISIBLE);
         quoteText.setVisibility(View.VISIBLE);
-        controlsPanel.setVisibility(analysisMode?View.GONE:View.VISIBLE);
+        // Keep manual UP/DOWN controls available while the expanded analysis is shown.
+        controlsPanel.setVisibility(View.VISIBLE);
         historyPanel.setVisibility(analysisMode?View.GONE:View.VISIBLE);
         signalText.setVisibility(View.VISIBLE);strengthBar.setVisibility(View.VISIBLE);
         analysisButton.setText(analysisMode?"СВЕРНУТЬ АНАЛИЗ":"АНАЛИЗ");
