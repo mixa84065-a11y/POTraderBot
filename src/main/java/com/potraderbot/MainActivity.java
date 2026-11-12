@@ -385,10 +385,44 @@ public class MainActivity extends Activity {
         io.execute(()->{
             try{
                 JSONObject result=SupabaseApi.openDemoTrade(token,symbol,direction,amount,expirySeconds);
-                runOnUiThread(()->{JSONObject trade=result.optJSONObject("trade");String id=trade==null?"":trade.optString("trade_id","");Toast.makeText(this,"Демо-сделка открыта"+(id.isEmpty()?"":" • "+id),Toast.LENGTH_LONG).show();});
+                final String tradeSymbol=symbol;
+                final int tradeExpiry=expirySeconds;
+                runOnUiThread(()->{
+                    JSONObject trade=result.optJSONObject("trade");
+                    String id=trade==null?"":trade.optString("trade_id","");
+                    Toast.makeText(this,"Демо-сделка открыта"+(id.isEmpty()?"":" • "+id),Toast.LENGTH_LONG).show();
+                    scheduleExpiryQuote(token,tradeSymbol,tradeExpiry);
+                });
             }catch(Exception e){runOnUiThread(()->Toast.makeText(this,"Сделка не открыта: "+e.getMessage(),Toast.LENGTH_LONG).show());}
             runOnUiThread(this::refreshData);
         });
+    }
+
+    // One provider request is made only when an opened demo trade reaches expiry.
+    // Wallet/history polling never calls the market provider.
+    private void scheduleExpiryQuote(String token,String tradeSymbol,int seconds){
+        handler.postDelayed(()->{
+            if(!token.equals(accessToken))return;
+            io.execute(()->{
+                try{
+                    // Fetch the final quote; the server settles all trades now due.
+                    SupabaseApi.getMarketSnapshot(token,tradeSymbol);
+                }catch(Exception ignored){
+                    // The next explicit ANALYSIS request can retry settlement.
+                }
+                runOnUiThread(()->{
+                    if(token.equals(accessToken)){
+                        refreshData();
+                        if(tradeSymbol.equals(symbol)){
+                            quoteFresh=false;
+                            quoteText.setText("Сделка завершена по времени. Нажмите АНАЛИЗ для новой котировки.");
+                            upButton.setEnabled(false);
+                            downButton.setEnabled(false);
+                        }
+                    }
+                });
+            });
+        },Math.max(1,seconds)*1000L);
     }
 
     private void toggleAnalysis(){
