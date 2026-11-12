@@ -39,9 +39,15 @@ public final class SupabaseApi {
         }
         String raw = bytes.toString("UTF-8");
         c.disconnect();
-        JSONObject result = raw.isEmpty() ? new JSONObject() : new JSONObject(raw);
         if (code < 200 || code >= 300) {
-            String message = result.optString("msg", result.optString("message", result.optString("error_description", "Сервер вернул ошибку " + code)));
+            JSONObject errorBody;
+            try {
+                Object parsed = raw.isEmpty() ? new JSONObject() : new JSONTokener(raw).nextValue();
+                errorBody = parsed instanceof JSONObject ? (JSONObject) parsed : new JSONObject();
+            } catch (Exception ignored) {
+                errorBody = new JSONObject();
+            }
+            String message = errorBody.optString("msg", errorBody.optString("message", errorBody.optString("error_description", "Сервер вернул ошибку " + code)));
             throw new Exception(message);
         }
         return raw.isEmpty() ? new JSONObject() : new JSONTokener(raw).nextValue();
