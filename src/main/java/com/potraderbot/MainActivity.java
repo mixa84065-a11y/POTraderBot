@@ -347,6 +347,7 @@ public class MainActivity extends Activity {
                 if(!price.isEmpty())status+=" • "+price;
                 quoteText.setText(status);
                 MarketAnalyzer.Result a=MarketAnalyzer.analyze(latestCandles);
+                chart.setDecision(a.direction,a.strength);
                 analysisText.setText(a.explanation);
                 signalText.setText(a.strength>50
                     ?"ОЦЕНКА НАПРАВЛЕНИЯ: "+a.direction+" • СИЛА "+a.strength+"%"
@@ -438,7 +439,9 @@ public class MainActivity extends Activity {
         historyPanel.setVisibility(analysisMode?View.GONE:View.VISIBLE);
         signalText.setVisibility(View.VISIBLE);strengthBar.setVisibility(View.VISIBLE);
         analysisButton.setText(analysisMode?"СВЕРНУТЬ АНАЛИЗ":"АНАЛИЗ");
-        analysisText.setText(analysisMode?"ПОЛНЫЙ АНАЛИЗ\n"+MarketAnalyzer.analyze(latestCandles).explanation:MarketAnalyzer.analyze(latestCandles).explanation);
+        MarketAnalyzer.Result currentAnalysis=MarketAnalyzer.analyze(latestCandles);
+        chart.setDecision(currentAnalysis.direction,currentAnalysis.strength);
+        analysisText.setText(analysisMode?"ПОЛНЫЙ АНАЛИЗ\\n"+currentAnalysis.explanation:currentAnalysis.explanation);
     }
 
     private void showMenu(){
