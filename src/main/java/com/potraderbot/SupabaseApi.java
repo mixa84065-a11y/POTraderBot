@@ -78,8 +78,13 @@ public final class SupabaseApi {
     }
 
     public static JSONObject getWallet(String token) throws Exception {
-        JSONArray a = (JSONArray) request("GET", "/rest/v1/demo_wallets?select=balance,currency&limit=1", null, token);
-        return a.length() > 0 ? a.getJSONObject(0) : new JSONObject();
+        Object response = request("GET", "/rest/v1/demo_wallets?select=balance,currency&limit=1", null, token);
+        if (response instanceof JSONArray) {
+            JSONArray rows = (JSONArray) response;
+            return rows.length() > 0 ? rows.getJSONObject(0) : new JSONObject();
+        }
+        if (response instanceof JSONObject) return (JSONObject) response;
+        throw new Exception("Неожиданный формат ответа баланса");
     }
 
     public static JSONArray getTrades(String token) throws Exception {
