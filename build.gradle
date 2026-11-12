@@ -8,10 +8,10 @@ android {
     buildFeatures { buildConfig true }
 
     defaultConfig {
-        applicationId 'com.potraderbot.godoftrading2'
+        applicationId 'com.potraderbot.godoftrading2standalone'
         minSdk 23
         targetSdk 35
-        versionCode 20
+        versionCode 21
         versionName '2.0.0-alpha01'
         buildConfigField 'String', 'SUPABASE_URL', '"https://srzemjqjgceoebvimmct.supabase.co"'
         buildConfigField 'String', 'SUPABASE_PUBLISHABLE_KEY', '"sb_publishable_YAOzHx7szuwIStV4XOq0Ng_dNr1j5ia"'
