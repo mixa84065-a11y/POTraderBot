@@ -380,7 +380,8 @@ public class MainActivity extends Activity {
 
                 // One automatic demo entry per explicit ANALYSIS request.
                 // "strength" is a heuristic model score, not a calibrated win probability.
-                if(canTrade && !autoTradeSubmitted && a.strength>70
+                if(canTrade && !activeTradeSymbols.contains(symbol) && !openingTradeSymbols.contains(symbol)
+                        && !autoTradeSubmitted && a.strength>70
                         && ("ВВЕРХ".equals(a.direction) || "ВНИЗ".equals(a.direction))) {
                     autoTradeSubmitted=true;
                     String autoDirection="ВВЕРХ".equals(a.direction)?"UP":"DOWN";
@@ -482,7 +483,6 @@ public class MainActivity extends Activity {
                         if(tradeSymbol.equals(symbol)){
                             quoteFresh=false;
                             quoteText.setText("Сделка завершена по времени. Нажмите АНАЛИЗ для новой котировки.");
-                            activeTradeSymbols.remove(tradeSymbol);
                             updateTradeButtons();
                         }
                     }
