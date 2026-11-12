@@ -23,6 +23,8 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.Locale;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -34,6 +36,8 @@ public class MainActivity extends Activity {
     private final Handler handler=new Handler(Looper.getMainLooper());
     private String accessToken="", refreshToken="";
     private String symbol="EUR/USD";
+    private final Set<String> activeTradeSymbols=new HashSet<>();
+    private final Set<String> openingTradeSymbols=new HashSet<>();
     private Spinner pairSelector;
     private TextView instrumentText;
     private int expirySeconds=180;
@@ -210,7 +214,7 @@ public class MainActivity extends Activity {
                 if(!selected.equals(symbol)){
                     symbol=selected;quoteFresh=false;demoEnabled=false;
                     instrumentText.setText(symbol+"  •  ОБЫЧНЫЙ РЫНОК  •  M1");
-                    upButton.setEnabled(false);downButton.setEnabled(false);
+                    updateTradeButtons();
                     quoteText.setText("Загружаем котировки для "+symbol+"…");
                     refreshData();
                 }
@@ -305,9 +309,25 @@ public class MainActivity extends Activity {
                     catch(Exception ignored){balanceText.setText(fw.optString("balance")+" ₽");}
                 }else balanceText.setText(fwe==null?"Баланс не найден":"Ошибка баланса: "+fwe);
                 if(ft==null && fte!=null) historyText.setText("История недоступна: "+fte);
-                if(ft!=null){renderStats(ft);renderHistory(ft);}
+                if(ft!=null){
+                    activeTradeSymbols.clear();
+                    for(int i=0;i<ft.length();i++){
+                        JSONObject trade=ft.optJSONObject(i);
+                        if(trade!=null && "OPEN".equals(trade.optString("status","")))
+                            activeTradeSymbols.add(trade.optString("symbol",""));
+                    }
+                    renderStats(ft);renderHistory(ft);updateTradeButtons();
+                }
             });
         });
+    }
+
+    private void updateTradeButtons(){
+        boolean canTrade=quoteFresh&&demoEnabled
+            && !activeTradeSymbols.contains(symbol)
+            && !openingTradeSymbols.contains(symbol);
+        if(upButton!=null)upButton.setEnabled(canTrade);
+        if(downButton!=null)downButton.setEnabled(canTrade);
     }
 
     // This is the only client path that calls Twelve Data. It runs only after ANALYSIS is pressed.
@@ -316,8 +336,7 @@ public class MainActivity extends Activity {
         autoTradeSubmitted=false;
         refreshingMarket=true;
         quoteFresh=false;
-        if(upButton!=null)upButton.setEnabled(false);
-        if(downButton!=null)downButton.setEnabled(false);
+        updateTradeButtons();
         quoteText.setText("Запрашиваем котировку для "+symbol+"…");
         analysisButton.setEnabled(false);
         final String token=accessToken,requestedSymbol=symbol;
@@ -333,7 +352,7 @@ public class MainActivity extends Activity {
                 if(!requestedSymbol.equals(symbol))return;
                 if(fs==null){
                     quoteText.setText("Не удалось получить котировку"+(fe==null?"":": "+fe));
-                    quoteFresh=false;upButton.setEnabled(false);downButton.setEnabled(false);
+                    quoteFresh=false;updateTradeButtons();
                     return;
                 }
                 latestCandles=fs.optJSONArray("candles");
@@ -357,8 +376,7 @@ public class MainActivity extends Activity {
                     :"ОЦЕНКА МОДЕЛИ: НЕТ ПРЕИМУЩЕСТВА");
                 strengthBar.setProgress(a.strength);
                 if(analysisMode)chart.setExpanded(true);
-                boolean canTrade=quoteFresh&&demoEnabled;
-                upButton.setEnabled(canTrade);downButton.setEnabled(canTrade);
+                updateTradeButtons();
 
                 // One automatic demo entry per explicit ANALYSIS request.
                 // "strength" is a heuristic model score, not a calibrated win probability.
@@ -414,27 +432,33 @@ public class MainActivity extends Activity {
 
     private void placeTrade(String direction){
         if(!quoteFresh||!demoEnabled){Toast.makeText(this,"Сделка заблокирована: нет проверенной свежей котировки.",Toast.LENGTH_LONG).show();return;}
+        if(activeTradeSymbols.contains(symbol)||openingTradeSymbols.contains(symbol)){
+            Toast.makeText(this,"По этой валютной паре уже есть открытая сделка.",Toast.LENGTH_LONG).show();return;
+        }
         double stake;
         try{stake=Double.parseDouble(stakeInput.getText().toString().replace(',','.'));}
         catch(Exception e){Toast.makeText(this,"Укажите сумму сделки.",Toast.LENGTH_SHORT).show();return;}
         if(stake<=0||stake>20000){Toast.makeText(this,"Сумма должна быть от 1 до 20 000 ₽.",Toast.LENGTH_SHORT).show();return;}
-        upButton.setEnabled(false);downButton.setEnabled(false);
+        final String tradeSymbol=symbol;
+        openingTradeSymbols.add(tradeSymbol);updateTradeButtons();
         final double amount=stake;final String token=accessToken;
         io.execute(()->{
             try{
-                JSONObject result=SupabaseApi.openDemoTrade(token,symbol,direction,amount,expirySeconds);
-                final String tradeSymbol=symbol;
+                JSONObject result=SupabaseApi.openDemoTrade(token,tradeSymbol,direction,amount,expirySeconds);
                 final int tradeExpiry=expirySeconds;
                 runOnUiThread(()->{
                     JSONObject trade=result.optJSONObject("trade");
                     String id=trade==null?"":trade.optString("trade_id","");
+                    openingTradeSymbols.remove(tradeSymbol);
+                    activeTradeSymbols.add(tradeSymbol);
+                    updateTradeButtons();
                     Toast.makeText(this,"Демо-сделка открыта"+(id.isEmpty()?"":" • "+id),Toast.LENGTH_LONG).show();
                     scheduleExpiryQuote(token,tradeSymbol,tradeExpiry);
                 });
             }catch(Exception e){runOnUiThread(()->{
+                openingTradeSymbols.remove(tradeSymbol);
+                updateTradeButtons();
                 Toast.makeText(this,"Сделка не открыта: "+e.getMessage(),Toast.LENGTH_LONG).show();
-                boolean canRetry=quoteFresh&&demoEnabled;
-                upButton.setEnabled(canRetry);downButton.setEnabled(canRetry);
             });}
             runOnUiThread(this::refreshData);
         });
@@ -458,8 +482,8 @@ public class MainActivity extends Activity {
                         if(tradeSymbol.equals(symbol)){
                             quoteFresh=false;
                             quoteText.setText("Сделка завершена по времени. Нажмите АНАЛИЗ для новой котировки.");
-                            upButton.setEnabled(false);
-                            downButton.setEnabled(false);
+                            activeTradeSymbols.remove(tradeSymbol);
+                            updateTradeButtons();
                         }
                     }
                 });
