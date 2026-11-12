@@ -37,7 +37,7 @@ public class MainActivity extends Activity {
     private Spinner pairSelector;
     private TextView instrumentText;
     private int expirySeconds=180;
-    private boolean quoteFresh=false, demoEnabled=false, analysisMode=false, refreshing=false;
+    private boolean quoteFresh=false, demoEnabled=false, analysisMode=false, refreshing=false, refreshingMarket=false;
     private JSONArray latestCandles=new JSONArray();
     private ChartView chart;
     private TextView balanceText, quoteText, analysisText, historyText, signalText;
@@ -284,17 +284,17 @@ public class MainActivity extends Activity {
         }
     }
 
+    // Wallet and trade history refresh independently; they never consume market-provider credits.
     private void refreshData(){
         if(refreshing||accessToken.isEmpty())return;
         refreshing=true;final String token=accessToken;
         io.execute(()->{
-            JSONObject wallet=null,snapshot=null;JSONArray trades=null;
-            String walletError=null,tradesError=null,snapshotError=null;
+            JSONObject wallet=null;JSONArray trades=null;
+            String walletError=null,tradesError=null;
             try{wallet=SupabaseApi.getWallet(token);}catch(Exception e){walletError=e.getMessage();}
             try{trades=SupabaseApi.getTrades(token);}catch(Exception e){tradesError=e.getMessage();}
-            try{snapshot=SupabaseApi.getMarketSnapshot(token,symbol);}catch(Exception e){snapshotError=e.getMessage();}
-            final JSONObject fw=wallet,fs=snapshot;final JSONArray ft=trades;
-            final String fwe=walletError,fte=tradesError,fse=snapshotError;
+            final JSONObject fw=wallet;final JSONArray ft=trades;
+            final String fwe=walletError,fte=tradesError;
             runOnUiThread(()->{
                 refreshing=false;
                 if(isFinishing()||accessToken.isEmpty())return;
@@ -302,26 +302,59 @@ public class MainActivity extends Activity {
                     try{balanceText.setText(String.format(Locale.US,"%,.2f ₽",fw.getDouble("balance")));}
                     catch(Exception ignored){balanceText.setText(fw.optString("balance")+" ₽");}
                 }else balanceText.setText(fwe==null?"Баланс не найден":"Ошибка баланса: "+fwe);
-                if(fs!=null){
-                    latestCandles=fs.optJSONArray("candles");if(latestCandles==null)latestCandles=new JSONArray();
-                    quoteFresh=fs.optBoolean("quote_fresh",false);demoEnabled=fs.optBoolean("demo_enabled",false);
-                    chart.setMarketData(latestCandles,quoteFresh);
-                    JSONObject q=fs.optJSONObject("quote");
-                    String price=q==null?"":q.optString("price","");
-                    String status=fs.optBoolean("key_required",false)?"Добавьте личный API-ключ Twelve Data в настройках":(quoteFresh?"Котировка актуальна":"Нет актуальной котировки");
-                    if(!demoEnabled)status+=" • демо-инструмент ещё не включён";
-                    if(!price.isEmpty())status+=" • "+price;
-                    quoteText.setText(status);
-                    MarketAnalyzer.Result a=MarketAnalyzer.analyze(latestCandles);
-                    analysisText.setText(a.explanation);
-                    signalText.setText(a.strength>50?"ОЦЕНКА НАПРАВЛЕНИЯ: "+a.direction+" • СИЛА "+a.strength+"%":"ОЦЕНКА МОДЕЛИ: НЕТ ПРЕИМУЩЕСТВА");
-                    strengthBar.setProgress(a.strength);
-                    if(analysisMode)chart.setExpanded(true);
-                }else quoteText.setText("Рыночный поток пока недоступен"+(fse==null?"":" • "+fse));
                 if(ft==null && fte!=null) historyText.setText("История недоступна: "+fte);
+                if(ft!=null)renderHistory(ft);
+            });
+        });
+    }
+
+    // This is the only client path that calls Twelve Data. It runs only after ANALYSIS is pressed.
+    private void fetchMarketSnapshot(){
+        if(accessToken.isEmpty()||refreshingMarket)return;
+        refreshingMarket=true;
+        quoteFresh=false;
+        if(upButton!=null)upButton.setEnabled(false);
+        if(downButton!=null)downButton.setEnabled(false);
+        quoteText.setText("Запрашиваем котировку для "+symbol+"…");
+        analysisButton.setEnabled(false);
+        final String token=accessToken,requestedSymbol=symbol;
+        io.execute(()->{
+            JSONObject snapshot=null;String error=null;
+            try{snapshot=SupabaseApi.getMarketSnapshot(token,requestedSymbol);}
+            catch(Exception e){error=e.getMessage();}
+            final JSONObject fs=snapshot;final String fe=error;
+            runOnUiThread(()->{
+                refreshingMarket=false;
+                if(isFinishing()||accessToken.isEmpty())return;
+                analysisButton.setEnabled(true);
+                if(!requestedSymbol.equals(symbol))return;
+                if(fs==null){
+                    quoteText.setText("Не удалось получить котировку"+(fe==null?"":": "+fe));
+                    quoteFresh=false;upButton.setEnabled(false);downButton.setEnabled(false);
+                    return;
+                }
+                latestCandles=fs.optJSONArray("candles");
+                if(latestCandles==null)latestCandles=new JSONArray();
+                quoteFresh=fs.optBoolean("quote_fresh",false);
+                demoEnabled=fs.optBoolean("demo_enabled",false);
+                chart.setMarketData(latestCandles,quoteFresh);
+                JSONObject q=fs.optJSONObject("quote");
+                String price=q==null?"":q.optString("price","");
+                String status=fs.optBoolean("key_required",false)
+                    ?"Добавьте личный API-ключ Twelve Data в настройках"
+                    :(quoteFresh?"Котировка получена":"Нет свежей котировки");
+                if(!demoEnabled)status+=" • демо-инструмент ещё не включён";
+                if(!price.isEmpty())status+=" • "+price;
+                quoteText.setText(status);
+                MarketAnalyzer.Result a=MarketAnalyzer.analyze(latestCandles);
+                analysisText.setText(a.explanation);
+                signalText.setText(a.strength>50
+                    ?"ОЦЕНКА НАПРАВЛЕНИЯ: "+a.direction+" • СИЛА "+a.strength+"%"
+                    :"ОЦЕНКА МОДЕЛИ: НЕТ ПРЕИМУЩЕСТВА");
+                strengthBar.setProgress(a.strength);
+                if(analysisMode)chart.setExpanded(true);
                 boolean canTrade=quoteFresh&&demoEnabled;
                 upButton.setEnabled(canTrade);downButton.setEnabled(canTrade);
-                if(ft!=null)renderHistory(ft);
             });
         });
     }
@@ -359,7 +392,9 @@ public class MainActivity extends Activity {
     }
 
     private void toggleAnalysis(){
+        boolean requestingMarket=!analysisMode;
         analysisMode=!analysisMode;
+        if(requestingMarket)fetchMarketSnapshot();
         chart.setExpanded(analysisMode);
         int chartHeight=analysisMode?dp(420):(getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?dp(175):dp(245));
         chart.getLayoutParams().height=chartHeight;chart.requestLayout();
