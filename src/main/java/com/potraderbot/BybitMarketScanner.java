@@ -25,11 +25,18 @@ public final class BybitMarketScanner {
     public static final String[] CATALOG_CATEGORIES = {"spot", "linear", "inverse", "option"};
 
     public static final class Instrument {
-        public final String category, symbol, baseCoin, quoteCoin;
+        public final String category, symbol, baseCoin, quoteCoin, displayName, marketRegion, symbolType;
         public final double turnover24h;
         Instrument(String category, String symbol, String baseCoin, String quoteCoin, double turnover24h) {
+            this(category,symbol,baseCoin,quoteCoin,turnover24h,symbol,"","");
+        }
+        Instrument(String category, String symbol, String baseCoin, String quoteCoin, double turnover24h,
+                   String displayName, String marketRegion, String symbolType) {
             this.category=category; this.symbol=symbol; this.baseCoin=baseCoin;
             this.quoteCoin=quoteCoin; this.turnover24h=turnover24h;
+            this.displayName=displayName==null||displayName.isEmpty()?symbol:displayName;
+            this.marketRegion=marketRegion==null?"":marketRegion;
+            this.symbolType=symbolType==null?"":symbolType;
         }
     }
     public static final class Signal {
@@ -122,8 +129,51 @@ public final class BybitMarketScanner {
             double turnover=t.optDouble("turnover24h",0);
             if(!symbol.isEmpty()&&turnover>0)candidates.add(new Instrument(category,symbol,"","",turnover));
         }
+        return scanCandidates(candidates,maxInstruments);
+    }
+
+    /** TradFi stocks and ETFs are linear contracts, but are discovered through Bybit's instrument-summary. */
+    public static List<Signal> scanTradFi(String symbolType,int maxInstruments) throws Exception {
+        if(!"stock".equals(symbolType)&&!"ETF".equals(symbolType))
+            throw new IllegalArgumentException("Поддерживаются только акции и ETF Bybit TradFi");
+        List<Instrument> candidates=new ArrayList<>();
+        String cursor="";
+        for(int page=0;page<10;page++){
+            String url="https://api.bybit.com/v5/market/instrument-summary?category=linear&symbolType="+enc(symbolType)+"&limit=1000"
+                +(cursor.isEmpty()?"":"&cursor="+enc(cursor));
+            JSONObject result=get(url).getJSONObject("result");
+            JSONArray list=result.optJSONArray("list");
+            if(list!=null)for(int i=0;i<list.length();i++){
+                JSONObject x=list.getJSONObject(i);
+                String symbol=x.optString("symbol","");
+                if(symbol.isEmpty())continue;
+                String name=x.optString("fullName",x.optString("displayName",symbol));
+                candidates.add(new Instrument("linear",symbol,x.optString("baseCoin",""),x.optString("settleCoin","USDT"),
+                    0,name,x.optString("marketRegion",""),x.optString("symbolType",symbolType)));
+            }
+            cursor=result.optString("nextPageCursor","");
+            if(cursor.isEmpty())break;
+        }
+        if(candidates.isEmpty())return candidates;
+        JSONObject tickers=get("https://api.bybit.com/v5/market/tickers?category=linear").getJSONObject("result");
+        JSONArray tickerList=tickers.optJSONArray("list");
+        java.util.Map<String,Double> turnoverBySymbol=new java.util.HashMap<>();
+        if(tickerList!=null)for(int i=0;i<tickerList.length();i++){
+            JSONObject t=tickerList.getJSONObject(i);
+            turnoverBySymbol.put(t.optString("symbol",""),t.optDouble("turnover24h",0));
+        }
+        List<Instrument> active=new ArrayList<>();
+        for(Instrument x:candidates){
+            double turnover=turnoverBySymbol.containsKey(x.symbol)?turnoverBySymbol.get(x.symbol):0;
+            if(turnover>0)active.add(new Instrument(x.category,x.symbol,x.baseCoin,x.quoteCoin,turnover,x.displayName,x.marketRegion,x.symbolType));
+        }
+        return scanCandidates(active,maxInstruments);
+    }
+
+    private static List<Signal> scanCandidates(List<Instrument> candidates,int maxInstruments) throws Exception {
         Collections.sort(candidates,(a,b)->Double.compare(b.turnover24h,a.turnover24h));
-        int count=Math.max(1,Math.min(maxInstruments,candidates.size()));
+        int count=Math.min(Math.max(0,maxInstruments),candidates.size());
+        if(count==0)return new ArrayList<>();
         ExecutorService pool=Executors.newFixedThreadPool(6);
         try{
             List<Future<Signal>> futures=new ArrayList<>();
