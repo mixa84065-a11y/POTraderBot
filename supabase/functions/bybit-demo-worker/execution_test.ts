@@ -34,6 +34,9 @@ Deno.test("INTENT order is submitted once and fills are persisted idempotently",
       if (url.pathname === "/v5/order/realtime" && url.searchParams.has("orderLinkId")) {
         return json({ retCode: 0, retMsg: "OK", result: { list: [] } });
       }
+      if (url.pathname === "/v5/order/history" && url.searchParams.has("orderLinkId")) {
+        return json({ retCode: 0, retMsg: "OK", result: { list: [] } });
+      }
       if (url.pathname === "/v5/order/create" && method === "POST") {
         return json({ retCode: 0, retMsg: "OK", result: { orderId: "exchange-order-1", orderLinkId: baseOrder.order_link_id } });
       }
