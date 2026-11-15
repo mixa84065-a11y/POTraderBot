@@ -93,15 +93,15 @@ public class ChartView extends View {
     @Override protected void onDraw(Canvas c) {
         super.onDraw(c);
         float w=getWidth(), h=getHeight();
-        c.drawColor(0xFF0E1F37);
-        p.setColor(0xFF1B3452); p.setStrokeWidth(1f);
+        c.drawColor(0xFF0A0D12);
+        p.setColor(0xFF202630); p.setStrokeWidth(1f);
         for(int i=1;i<6;i++) c.drawLine(0,h*i/6f,w,h*i/6f,p);
         for(int i=1;i<8;i++) c.drawLine(w*i/8f,0,w*i/8f,h,p);
-        p.setColor(0xFFE0B75B); p.setTextSize(14f); p.setFakeBoldText(true);
+        p.setColor(0xFFF7BE37); p.setTextSize(14f); p.setFakeBoldText(true);
         c.drawText(expanded ? "ГРАФИК И АНАЛИЗ • " + symbol + " • M1" : symbol + " • M1",16,24,p);
         p.setFakeBoldText(false);
         if(candles.isEmpty()) {
-            p.setColor(0xFF9AAFC9); p.setTextSize(12f);
+            p.setColor(0xFF979AA3); p.setTextSize(12f);
             String t="Нажмите «АНАЛИЗ» для загрузки свечей";
             c.drawText(t,Math.max(12,(w-p.measureText(t))/2f),h/2f,p);
         } else {
@@ -122,7 +122,7 @@ public class ChartView extends View {
                 float yOpen=bottom-(float)((a[0]-min)/(max-min))*plotH;
                 float yClose=bottom-(float)((a[3]-min)/(max-min))*plotH;
                 boolean up=a[3]>=a[0];
-                p.setColor(up?0xFF26B88A:0xFFE45B68); p.setStrokeWidth(1.6f);
+                p.setColor(up?0xFF00BE55:0xFFE02B2B); p.setStrokeWidth(1.6f);
                 c.drawLine(x,yHigh,x,yLow,p);
                 float y=Math.min(yOpen,yClose), bh=Math.max(2,Math.abs(yClose-yOpen));
                 p.setStyle(Paint.Style.FILL);
@@ -130,28 +130,28 @@ public class ChartView extends View {
             }
 
             if(showDecision && candles.size()>=21) {
-                drawEma(c,ema(9),0xFF36C7E8,left,slot,bottom,plotH,min,max);
-                drawEma(c,ema(21),0xFFE0B75B,left,slot,bottom,plotH,min,max);
+                drawEma(c,ema(9),0xFFF7BE37,left,slot,bottom,plotH,min,max);
+                drawEma(c,ema(21),0xFF979AA3,left,slot,bottom,plotH,min,max);
 
                 p.setTextSize(10f); p.setFakeBoldText(true);
-                p.setColor(0xFF36C7E8); c.drawText("EMA 9",16,42,p);
-                p.setColor(0xFFE0B75B); c.drawText("EMA 21",66,42,p);
+                p.setColor(0xFFF7BE37); c.drawText("EMA 9",16,42,p);
+                p.setColor(0xFF979AA3); c.drawText("EMA 21",66,42,p);
                 p.setFakeBoldText(false);
 
-                int signalColor = decision.contains("ВВЕРХ") ? 0xFF26B88A :
-                        decision.contains("ВНИЗ") ? 0xFFE45B68 : 0xFF9AAFC9;
+                int signalColor = decision.contains("ВВЕРХ") ? 0xFF00BE55 :
+                        decision.contains("ВНИЗ") ? 0xFFE02B2B : 0xFF979AA3;
                 String label = decision + " • " + decisionStrength + "%";
                 p.setTextSize(10f); p.setFakeBoldText(true);
                 float badgeW=p.measureText(label)+16;
                 float badgeLeft=Math.max(120,w-badgeW-12);
-                p.setColor(0xFF193653);
+                p.setColor(0xFF171B22);
                 c.drawRoundRect(new RectF(badgeLeft,10,w-10,31),8,8,p);
                 p.setColor(signalColor);
                 c.drawText(label,badgeLeft+8,24,p);
                 p.setFakeBoldText(false);
             }
         }
-        p.setColor(fresh?0xFF26B88A:0xFF9AAFC9); p.setTextSize(10f);
+        p.setColor(fresh?0xFF00BE55:0xFF979AA3); p.setTextSize(10f);
         c.drawText(message,16,h-7,p);
     }
 }
