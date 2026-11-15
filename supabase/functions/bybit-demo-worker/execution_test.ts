@@ -1,0 +1,121 @@
+import { buildSpotMarketBuy } from "./bybit.ts";
+import { submitOrReconcileDemoOrder, type PendingDemoOrder } from "./execution.ts";
+
+const baseOrder: PendingDemoOrder = {
+  order_id: "00000000-0000-4000-8000-000000000001",
+  position_id: null,
+  symbol: "BTCUSDT",
+  side: "Buy",
+  purpose: "ENTRY",
+  order_link_id: "g2test12345678901234567890123456",
+  exchange_order_id: null,
+  requested_qty: "100",
+  qty_unit: "quoteCoin",
+  status: "INTENT",
+};
+
+function json(data: unknown) {
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+Deno.test("INTENT order is submitted once and fills are persisted idempotently", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ method: string; path: string; query: URLSearchParams }> = [];
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    writable: true,
+    value: async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(typeof input === "string" || input instanceof URL ? input.toString() : input.url);
+      const method = init?.method ?? "GET";
+      requests.push({ method, path: url.pathname, query: url.searchParams });
+      if (url.pathname === "/v5/order/realtime" && url.searchParams.has("orderLinkId")) {
+        return json({ retCode: 0, retMsg: "OK", result: { list: [] } });
+      }
+      if (url.pathname === "/v5/order/create" && method === "POST") {
+        return json({ retCode: 0, retMsg: "OK", result: { orderId: "exchange-order-1", orderLinkId: baseOrder.order_link_id } });
+      }
+      if (url.pathname === "/v5/order/realtime" && url.searchParams.has("orderId")) {
+        return json({ retCode: 0, retMsg: "OK", result: { list: [{
+          orderId: "exchange-order-1", orderLinkId: baseOrder.order_link_id,
+          orderStatus: "Filled", cumExecQty: "0.002", cumExecValue: "100",
+          avgPrice: "50000", leavesQty: "0",
+        }] } });
+      }
+      if (url.pathname === "/v5/execution/list") {
+        return json({ retCode: 0, retMsg: "OK", result: { list: [{
+          execId: "fill-1", orderId: "exchange-order-1", symbol: "BTCUSDT",
+          side: "Buy", execQty: "0.002", execPrice: "50000", execValue: "100",
+          execFee: "0.1", feeCurrency: "USDT", execTime: "1800000000000",
+        }], nextPageCursor: "" } });
+      }
+      throw new Error("Unexpected mocked Bybit request: " + method + " " + url.toString());
+    },
+  });
+
+  const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+  try {
+    const result = await submitOrReconcileDemoOrder({
+      apiKey: "test-api-key-123456",
+      apiSecret: "test-api-secret-123456789012",
+      order: baseOrder,
+      payload: buildSpotMarketBuy("BTCUSDT", "100", baseOrder.order_link_id),
+      rpc: async (name, args = {}) => {
+        rpcCalls.push({ name, args });
+        if (name === "bybit_demo_worker_record_fill") return { fee_conversion_complete: true };
+        return null;
+      },
+    });
+    if (requests.filter((r) => r.path === "/v5/order/create").length !== 1) {
+      throw new Error("Expected exactly one order submission");
+    }
+    if (result.status !== "FILLED" || result.filledQty !== 0.002 ||
+        result.filledValueUsdt !== 100 || result.feeUsdt !== 0.1 ||
+        result.executionCount !== 1 || !result.feeConversionComplete) {
+      throw new Error("Unexpected reconciliation result: " + JSON.stringify(result));
+    }
+    if (!rpcCalls.some((call) => call.name === "bybit_demo_worker_record_fill")) {
+      throw new Error("Execution fill was not persisted");
+    }
+  } finally {
+    Object.defineProperty(globalThis, "fetch", { configurable: true, writable: true, value: originalFetch });
+  }
+});
+
+Deno.test("UNKNOWN order is never blindly resubmitted when Bybit cannot find it", async () => {
+  const originalFetch = globalThis.fetch;
+  let createCount = 0;
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    writable: true,
+    value: async (input: RequestInfo | URL) => {
+      const url = new URL(typeof input === "string" || input instanceof URL ? input.toString() : input.url);
+      if (url.pathname === "/v5/order/realtime") {
+        return json({ retCode: 0, retMsg: "OK", result: { list: [] } });
+      }
+      if (url.pathname === "/v5/order/create") createCount++;
+      throw new Error("Unexpected request");
+    },
+  });
+  try {
+    let rejected = false;
+    try {
+      await submitOrReconcileDemoOrder({
+        apiKey: "test-api-key-123456",
+        apiSecret: "test-api-secret-123456789012",
+        order: { ...baseOrder, status: "UNKNOWN" },
+        payload: buildSpotMarketBuy("BTCUSDT", "100", baseOrder.order_link_id),
+        rpc: async () => null,
+      });
+    } catch {
+      rejected = true;
+    }
+    if (!rejected || createCount !== 0) {
+      throw new Error("UNKNOWN order was retried without exchange confirmation");
+    }
+  } finally {
+    Object.defineProperty(globalThis, "fetch", { configurable: true, writable: true, value: originalFetch });
+  }
+});
