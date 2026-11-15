@@ -149,4 +149,41 @@ public final class SupabaseApi {
         b.put("p_run_id", JSONObject.NULL);
         return (JSONObject) request("POST", "/rest/v1/rpc/bybit_demo_get_report", b, token);
     }
+    public static JSONObject startMultiMarketPaperRun(String token) throws Exception {
+        JSONObject body = new JSONObject();
+        JSONArray markets = new JSONArray();
+        for (String market : new String[]{"spot","linear","inverse","option","stock","ETF","forex","commodity"}) markets.put(market);
+        body.put("p_market_categories", markets);
+        body.put("p_starting_balance_usdt", 200.0);
+        return (JSONObject) request("POST", "/rest/v1/rpc/paper_start_run", body, token);
+    }
+
+    public static JSONObject stopMultiMarketPaperRun(String token, String runId) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("p_run_id", runId);
+        return (JSONObject) request("POST", "/rest/v1/rpc/paper_stop_run", body, token);
+    }
+
+    public static JSONObject getMultiMarketPaperReport(String token) throws Exception {
+        JSONArray runs = (JSONArray) request("GET",
+            "/rest/v1/paper_runs?select=id,status,market_categories,starting_balance_usdt,cash_usdt,realized_pnl_usdt,max_drawdown_pct,last_cycle_at,last_error,started_at,stopped_at&order=created_at.desc&limit=1",
+            null, token);
+        JSONObject report = new JSONObject();
+        if (runs.length() == 0) { report.put("has_run", false); return report; }
+        JSONObject run = runs.getJSONObject(0);
+        String id = run.getString("id");
+        JSONArray positions = (JSONArray) request("GET",
+            "/rest/v1/paper_positions?select=market_category,symbol,side,qty,entry_price,mark_price,unrealized_pnl_usdt,signal_score,opened_at&run_id=eq."
+                + java.net.URLEncoder.encode(id, "UTF-8") + "&status=eq.OPEN&order=opened_at.desc&limit=30", null, token);
+        JSONArray trades = (JSONArray) request("GET",
+            "/rest/v1/paper_trades?select=market_category,symbol,side,entry_price,exit_price,net_pnl_usdt,exit_reason,closed_at&run_id=eq."
+                + java.net.URLEncoder.encode(id, "UTF-8") + "&order=closed_at.desc&limit=20", null, token);
+        JSONArray events = (JSONArray) request("GET",
+            "/rest/v1/paper_events?select=event_type,message,created_at&run_id=eq."
+                + java.net.URLEncoder.encode(id, "UTF-8") + "&order=created_at.desc&limit=8", null, token);
+        report.put("has_run", true); report.put("run", run); report.put("positions", positions);
+        report.put("trades", trades); report.put("events", events);
+        return report;
+    }
+
 }
