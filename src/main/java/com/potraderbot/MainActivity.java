@@ -73,10 +73,8 @@ public class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
             | View.SYSTEM_UI_FLAG_FULLSCREEN
-            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
             | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
     }
 
     @Override public void onWindowFocusChanged(boolean hasFocus){
@@ -234,7 +232,7 @@ public class MainActivity extends Activity {
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
         });
         chart=new ChartView(this);chart.setSymbol(symbol);
-        int chartHeight=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?dp(175):dp(245);
+        int chartHeight=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?dp(175):dp(256);
         LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,chartHeight);content.addView(chart,cp);
 
         quoteText=label("Нажмите «АНАЛИЗ», чтобы загрузить подтверждённые котировки.",11,MUTED,false);quoteText.setPadding(dp(4),dp(6),0,dp(4));content.addView(quoteText);
@@ -507,7 +505,7 @@ public class MainActivity extends Activity {
         analysisMode=!analysisMode;
         if(requestingMarket)fetchMarketSnapshot();
         chart.setExpanded(analysisMode);
-        int chartHeight=analysisMode?dp(420):(getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?dp(175):dp(245));
+        int chartHeight=analysisMode?dp(420):(getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?dp(175):dp(256));
         chart.getLayoutParams().height=chartHeight;chart.requestLayout();
         accountPanel.setVisibility(analysisMode?View.GONE:View.VISIBLE);
         quoteText.setVisibility(View.VISIBLE);
