@@ -46,7 +46,7 @@ public class BybitTerminalActivity extends Activity {
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
     private String accessToken="";
-    private TextView serverReportText, connectionStatusText;
+    private TextView serverReportText, connectionStatusText, paperAutoReportText;\n    private Button paperStartButton, paperStopButton;\n    private String activePaperRunId="";\n    private boolean paperReportLoading=false;
     private Button serverRefreshButton, connectionCheckButton, startDemoRunButton;
     private Spinner symbolPicker, scanCategoryPicker;
     private TextView multiScanText;
@@ -58,7 +58,7 @@ public class BybitTerminalActivity extends Activity {
     private boolean loading=false, autoEnabled=false;
     private JSONArray candles=new JSONArray();
     private double lastPrice=0;
-    private final Runnable poll=new Runnable(){@Override public void run(){loadMarket();handler.postDelayed(this,15000);}};
+    private final Runnable poll=new Runnable(){@Override public void run(){loadMarket();handler.postDelayed(this,15000);}};\n    private final Runnable paperStatusPoll=new Runnable(){@Override public void run(){refreshPaperAutoReport();handler.postDelayed(this,60000);}};
 
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
@@ -191,6 +191,115 @@ public class BybitTerminalActivity extends Activity {
     }
 
 
+
+
+    private void buildMultiMarketPaperSection(LinearLayout root){
+        TextView heading=text("АВТОНОМНОЕ МУЛЬТИРЫНОЧНОЕ АВТОДЕМО",12,GOLD,true);
+        heading.setPadding(dp(4),dp(20),0,dp(8));root.addView(heading);
+        TextView note=text("Отдельный серверный бумажный портфель: 200 USDT виртуально. Spot, USDT Futures, Inverse, Options, акции, ETF, Forex и сырьё Bybit TradFi. Цикл каждую минуту, работает при закрытом приложении. Только виртуальные сделки — ключи Bybit не используются.",10,MUTED,false);
+        note.setPadding(dp(4),0,dp(4),dp(8));root.addView(note);
+        paperStartButton=button("ЗАПУСТИТЬ АВТОТОРГОВЛЮ ПО ВСЕМ РЫНКАМ",GOLD,BG);
+        root.addView(paperStartButton,new LinearLayout.LayoutParams(-1,dp(50)));
+        paperStartButton.setOnClickListener(v->confirmStartMultiMarketPaperRun());
+        paperStopButton=button("ОСТАНОВИТЬ АВТОТОРГОВЛЮ",PANEL,WHITE);
+        LinearLayout.LayoutParams stopLp=new LinearLayout.LayoutParams(-1,dp(46));stopLp.topMargin=dp(6);root.addView(paperStopButton,stopLp);
+        paperStopButton.setOnClickListener(v->stopMultiMarketPaperRun());
+        Button refresh=button("ОБНОВИТЬ ОТЧЁТ МУЛЬТИРЫНКА",PANEL,WHITE);
+        LinearLayout.LayoutParams refreshLp=new LinearLayout.LayoutParams(-1,dp(44));refreshLp.topMargin=dp(6);root.addView(refresh,refreshLp);
+        refresh.setOnClickListener(v->refreshPaperAutoReport());
+        paperAutoReportText=text("Проверяем состояние автономного автодемо…",11,WHITE,false);
+        paperAutoReportText.setPadding(dp(12),dp(12),dp(12),dp(12));paperAutoReportText.setBackgroundColor(PANEL);
+        LinearLayout.LayoutParams reportLp=new LinearLayout.LayoutParams(-1,-2);reportLp.topMargin=dp(8);root.addView(paperAutoReportText,reportLp);
+        refreshPaperAutoReport();
+    }
+
+    private void confirmStartMultiMarketPaperRun(){
+        if(accessToken.isEmpty()){Toast.makeText(this,"Сначала войдите в GOD OF TRADING.",Toast.LENGTH_LONG).show();return;}
+        new AlertDialog.Builder(this).setTitle("Запуск автономного автодемо")
+            .setMessage("Запустится отдельный виртуальный портфель 200 USDT. Сервер будет анализировать все поддерживаемые рынки Bybit каждую минуту, открывать несколько виртуальных позиций и закрывать их по стопу/цели. Реальные ордера и средства не используются. Продолжить?")
+            .setNegativeButton("ОТМЕНА",null).setPositiveButton("ЗАПУСТИТЬ",(d,w)->startMultiMarketPaperRun()).show();
+    }
+
+    private void startMultiMarketPaperRun(){
+        if(paperStartButton!=null)paperStartButton.setEnabled(false);
+        if(paperAutoReportText!=null)paperAutoReportText.setText("Создаём автономный виртуальный портфель…");
+        io.execute(()->{
+            JSONObject result=null;String error=null;
+            try{result=SupabaseApi.startMultiMarketPaperRun(accessToken);}catch(Exception e){error=e.getMessage();}
+            final JSONObject started=result;final String problem=error;
+            runOnUiThread(()->{
+                if(isFinishing())return;
+                if(paperStartButton!=null)paperStartButton.setEnabled(true);
+                if(started!=null){activePaperRunId=started.optString("run_id","");Toast.makeText(this,"Автодемо по рынкам запущено на сервере",Toast.LENGTH_LONG).show();}
+                else Toast.makeText(this,"Не удалось запустить: "+problem,Toast.LENGTH_LONG).show();
+                refreshPaperAutoReport();
+            });
+        });
+    }
+
+    private void stopMultiMarketPaperRun(){
+        if(accessToken.isEmpty()||activePaperRunId.isEmpty()){
+            Toast.makeText(this,"Нет активного запуска для остановки.",Toast.LENGTH_SHORT).show();return;
+        }
+        new AlertDialog.Builder(this).setTitle("Остановить автодемо?")
+            .setMessage("Новые позиции больше открываться не будут. Сервер продолжит сопровождать уже открытые позиции и закроет их по стопу или цели.")
+            .setNegativeButton("НЕТ",null).setPositiveButton("ОСТАНОВИТЬ",(d,w)->{
+                if(paperStopButton!=null)paperStopButton.setEnabled(false);
+                io.execute(()->{
+                    String error=null;try{SupabaseApi.stopMultiMarketPaperRun(accessToken,activePaperRunId);}catch(Exception e){error=e.getMessage();}
+                    final String problem=error;
+                    runOnUiThread(()->{if(paperStopButton!=null)paperStopButton.setEnabled(true);if(problem!=null)Toast.makeText(this,"Ошибка остановки: "+problem,Toast.LENGTH_LONG).show();refreshPaperAutoReport();});
+                });
+            }).show();
+    }
+
+    private void refreshPaperAutoReport(){
+        if(accessToken.isEmpty()||paperReportLoading||paperAutoReportText==null)return;
+        paperReportLoading=true;
+        io.execute(()->{
+            JSONObject report=null;String error=null;
+            try{report=SupabaseApi.getMultiMarketPaperReport(accessToken);}catch(Exception e){error=e.getMessage();}
+            final JSONObject data=report;final String problem=error;
+            runOnUiThread(()->{
+                paperReportLoading=false;if(isFinishing()||paperAutoReportText==null)return;
+                if(data==null){paperAutoReportText.setText("Не удалось получить отчёт: "+problem);return;}
+                if(!data.optBoolean("has_run",false)){
+                    activePaperRunId="";paperAutoReportText.setText("Автодемо ещё не запускалось. После запуска сервер начнёт собирать сделки и статистику.");paperStartButton.setEnabled(true);paperStopButton.setEnabled(false);return;
+                }
+                JSONObject run=data.optJSONObject("run");if(run==null)return;
+                activePaperRunId=run.optString("id","");
+                String status=run.optString("status","UNKNOWN");
+                paperStartButton.setEnabled(!"RUNNING".equals(status)&&!"STOPPING".equals(status));
+                paperStopButton.setEnabled("RUNNING".equals(status));
+                paperStopButton.setText("STOPPING".equals(status)?"ЗАКРЫВАЕМ ОТКРЫТЫЕ ПОЗИЦИИ…":"ОСТАНОВИТЬ АВТОТОРГОВЛЮ");
+                StringBuilder b=new StringBuilder("СОСТОЯНИЕ: ").append(status)
+                    .append("\nВиртуальный старт: ").append(run.optString("starting_balance_usdt","—")).append(" USDT")
+                    .append("\nРеализованный P/L: ").append(run.optString("realized_pnl_usdt","0")).append(" USDT")
+                    .append("\nСвободные средства: ").append(run.optString("cash_usdt","—")).append(" USDT")
+                    .append("\nПоследний серверный цикл: ").append(run.optString("last_cycle_at","ещё не выполнялся"));
+                if(!run.optString("last_error","").isEmpty())b.append("\nПримечание: ").append(run.optString("last_error"));
+                JSONArray positions=data.optJSONArray("positions");
+                b.append("\n\nОТКРЫТЫЕ ПОЗИЦИИ: ").append(positions==null?0:positions.length());
+                if(positions!=null)for(int i=0;i<positions.length();i++){
+                    JSONObject p=positions.optJSONObject(i);if(p==null)continue;
+                    b.append("\n").append(p.optString("market_category")).append(" • ").append(p.optString("symbol"))
+                     .append(" • ").append(p.optString("side")).append(" • вход ").append(p.optString("entry_price"))
+                     .append(" • сейчас ").append(p.optString("mark_price")).append(" • P/L ").append(p.optString("unrealized_pnl_usdt"));
+                }
+                JSONArray trades=data.optJSONArray("trades");
+                b.append("\n\nЗАКРЫТЫЕ СДЕЛКИ: ").append(trades==null?0:trades.length());
+                if(trades!=null)for(int i=0;i<trades.length();i++){
+                    JSONObject t=trades.optJSONObject(i);if(t==null)continue;
+                    b.append("\n").append(t.optString("market_category")).append(" • ").append(t.optString("symbol"))
+                     .append(" • ").append(t.optString("side")).append(" • P/L ").append(t.optString("net_pnl_usdt"))
+                     .append(" • ").append(t.optString("exit_reason"));
+                }
+                JSONArray events=data.optJSONArray("events");
+                if(events!=null&&events.length()>0){b.append("\n\nЖУРНАЛ");for(int i=0;i<events.length();i++){JSONObject e=events.optJSONObject(i);if(e!=null)b.append("\n").append(e.optString("created_at")).append(" ").append(e.optString("message"));}}
+                paperAutoReportText.setText(b.toString());
+            });
+        });
+    }
 
     private void confirmStartBybitDemoRun(){
         if(accessToken.isEmpty()){Toast.makeText(this,"Сначала войдите в аккаунт GOD OF TRADING.",Toast.LENGTH_LONG).show();return;}
@@ -599,7 +708,7 @@ public class BybitTerminalActivity extends Activity {
         if(open)last+="\n\nОТКРЫТАЯ ПОЗИЦИЯ: "+prefs.getString("trade_symbol",symbol)+" • вход "+String.format(Locale.US,"%.4f",prefs.getFloat("entry",0))+" • стоп 0,7% / цель 1,4%";
         historyText.setText(last);
     }
-    @Override protected void onResume(){super.onResume();handler.removeCallbacks(poll);handler.post(poll);refreshServerReport();}
+    @Override protected void onResume(){super.onResume();handler.removeCallbacks(poll);handler.post(poll);refreshServerReport();refreshPaperAutoReport();handler.removeCallbacks(paperStatusPoll);handler.postDelayed(paperStatusPoll,60000);}
     @Override protected void onPause(){super.onPause();handler.removeCallbacks(poll);}
     @Override protected void onDestroy(){handler.removeCallbacks(poll);io.shutdownNow();super.onDestroy();}
 
