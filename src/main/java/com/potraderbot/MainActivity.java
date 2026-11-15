@@ -186,7 +186,7 @@ public class MainActivity extends Activity {
         LinearLayout header=horizontal();
         TextView brand=label("GOD OF TRADING",19,GOLD,true);header.addView(brand,new LinearLayout.LayoutParams(0,dp(42),1));
         Button bybit=button("BYBIT",GOLD,NAVY);header.addView(bybit,new LinearLayout.LayoutParams(dp(82),dp(42)));
-        bybit.setOnClickListener(v->startActivity(new android.content.Intent(this,BybitTerminalActivity.class)));
+        bybit.setOnClickListener(v->{android.content.Intent intent=new android.content.Intent(this,BybitTerminalActivity.class);intent.putExtra("access_token",accessToken);startActivity(intent);});
         Button menu=button("⋮",PANEL,TEXT);header.addView(menu,new LinearLayout.LayoutParams(dp(48),dp(42)));
         content.addView(header);
         menu.setOnClickListener(v->showMenu());
