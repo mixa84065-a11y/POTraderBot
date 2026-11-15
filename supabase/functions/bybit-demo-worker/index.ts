@@ -632,6 +632,30 @@ async function processRun(run: ActiveRun) {
             "Вход Bybit Demo подтверждён и записан в журнал позиции.",
             { symbol, position_id: finalized.position_id, qty: result.filledQty, average_price: result.averageFillPrice },
           );
+          const newPositions = await rpc<OpenPosition[]>("bybit_demo_worker_open_positions", { p_run_id: run.run_id });
+          const newPosition = (newPositions ?? []).find((item) => item.position_id === finalized.position_id);
+          const entryMarket = markets.get(symbol);
+          if (newPosition && entryMarket) {
+            const immediateReason = positionExitReason(
+              entryMarket.last_price, newPosition.stop_price, newPosition.target_price,
+            );
+            if (immediateReason) {
+              const exit = await createAndSubmitExit(run, newPosition, entryMarket, signal.candle_time, immediateReason);
+              exitOrders++;
+              if (exit.status === "FILLED" || exit.status === "CANCELLED") await applyPendingExitFills(run.run_id);
+            } else {
+              const protection = await createAndSubmitProtection(run, newPosition, entryMarket, signal.candle_time);
+              if (protection.status === "REJECTED") {
+                await log(run.run_id, "ERROR", "NATIVE_STOP_REJECTED",
+                  "Биржа отклонила защитный стоп сразу после входа; позиция закрывается рыночной заявкой.",
+                  { symbol, position_id: newPosition.position_id },
+                );
+                const exit = await createAndSubmitExit(run, newPosition, entryMarket, signal.candle_time, "отклонён защитный стоп-ордер");
+                exitOrders++;
+                if (exit.status === "FILLED" || exit.status === "CANCELLED") await applyPendingExitFills(run.run_id);
+              }
+            }
+          }
         }
         if (!result.feeConversionComplete) {
           await log(run.run_id, "WARN", "ENTRY_FEE_CONVERSION_PENDING",
