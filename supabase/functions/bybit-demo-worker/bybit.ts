@@ -162,7 +162,33 @@ export function buildSpotMarketSell(symbol: string, baseQuantity: string, orderL
   };
 }
 
-export type DemoSpotOrderPayload = ReturnType<typeof buildSpotMarketBuy> | ReturnType<typeof buildSpotMarketSell>;
+export function buildSpotStopLossSell(
+  symbol: string, baseQuantity: string, triggerPrice: string, orderLinkId: string,
+) {
+  validateOrderIdentity(symbol, orderLinkId);
+  if (!/^\d+(?:\.\d+)?$/.test(baseQuantity) ||
+      !Number.isFinite(Number(baseQuantity)) || Number(baseQuantity) <= 0 ||
+      !/^\d+(?:\.\d+)?$/.test(triggerPrice) ||
+      !Number.isFinite(Number(triggerPrice)) || Number(triggerPrice) <= 0) {
+    throw new Error("Некорректные параметры условного стоп-ордера.");
+  }
+  return {
+    category: "spot",
+    symbol,
+    side: "Sell",
+    orderType: "Market",
+    qty: baseQuantity,
+    marketUnit: "baseCoin",
+    orderFilter: "StopOrder",
+    triggerPrice,
+    orderLinkId,
+  };
+}
+
+export type DemoSpotOrderPayload =
+  | ReturnType<typeof buildSpotMarketBuy>
+  | ReturnType<typeof buildSpotMarketSell>
+  | ReturnType<typeof buildSpotStopLossSell>;
 export type DemoSpotOrderStatus = "NEW" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED" | "REJECTED" | "UNKNOWN";
 
 export type DemoSpotOrder = {
@@ -218,6 +244,18 @@ export function normalizeDemoOrderStatus(status: string): DemoSpotOrderStatus {
     default:
       return "UNKNOWN";
   }
+}
+
+export async function cancelDemoSpotStopOrder(
+  apiKey: string, apiSecret: string, symbol: string, orderId: string,
+): Promise<void> {
+  if (!/^[A-Z0-9]{3,20}$/.test(symbol) || !orderId || orderId.length > 128) {
+    throw new Error("Некорректные параметры отмены стоп-ордера.");
+  }
+  await demoPrivateRequest<{ orderId?: string }>(
+    apiKey, apiSecret, "POST", "/v5/order/cancel",
+    { category: "spot", symbol, orderId, orderFilter: "StopOrder" },
+  );
 }
 
 export async function placeDemoSpotMarketOrder(
