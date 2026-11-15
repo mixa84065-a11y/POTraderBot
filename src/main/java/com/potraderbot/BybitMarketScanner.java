@@ -132,10 +132,10 @@ public final class BybitMarketScanner {
         return scanCandidates(candidates,maxInstruments);
     }
 
-    /** Returns the Bybit TradFi stock/ETF catalog even when the underlying market is closed. */
+    /** Returns the Bybit TradFi stock/ETF/forex/commodity catalog even when the market is closed. */
     public static List<Instrument> loadTradFiCatalog(String symbolType,int maxItems) throws Exception {
-        if(!"stock".equals(symbolType)&&!"ETF".equals(symbolType))
-            throw new IllegalArgumentException("Поддерживаются только акции и ETF Bybit TradFi");
+        if(!java.util.Arrays.asList("stock","ETF","forex","commodity").contains(symbolType))
+            throw new IllegalArgumentException("Неподдерживаемый тип Bybit TradFi");
         List<Instrument> catalog=new ArrayList<>();
         String cursor="";
         for(int page=0;page<10;page++){
