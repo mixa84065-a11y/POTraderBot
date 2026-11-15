@@ -104,7 +104,7 @@ public class BybitTerminalActivity extends Activity {
         root.addView(select);
         LinearLayout multiScan=horizontal();
         scanCategoryPicker=new Spinner(this);
-        String[] scanCategories={"Spot","USDT Futures","Inverse Futures"};
+        String[] scanCategories={"Spot","USDT Futures","Inverse Futures","Акции TradFi","ETF TradFi"};
         ArrayAdapter<String> scanAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,scanCategories);
         scanAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         scanCategoryPicker.setAdapter(scanAdapter);
@@ -237,23 +237,28 @@ public class BybitTerminalActivity extends Activity {
 
     private void runMultiScan(){
         if(multiScanButton==null)return;
-        final String category=new String[]{"spot","linear","inverse"}[scanCategoryPicker.getSelectedItemPosition()];
+        final int selected=scanCategoryPicker.getSelectedItemPosition();
+        final String category=selected==3?"stock":selected==4?"ETF":new String[]{"spot","linear","inverse"}[selected];
         multiScanButton.setEnabled(false);
         multiScanText.setText("Сканируем до 30 наиболее ликвидных инструментов Bybit ("+category+") параллельно. Только публичные данные, ордера не отправляются…");
         io.execute(()->{
             java.util.List<BybitMarketScanner.Signal> signals=null;String error=null;
-            try{signals=BybitMarketScanner.scan(category,30);}catch(Exception e){error=e.getMessage();}
+            try{signals=("stock".equals(category)||"ETF".equals(category))
+                    ?BybitMarketScanner.scanTradFi(category,30):BybitMarketScanner.scan(category,30);}
+            catch(Exception e){error=e.getMessage();}
             final java.util.List<BybitMarketScanner.Signal> found=signals;final String problem=error;
             runOnUiThread(()->{
                 if(isFinishing())return;
                 multiScanButton.setEnabled(true);
                 if(found==null){multiScanText.setText("Ошибка сканирования: "+problem);return;}
                 if(found.isEmpty()){multiScanText.setText("Нет свежих сигналов. Новые входы не рекомендуются.");return;}
-                StringBuilder out=new StringBuilder("РЕЙТИНГ ИНСТРУМЕНТОВ BYBIT • "+category.toUpperCase(java.util.Locale.US)+"\n");
+                String categoryLabel=("stock".equals(category)?"АКЦИИ TRADFI":("ETF".equals(category)?"ETF TRADFI":category.toUpperCase(java.util.Locale.US)));
+                StringBuilder out=new StringBuilder("РЕЙТИНГ ИНСТРУМЕНТОВ BYBIT • "+categoryLabel+"\n");
                 int shown=Math.min(15,found.size());
                 for(int i=0;i<shown;i++){
                     BybitMarketScanner.Signal x=found.get(i);
-                    out.append(i+1).append(". ").append(x.instrument.symbol).append(" • ").append(x.direction)
+                    out.append(i+1).append(". ").append(x.instrument.displayName).append(" (").append(x.instrument.symbol).append(")")
+                       .append(x.instrument.marketRegion.isEmpty()?"":" • "+x.instrument.marketRegion).append(" • ").append(x.direction)
                        .append(" • score ").append(x.score).append(" • ").append(String.format(java.util.Locale.US,"%.8f",x.lastPrice)).append("\n");
                 }
                 out.append("\nПроверено сигналов: ").append(found.size())
