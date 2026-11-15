@@ -37,8 +37,8 @@ public class MarketStrategyEngineTest {
 
     @Test public void optionsNeedAdequateExpiryAndDelta() {
         MarketStrategyEngine.OptionResult r=MarketStrategyEngine.analyzeOption(
-                10,10.2,10.1,0.5,0.01,0.2,-0.1,0.6,100000,24,5);
-        assertEquals("НЕТ СИГНАЛА",r.stance);
+                10,10.2,10.1,0.1,0.01,0.2,-0.1,0.6,100000,24,5);
+        assertEquals("НЕТ СДЕЛКИ",r.stance);
     }
 
     @Test public void optionCandidateUsesGreeksAndUnderlyingTrend() {
