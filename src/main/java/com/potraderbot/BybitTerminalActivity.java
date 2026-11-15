@@ -278,7 +278,7 @@ public class BybitTerminalActivity extends Activity {
                     float x=(i+0.5f)*slot;
                     float yHigh=(float)(bottom-(high-min)/range*plotH),yLow=(float)(bottom-(low-min)/range*plotH);
                     float yOpen=(float)(bottom-(open-min)/range*plotH),yClose=(float)(bottom-(close-min)/range*plotH);
-                    p.setColor(close>=open?GREEN:RED);p.setStrokeWidth(Math.max(1,dp(1.2f)));
+                    p.setColor(close>=open?GREEN:RED);p.setStrokeWidth(Math.max(1f,1.2f*getResources().getDisplayMetrics().density));
                     c.drawLine(x,yHigh,x,yLow,p);
                     float bodyTop=Math.min(yOpen,yClose),bodyBottom=Math.max(yOpen,yClose);
                     if(bodyBottom-bodyTop<dp(2))bodyBottom=bodyTop+dp(2);
