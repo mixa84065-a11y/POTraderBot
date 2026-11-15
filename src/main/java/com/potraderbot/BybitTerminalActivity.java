@@ -241,6 +241,7 @@ public class BybitTerminalActivity extends Activity {
         final String category=new String[]{"spot","linear","inverse","option","stock","ETF","forex","commodity","cfd"}[selected];
         multiScanButton.setEnabled(false);
         if("cfd".equals(category)){
+            multiScanButton.setEnabled(true);
             multiScanText.setText("CFD НА BYBIT: отдельный MT5 CFD-счёт и отдельный API/интеграционный контур. V5 API для спота/деривативов не предоставляет CFD-каталог. Этот раздел зарезервирован; сначала нужно проверить доступный официальный способ подключения MT5 CFD для вашего аккаунта и региона. Торговля не запускается.");
             return;
         }
