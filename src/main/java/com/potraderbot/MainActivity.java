@@ -319,9 +319,17 @@ public class MainActivity extends Activity {
         TextView title=label("♛  GOD OF TRADING 2.0",17,GOLD,true);
         LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(0,dp(42),1);tp.leftMargin=dp(10);top.addView(title,tp);root.addView(top);
         back.setOnClickListener(v->showMain());
-        TextView heading=label(section,20,TEXT,true);heading.setPadding(dp(2),dp(20),0,dp(12));root.addView(heading);
+        TextView heading=label("СТАТИСТИКА".equals(section)?"СТАТИСТИКА ТОРГОВЛИ  ▾":section,20,TEXT,true);
+        heading.setPadding(dp(2),dp(20),0,dp(12));root.addView(heading);
         TextView info=label("ДЕМО-РЕЖИМ  •  BYBIT / GOD OF TRADING",10,GOLD,true);root.addView(info);
         TextView body=label("Загружаем подтверждённые данные…",13,TEXT,false);stylePanel(body,14);
+        if("СТАТИСТИКА".equals(section)){
+            heading.setOnClickListener(v->{
+                boolean expanded=body.getVisibility()==View.VISIBLE;
+                body.setVisibility(expanded?View.GONE:View.VISIBLE);
+                heading.setText(expanded?"СТАТИСТИКА ТОРГОВЛИ  ▸":"СТАТИСТИКА ТОРГОВЛИ  ▾");
+            });
+        }
         LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);bp.topMargin=dp(12);root.addView(body,bp);
         Button refresh=button("ОБНОВИТЬ",GOLD,NAVY);
         LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(48));rp.topMargin=dp(12);root.addView(refresh,rp);
