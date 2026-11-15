@@ -3,6 +3,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const BYBIT_DEMO_BASE = "https://api-demo.bybit.com";
+const BYBIT_PUBLIC_BASE = "https://api.bybit.com";
 const RECV_WINDOW = "5000";
 const ALLOWED_SYMBOLS = new Set(["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT"]);
 
@@ -71,15 +72,22 @@ async function signedGet(apiKey: string, apiSecret: string, path: string, params
 }
 
 async function publicKlines(symbol: string) {
-  const url = new URL(`${BYBIT_DEMO_BASE}/v5/market/kline`);
+  const url = new URL(`${BYBIT_PUBLIC_BASE}/v5/market/kline`);
   url.search = new URLSearchParams({ category: "spot", symbol, interval: "1", limit: "80" }).toString();
   const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
   const data = await response.json();
   if (!response.ok || data.retCode !== 0) throw new Error(`Market data ${symbol}: ${data.retMsg ?? response.status}`);
-  return (data.result?.list ?? []).map((row: string[]) => ({
+  const parsed = (data.result?.list ?? []).map((row: string[]) => ({
     time: Number(row[0]), open: Number(row[1]), high: Number(row[2]),
     low: Number(row[3]), close: Number(row[4]), volume: Number(row[5]),
   })).reverse();
+  // Exclude the still-forming 1-minute candle to avoid intrabar signal flicker.
+  const closed = parsed.filter((candle) =>
+    Number.isFinite(candle.time) && Number.isFinite(candle.close) &&
+    candle.close > 0 && candle.time + 60_000 <= Date.now()
+  );
+  if (closed.length < 30) throw new Error(`Недостаточно закрытых свечей для ${symbol}.`);
+  return closed;
 }
 
 function ema(values: number[], period: number): number {
@@ -105,7 +113,11 @@ function rsi(values: number[], period = 14): number {
 function analyze(candles: { close: number; time: number }[]) {
   const closes = candles.map((c) => c.close);
   const fast = ema(closes, 9), slow = ema(closes, 21), strength = rsi(closes);
-  const momentum = closes.length >= 6 ? (closes.at(-1)! / closes.at(-6)! - 1) * 100 : 0;
+  const momentum = closes.length >= 6 && closes.at(-6)! > 0
+    ? (closes.at(-1)! / closes.at(-6)! - 1) * 100 : 0;
+  if (![fast, slow, strength, momentum].every(Number.isFinite)) {
+    throw new Error("Индикаторы не рассчитаны: недостаточно корректных данных.");
+  }
   const score = (fast > slow ? 1 : -1) + (strength >= 52 ? 1 : strength <= 48 ? -1 : 0) + (momentum > 0.04 ? 1 : momentum < -0.04 ? -1 : 0);
   return {
     direction: score >= 2 ? "UP" : score <= -2 ? "DOWN" : "NEUTRAL",
