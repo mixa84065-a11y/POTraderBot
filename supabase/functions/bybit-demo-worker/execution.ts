@@ -48,7 +48,8 @@ export async function submitOrReconcileDemoOrder(input: {
 }) {
   const { apiKey, apiSecret, order, payload, rpc } = input;
   if (payload.orderLinkId !== order.order_link_id ||
-      payload.symbol !== order.symbol || payload.side !== order.side) {
+      payload.symbol !== order.symbol || payload.side !== order.side ||
+      payload.marketUnit !== order.qty_unit) {
     throw new Error("Заявка не совпадает с сохранённым серверным намерением.");
   }
 
