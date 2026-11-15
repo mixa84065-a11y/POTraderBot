@@ -19,6 +19,7 @@ public class ChartView extends View {
     private String decision = "НЕТ СИГНАЛА";
     private int decisionStrength = 0;
     private String message = "Ожидание проверенного потока котировок";
+    private String symbol = "EUR/USD";
 
     public ChartView(Context context) {
         super(context);
@@ -26,6 +27,11 @@ public class ChartView extends View {
     }
 
     public void setExpanded(boolean value) { expanded = value; invalidate(); }
+
+    public void setSymbol(String value) {
+        if (value != null && !value.trim().isEmpty()) symbol = value.trim();
+        invalidate();
+    }
 
     public void setDecision(String direction, int strength) {
         decision = direction == null ? "НЕТ СИГНАЛА" : direction;
@@ -92,7 +98,7 @@ public class ChartView extends View {
         for(int i=1;i<6;i++) c.drawLine(0,h*i/6f,w,h*i/6f,p);
         for(int i=1;i<8;i++) c.drawLine(w*i/8f,0,w*i/8f,h,p);
         p.setColor(0xFFE0B75B); p.setTextSize(14f); p.setFakeBoldText(true);
-        c.drawText(expanded ? "ГРАФИК И АНАЛИЗ • M1" : "EUR/USD • M1",16,24,p);
+        c.drawText(expanded ? "ГРАФИК И АНАЛИЗ • " + symbol + " • M1" : symbol + " • M1",16,24,p);
         p.setFakeBoldText(false);
         if(candles.isEmpty()) {
             p.setColor(0xFF9AAFC9); p.setTextSize(12f);
