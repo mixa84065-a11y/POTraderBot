@@ -36,7 +36,7 @@ public class BybitTerminalActivity extends Activity {
     private static final int GOLD=Color.rgb(245,190,65), WHITE=Color.rgb(230,238,247);
     private static final int MUTED=Color.rgb(139,157,180), GREEN=Color.rgb(38,176,129), RED=Color.rgb(220,83,91);
     private static final String API="https://api.bybit.com";
-    private static final double START_BALANCE=20000.0, STAKE=100.0, STOP_PCT=0.007, TAKE_PCT=0.014;
+    private static final double START_BALANCE=20000.0, STAKE=100.0, STOP_PCT=0.007, TAKE_PCT=0.014, MAX_DAILY_LOSS=200.0;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
@@ -56,6 +56,7 @@ public class BybitTerminalActivity extends Activity {
         prefs=getSharedPreferences("bybit_paper_ledger",MODE_PRIVATE);
         if(!prefs.contains("cash"))prefs.edit().putFloat("cash",(float)START_BALANCE).apply();
         autoEnabled=prefs.getBoolean("auto",false);
+        if(prefs.getBoolean("open",false))symbol=prefs.getString("trade_symbol","BTCUSDT");
         buildScreen();
         handler.post(poll);
     }
@@ -88,7 +89,7 @@ public class BybitTerminalActivity extends Activity {
         root.addView(select);
         symbolPicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
             @Override public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){
-                String next=symbols[pos];if(!next.equals(symbol)){symbol=next;loadMarket();}
+                String next=symbols[pos];\n                if(prefs.getBoolean("open",false) && !next.equals(prefs.getString("trade_symbol","BTCUSDT"))){\n                    Toast.makeText(BybitTerminalActivity.this,"Сначала закройте открытую демо-позицию.",Toast.LENGTH_SHORT).show();\n                    symbolPicker.setSelection(java.util.Arrays.asList(symbols).indexOf(prefs.getString("trade_symbol","BTCUSDT")));return;\n                }\n                if(!next.equals(symbol)){symbol=next;loadMarket();}
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> p){}
         });
@@ -196,13 +197,13 @@ public class BybitTerminalActivity extends Activity {
             if(stop||take||reverse){
                 double cash=prefs.getFloat("cash",(float)START_BALANCE);
                 prefs.edit().putFloat("cash",(float)(cash+stake+pnl)).putBoolean("open",false)
-                    .putString("last",String.format(Locale.US,"%s • %s • вход %.4f • выход %.4f • P/L %+.2f USDT",symbol,stop?"STOP":take?"TAKE PROFIT":"СИГНАЛ ЗАКРЫТ",entry,lastPrice,pnl)).apply();
+                    .putString("last",String.format(Locale.US,"%s • %s • вход %.4f • выход %.4f • P/L %+.2f USDT",symbol,stop?"STOP":take?"TAKE PROFIT":"СИГНАЛ ЗАКРЫТ",entry,lastPrice,pnl)).apply();\n                if(stopAuto)autoEnabled=false;
             }
         }else if(autoEnabled&&s>=3&&lastPrice>0){
             double cash=prefs.getFloat("cash",(float)START_BALANCE);
             if(cash>=STAKE){
                 prefs.edit().putFloat("cash",(float)(cash-STAKE)).putFloat("entry",(float)lastPrice)
-                    .putFloat("stake",(float)STAKE).putBoolean("open",true)
+                    .putFloat("stake",(float)STAKE).putString("trade_symbol",symbol).putBoolean("open",true)
                     .putString("last",String.format(Locale.US,"%s • BUY %.4f • объём 100 USDT • SL %.4f • TP %.4f",symbol,lastPrice,lastPrice*(1-STOP_PCT),lastPrice*(1+TAKE_PCT))).apply();
             }
         }
