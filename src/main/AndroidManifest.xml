@@ -2,6 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <application android:allowBackup="false" android:label="GOD OF TRADING 2.0"
         android:theme="@android:style/Theme.Material.NoActionBar" android:usesCleartextTraffic="false">
+        <activity android:name=".BybitTerminalActivity" android:screenOrientation="fullSensor" android:exported="false" />
         <activity android:name=".MainActivity" android:screenOrientation="fullSensor" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
