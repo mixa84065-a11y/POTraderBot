@@ -104,7 +104,7 @@ public class BybitTerminalActivity extends Activity {
     private LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(1);return l;}
     private LinearLayout horizontal(){LinearLayout l=new LinearLayout(this);l.setOrientation(0);l.setGravity(Gravity.CENTER_VERTICAL);return l;}
     private void buildScreen(){
-        LinearLayout root=vertical();root.setPadding(dp(16),dp(38),dp(16),dp(30));root.setBackgroundColor(BG);
+        LinearLayout root=vertical();root.setPadding(dp(16),dp(12),dp(16),dp(30));root.setBackgroundColor(BG);
         LinearLayout top=horizontal();
         TextView title=text("♛  GOD OF TRADING 2.0",17,GOLD,true);
         top.addView(title,new LinearLayout.LayoutParams(0,dp(44),1));
@@ -150,7 +150,7 @@ public class BybitTerminalActivity extends Activity {
         quote.addView(qleft,new LinearLayout.LayoutParams(0,-2,1));
         liveText=text("● ОЖИДАНИЕ",11,MUTED,true);quote.addView(liveText); 
         LinearLayout.LayoutParams qp=new LinearLayout.LayoutParams(-1,-2);qp.topMargin=dp(8);root.addView(quote,qp);
-        priceChart=new PriceChart();LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(220));cp.topMargin=dp(8);root.addView(priceChart,cp);
+        priceChart=new PriceChart();LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(230));cp.topMargin=dp(8);root.addView(priceChart,cp);
         TextView tf=text("ГРАФИК • 1 МИНУТА • ПОСЛЕДНИЕ 100 СВЕЧЕЙ",10,MUTED,true);tf.setPadding(dp(3),dp(5),0,dp(5));root.addView(tf);
         LinearLayout wallet=horizontal();wallet.setPadding(dp(14),dp(14),dp(14),dp(14));wallet.setBackground(surface(PANEL,16,0xFF51401D));wallet.setElevation(dp(2));
         LinearLayout cashCol=vertical();cashCol.addView(text("ДЕМО-БАЛАНС",10,MUTED,true));
