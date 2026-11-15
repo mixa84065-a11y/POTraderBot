@@ -175,9 +175,23 @@ public final class SupabaseApi {
         JSONArray positions = (JSONArray) request("GET",
             "/rest/v1/paper_positions?select=market_category,symbol,side,qty,entry_price,mark_price,unrealized_pnl_usdt,signal_score,opened_at&run_id=eq."
                 + java.net.URLEncoder.encode(id, "UTF-8") + "&status=eq.OPEN&order=opened_at.desc&limit=30", null, token);
-        JSONArray trades = (JSONArray) request("GET",
-            "/rest/v1/paper_trades?select=market_category,symbol,side,entry_price,exit_price,net_pnl_usdt,exit_reason,closed_at&run_id=eq."
-                + java.net.URLEncoder.encode(id, "UTF-8") + "&order=closed_at.desc&limit=20", null, token);
+        JSONArray allTrades = (JSONArray) request("GET",
+            "/rest/v1/paper_trades?select=market_category,symbol,side,entry_price,exit_price,gross_pnl_usdt,fees_usdt,net_pnl_usdt,exit_reason,closed_at&run_id=eq."
+                + java.net.URLEncoder.encode(id, "UTF-8") + "&order=closed_at.desc&limit=1000", null, token);
+        int wins=0, losses=0;
+        double netPnl=0, fees=0;
+        JSONArray trades = new JSONArray();
+        for(int i=0;i<allTrades.length();i++){
+            JSONObject trade=allTrades.optJSONObject(i); if(trade==null)continue;
+            double net=trade.optDouble("net_pnl_usdt",0);
+            netPnl+=net; fees+=trade.optDouble("fees_usdt",0);
+            if(net>0)wins++; else if(net<0)losses++;
+            if(i<20)trades.put(trade);
+        }
+        JSONObject summary=new JSONObject();
+        summary.put("trades_total",allTrades.length()); summary.put("wins",wins); summary.put("losses",losses);
+        summary.put("win_rate_pct",allTrades.length()==0?0:Math.round(wins*10000.0/allTrades.length())/100.0);
+        summary.put("net_pnl_usdt",netPnl); summary.put("fees_usdt",fees);
         JSONArray events = (JSONArray) request("GET",
             "/rest/v1/paper_events?select=event_type,message,created_at&run_id=eq."
                 + java.net.URLEncoder.encode(id, "UTF-8") + "&order=created_at.desc&limit=8", null, token);
