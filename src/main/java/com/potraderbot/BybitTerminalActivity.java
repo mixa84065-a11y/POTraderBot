@@ -48,7 +48,9 @@ public class BybitTerminalActivity extends Activity {
     private String accessToken="";
     private TextView serverReportText, connectionStatusText;
     private Button serverRefreshButton, connectionCheckButton;
-    private Spinner symbolPicker;
+    private Spinner symbolPicker, scanCategoryPicker;
+    private TextView multiScanText;
+    private Button multiScanButton;
     private TextView priceText, changeText, balanceText, modeText, signalText, riskText, historyText, statusText, liveText;
     private Button autoButton;
     private PriceChart priceChart;
@@ -100,6 +102,19 @@ public class BybitTerminalActivity extends Activity {
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);symbolPicker.setAdapter(adapter);
         select.addView(symbolPicker,new LinearLayout.LayoutParams(0,dp(44),1));
         root.addView(select);
+        LinearLayout multiScan=horizontal();
+        scanCategoryPicker=new Spinner(this);
+        String[] scanCategories={"Spot","USDT Futures","Inverse Futures"};
+        ArrayAdapter<String> scanAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,scanCategories);
+        scanAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        scanCategoryPicker.setAdapter(scanAdapter);
+        multiScan.addView(scanCategoryPicker,new LinearLayout.LayoutParams(0,dp(46),1));
+        multiScanButton=button("СКАНИРОВАТЬ РЫНОК",GOLD,BG);
+        multiScan.addView(multiScanButton,new LinearLayout.LayoutParams(0,dp(46),1));
+        LinearLayout.LayoutParams msp=new LinearLayout.LayoutParams(-1,-2);msp.topMargin=dp(6);root.addView(multiScan,msp);
+        multiScanText=text("Мультианализ: нажмите «Сканировать рынок». Будут проверены наиболее ликвидные инструменты Bybit.",11,MUTED,false);
+        multiScanText.setPadding(dp(10),dp(8),dp(10),dp(8));multiScanText.setBackgroundColor(PANEL);root.addView(multiScanText);
+        multiScanButton.setOnClickListener(v->runMultiScan());
         symbolPicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
             @Override public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){
                 String next=symbols[pos];
@@ -170,6 +185,35 @@ public class BybitTerminalActivity extends Activity {
         LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,-2);sp.topMargin=dp(8);root.addView(serverReportText,sp);
         TextView state=text("Серверный исполнитель Bybit Demo развернут. 48-часовой запуск пока не активирован: сначала нужно сохранить Demo API-ключи и проверить авторизацию, баланс и безопасную обработку заявок. Реальные ордера не используются.",10,MUTED,false);
         state.setPadding(dp(4),dp(8),dp(4),0);root.addView(state);
+    }
+
+
+    private void runMultiScan(){
+        if(multiScanButton==null)return;
+        final String category=new String[]{"spot","linear","inverse"}[scanCategoryPicker.getSelectedItemPosition()];
+        multiScanButton.setEnabled(false);
+        multiScanText.setText("Сканируем до 30 наиболее ликвидных инструментов Bybit ("+category+") параллельно. Только публичные данные, ордера не отправляются…");
+        io.execute(()->{
+            java.util.List<BybitMarketScanner.Signal> signals=null;String error=null;
+            try{signals=BybitMarketScanner.scan(category,30);}catch(Exception e){error=e.getMessage();}
+            final java.util.List<BybitMarketScanner.Signal> found=signals;final String problem=error;
+            runOnUiThread(()->{
+                if(isFinishing())return;
+                multiScanButton.setEnabled(true);
+                if(found==null){multiScanText.setText("Ошибка сканирования: "+problem);return;}
+                if(found.isEmpty()){multiScanText.setText("Нет свежих сигналов. Новые входы не рекомендуются.");return;}
+                StringBuilder out=new StringBuilder("РЕЙТИНГ ИНСТРУМЕНТОВ BYBIT • "+category.toUpperCase(java.util.Locale.US)+"\n");
+                int shown=Math.min(15,found.size());
+                for(int i=0;i<shown;i++){
+                    BybitMarketScanner.Signal x=found.get(i);
+                    out.append(i+1).append(". ").append(x.instrument.symbol).append(" • ").append(x.direction)
+                       .append(" • score ").append(x.score).append(" • ").append(String.format(java.util.Locale.US,"%.8f",x.lastPrice)).append("\n");
+                }
+                out.append("\nПроверено сигналов: ").append(found.size())
+                   .append(". Score — эвристика, не вероятность дохода. Это мультианализ, не открытие позиций.");
+                multiScanText.setText(out.toString());
+            });
+        });
     }
 
     private void showBybitCredentialsDialog(){
