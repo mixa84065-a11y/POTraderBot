@@ -312,8 +312,9 @@ async function walletState(apiKey: string, apiSecret: string) {
   if (!usdt) throw new Error("Bybit Demo API не вернул USDT в составе кошелька.");
   const walletBalance = Number(usdt.walletBalance ?? 0);
   const locked = Number(usdt.locked ?? 0);
-  const available = Number.isFinite(Number(usdt.availableToWithdraw))
-    ? Number(usdt.availableToWithdraw)
+  const availableRaw = usdt.availableToWithdraw;
+  const available = typeof availableRaw === "string" && availableRaw.trim() !== "" && Number.isFinite(Number(availableRaw))
+    ? Number(availableRaw)
     : walletBalance - locked;
   if (![walletBalance, locked, available].every(Number.isFinite) || available < 0) {
     throw new Error("Не удалось безопасно определить доступный баланс USDT.");
