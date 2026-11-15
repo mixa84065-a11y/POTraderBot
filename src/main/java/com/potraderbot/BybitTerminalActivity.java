@@ -46,8 +46,8 @@ public class BybitTerminalActivity extends Activity {
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
     private String accessToken="";
-    private TextView serverReportText;
-    private Button serverRefreshButton;
+    private TextView serverReportText, connectionStatusText;
+    private Button serverRefreshButton, connectionCheckButton;
     private Spinner symbolPicker;
     private TextView priceText, changeText, balanceText, modeText, signalText, riskText, historyText, statusText, liveText;
     private Button autoButton;
@@ -156,7 +156,7 @@ public class BybitTerminalActivity extends Activity {
         Button connect=button("ПОДКЛЮЧИТЬ BYBIT DEMO API",PANEL,WHITE);
         root.addView(connect,new LinearLayout.LayoutParams(-1,dp(46)));
         connect.setOnClickListener(v->showBybitCredentialsDialog());
-        serverRefreshButton=button("ОБНОВИТЬ ПОЛНЫЙ ОТЧЁТ",GOLD,BG);
+        connectionCheckButton=button("ПРОВЕРИТЬ ПОДКЛЮЧЕНИЕ",PANEL,WHITE);\n        LinearLayout.LayoutParams checkParams=new LinearLayout.LayoutParams(-1,dp(46));checkParams.topMargin=dp(6);root.addView(connectionCheckButton,checkParams);\n        connectionCheckButton.setOnClickListener(v->checkBybitConnection());\n        connectionStatusText=text("Авторизация Bybit ещё не проверена.",11,MUTED,false);\n        connectionStatusText.setPadding(dp(10),dp(8),dp(10),dp(4));root.addView(connectionStatusText);\n        serverRefreshButton=button("ОБНОВИТЬ ПОЛНЫЙ ОТЧЁТ",GOLD,BG);
         LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(46));rp.topMargin=dp(6);root.addView(serverRefreshButton,rp);
         serverRefreshButton.setOnClickListener(v->refreshServerReport());
         serverReportText=text("Проверяем серверный отчёт…",11,WHITE,false);
@@ -187,11 +187,38 @@ public class BybitTerminalActivity extends Activity {
             io.execute(()->{
                 try{
                     SupabaseApi.saveBybitDemoCredentials(accessToken,key,secret);
-                    runOnUiThread(()->{keyInput.setText("");secretInput.setText("");status.setText("Ключи сохранены в защищённом хранилище. Подключение к Bybit ещё не проверено: серверный тест будет выполнен при запуске исполнителя.");save.setEnabled(true);Toast.makeText(this,"Ключи сохранены. Доступ к Bybit ещё не проверен.",Toast.LENGTH_LONG).show();refreshServerReport();});
+                    runOnUiThread(()->{keyInput.setText("");secretInput.setText("");status.setText("Ключи сохранены. Сейчас проверяем авторизацию Bybit Demo без отправки ордеров…");save.setEnabled(true);Toast.makeText(this,"Ключи сохранены. Проверяем подключение…",Toast.LENGTH_LONG).show();refreshServerReport();checkBybitConnection();});
                 }catch(Exception e){runOnUiThread(()->{status.setText("Не удалось сохранить ключи: "+e.getMessage());save.setEnabled(true);});}
             });
         }));
         dialog.show();
+    }
+
+    private void checkBybitConnection(){
+        if(accessToken.isEmpty()){if(connectionStatusText!=null)connectionStatusText.setText("Нет активной сессии. Войдите в GOD OF TRADING.");return;}
+        if(connectionCheckButton!=null)connectionCheckButton.setEnabled(false);
+        if(connectionStatusText!=null)connectionStatusText.setText("Проверяем подпись API и доступ к Demo Unified Wallet. Ордеры не отправляются…");
+        io.execute(()->{
+            JSONObject result=null;String error=null;
+            try{result=SupabaseApi.checkBybitDemoConnection(accessToken);}catch(Exception e){error=e.getMessage();}
+            final JSONObject checked=result;final String problem=error;
+            runOnUiThread(()->{
+                if(isFinishing())return;
+                if(connectionCheckButton!=null)connectionCheckButton.setEnabled(true);
+                if(checked!=null&&checked.optBoolean("connected",false)){
+                    connectionStatusText.setText("ПОДКЛЮЧЕНО • BYBIT DEMO\nБаланс: "+checked.optString("wallet_balance_usdt","—")+" USDT"
+                        +"\nДоступно: "+checked.optString("available_usdt","—")+" USDT"
+                        +"\nКапитал: "+checked.optString("equity_usdt","—")+" USDT"
+                        +"\nПроверено: "+checked.optString("checked_at","—")
+                        +"\nОрдеры не отправлялись. 48-часовой тест не запущен.");
+                    connectionStatusText.setTextColor(GREEN);
+                }else{
+                    String reason=checked==null?problem:checked.optString("error","Не удалось проверить подключение.");
+                    connectionStatusText.setText("BYBIT DEMO НЕ ПОДКЛЮЧЕН\n"+(reason==null?"Неизвестная ошибка":reason)+"\nОрдеры не отправлялись.");
+                    connectionStatusText.setTextColor(RED);
+                }
+            });
+        });
     }
 
     private void refreshServerReport(){
