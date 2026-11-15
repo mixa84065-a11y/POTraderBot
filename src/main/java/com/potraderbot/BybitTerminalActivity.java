@@ -162,8 +162,10 @@ public class BybitTerminalActivity extends Activity {
         historyText=text("Сделок пока нет.",12,WHITE,false);historyText.setPadding(dp(12),dp(12),dp(12),dp(12));historyText.setBackgroundColor(PANEL);root.addView(historyText);
         TextView foot=text("Автостратегия — экспериментальная эвристика, не гарантия доходности. Это локальный симулятор, не Bybit Demo API.",10,MUTED,false);
         foot.setPadding(dp(4),dp(12),dp(4),0);root.addView(foot);
-        buildServerReport(root);
+        // Keep the autonomous multi-market demo immediately after the local terminal,
+        // before the longer 48-hour Bybit Demo section, so it is easy to find.
         buildMultiMarketPaperSection(root);
+        buildServerReport(root);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(BG);scroll.addView(root);setContentView(scroll);
         renderLedger();
     }
