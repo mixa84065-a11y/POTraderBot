@@ -625,14 +625,20 @@ public class MainActivity extends Activity {
     }
 
     private void showMenu(){
-        String[] items={"Открыть BYBIT","API-ключ Twelve Data","Обновить данные","Telegram-бот","Выйти из аккаунта"};
-        new AlertDialog.Builder(this).setTitle("Настройки").setItems(items,(d,which)->{
-            if(which==0)openBybitTerminal();
-            else if(which==1)showTwelveDataSettings();
-            else if(which==2)refreshData();
-            else if(which==3)new AlertDialog.Builder(this).setMessage("Ссылка на Telegram-бот ещё не настроена.").setPositiveButton("ОК",null).show();
+        String[] items={"Аналитика","Статистика","История сделок","Профиль","Открыть BYBIT",
+            "API-ключ Twelve Data","Обновить данные","Telegram-бот","Выйти из аккаунта"};
+        new AlertDialog.Builder(this).setTitle("РАЗДЕЛЫ И НАСТРОЙКИ").setItems(items,(d,which)->{
+            if(which==0)showSection("АНАЛИТИКА");
+            else if(which==1)showSection("СТАТИСТИКА");
+            else if(which==2)showSection("ИСТОРИЯ СДЕЛОК");
+            else if(which==3)showSection("ПРОФИЛЬ");
+            else if(which==4)openBybitTerminal();
+            else if(which==5)showTwelveDataSettings();
+            else if(which==6)refreshData();
+            else if(which==7)new AlertDialog.Builder(this).setMessage("Ссылка на Telegram-бот ещё не настроена.").setPositiveButton("ОК",null).show();
             else logout();
-        }).show();    }
+        }).show();
+    }
 
 
     private void showTwelveDataSettings(){
