@@ -24,6 +24,8 @@ import java.net.URL;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.Locale;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -55,6 +57,8 @@ public class BybitTerminalActivity extends Activity {
         getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
         prefs=getSharedPreferences("bybit_paper_ledger",MODE_PRIVATE);
         if(!prefs.contains("cash"))prefs.edit().putFloat("cash",(float)START_BALANCE).apply();
+        String today=new SimpleDateFormat("yyyyMMdd",Locale.US).format(new Date());
+        if(!today.equals(prefs.getString("loss_day",""))){prefs.edit().putString("loss_day",today).putFloat("loss_today",0).apply();}
         autoEnabled=prefs.getBoolean("auto",false);
         if(prefs.getBoolean("open",false))symbol=prefs.getString("trade_symbol","BTCUSDT");
         buildScreen();
