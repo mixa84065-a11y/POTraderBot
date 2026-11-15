@@ -49,7 +49,7 @@ public class BybitTerminalActivity extends Activity {
     private TextView serverReportText;
     private Button serverRefreshButton;
     private Spinner symbolPicker;
-    private TextView priceText, changeText, balanceText, modeText, signalText, riskText, historyText, statusText;
+    private TextView priceText, changeText, balanceText, modeText, signalText, riskText, historyText, statusText, liveText;
     private Button autoButton;
     private PriceChart priceChart;
     private String symbol="BTCUSDT";
@@ -116,7 +116,7 @@ public class BybitTerminalActivity extends Activity {
         priceText=text("Загрузка цены…",25,WHITE,true);qleft.addView(priceText);
         changeText=text("24ч: —",11,MUTED,false);qleft.addView(changeText);
         quote.addView(qleft,new LinearLayout.LayoutParams(0,-2,1));
-        TextView live=text("● LIVE",11,GREEN,true);quote.addView(live); 
+        liveText=text("● ОЖИДАНИЕ",11,MUTED,true);quote.addView(liveText); 
         LinearLayout.LayoutParams qp=new LinearLayout.LayoutParams(-1,-2);qp.topMargin=dp(8);root.addView(quote,qp);
         priceChart=new PriceChart();LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(220));cp.topMargin=dp(8);root.addView(priceChart,cp);
         TextView tf=text("ГРАФИК • 1 МИНУТА • ПОСЛЕДНИЕ 100 СВЕЧЕЙ",10,MUTED,true);tf.setPadding(dp(3),dp(5),0,dp(5));root.addView(tf);
@@ -274,12 +274,12 @@ public class BybitTerminalActivity extends Activity {
             final JSONArray rr=rows;final JSONObject tt=ticker;final String ee=error;
             runOnUiThread(()->{
                 loading=false;if(isFinishing()||!requested.equals(symbol))return;
-                if(rr==null||tt==null){statusText.setText("Нет котировок Bybit: "+ee);return;}
+                if(rr==null||tt==null){liveText.setText("● OFFLINE");liveText.setTextColor(RED);statusText.setText("Нет котировок Bybit: "+ee);return;}
                 try{
                     JSONArray ordered=new JSONArray();for(int i=rr.length()-1;i>=0;i--)ordered.put(rr.getJSONArray(i));
                     // Discard the still-forming candle; only closed bars feed the strategy.
                     if(ordered.length()>1)ordered.remove(ordered.length()-1);
-                    candles=ordered;lastPrice=Double.parseDouble(tt.getString("lastPrice"));
+                    candles=ordered;lastPrice=Double.parseDouble(tt.getString("lastPrice"));\n                    long latestClosed=Long.parseLong(candles.getJSONArray(candles.length()-1).getString(0));\n                    boolean marketFresh=System.currentTimeMillis()-latestClosed<=180000L;\n                    liveText.setText(marketFresh?"● LIVE":"● STALE");\n                    liveText.setTextColor(marketFresh?GREEN:RED);
                     priceText.setText(String.format(Locale.US,"%s  %,.4f",requested,lastPrice));
                     double change=Double.parseDouble(tt.optString("price24hPcnt","0"))*100.0;
                     changeText.setText(String.format(Locale.US,"24ч: %+.2f%%",change));
