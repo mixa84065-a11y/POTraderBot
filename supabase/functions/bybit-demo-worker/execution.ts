@@ -78,6 +78,7 @@ export async function submitOrReconcileDemoOrder(input: {
     await rpc("bybit_demo_worker_set_order_state", {
       p_order_id: order.order_id, p_exchange_order_id: order.exchange_order_id, p_status: "REJECTED",
     });
+    await rpc("bybit_demo_worker_mark_executions_complete", { p_order_id: order.order_id });
     return {
       orderId: order.exchange_order_id,
       orderLinkId: order.order_link_id,
