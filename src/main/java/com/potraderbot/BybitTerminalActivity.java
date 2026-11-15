@@ -281,6 +281,12 @@ public class BybitTerminalActivity extends Activity {
                     .append("\nРеализованный P/L: ").append(run.optString("realized_pnl_usdt","0")).append(" USDT")
                     .append("\nСвободные средства: ").append(run.optString("cash_usdt","—")).append(" USDT")
                     .append("\nПоследний серверный цикл: ").append(run.optString("last_cycle_at","ещё не выполнялся"));
+                JSONObject summary=data.optJSONObject("summary");
+                if(summary!=null)b.append("\n\nСТАТИСТИКА: сделок ").append(summary.optInt("trades_total"))
+                    .append(" • плюсовых ").append(summary.optInt("wins")).append(" • минусовых ").append(summary.optInt("losses"))
+                    .append("\nWin rate: ").append(summary.optString("win_rate_pct","0")).append("%")
+                    .append(" • чистый P/L: ").append(summary.optString("net_pnl_usdt","0")).append(" USDT")
+                    .append("\nКомиссии: ").append(summary.optString("fees_usdt","0")).append(" USDT");
                 if(!run.optString("last_error","").isEmpty())b.append("\nПримечание: ").append(run.optString("last_error"));
                 JSONArray positions=data.optJSONArray("positions");
                 b.append("\n\nОТКРЫТЫЕ ПОЗИЦИИ: ").append(positions==null?0:positions.length());
@@ -714,7 +720,7 @@ public class BybitTerminalActivity extends Activity {
     }
     @Override protected void onResume(){super.onResume();handler.removeCallbacks(poll);handler.post(poll);refreshServerReport();refreshPaperAutoReport();handler.removeCallbacks(paperStatusPoll);handler.postDelayed(paperStatusPoll,60000);}
     @Override protected void onPause(){super.onPause();handler.removeCallbacks(poll);handler.removeCallbacks(paperStatusPoll);}
-    @Override protected void onDestroy(){handler.removeCallbacks(poll);io.shutdownNow();super.onDestroy();}
+    @Override protected void onDestroy(){handler.removeCallbacks(poll);handler.removeCallbacks(paperStatusPoll);io.shutdownNow();super.onDestroy();}
 
     private final class PriceChart extends View{
         private final Paint p=new Paint(3);private JSONArray data=new JSONArray();
