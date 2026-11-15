@@ -47,7 +47,7 @@ public class BybitTerminalActivity extends Activity {
     private SharedPreferences prefs;
     private String accessToken="";
     private TextView serverReportText, connectionStatusText;
-    private Button serverRefreshButton, connectionCheckButton;
+    private Button serverRefreshButton, connectionCheckButton, startDemoRunButton;
     private Spinner symbolPicker, scanCategoryPicker;
     private TextView multiScanText;
     private Button multiScanButton;
@@ -176,6 +176,9 @@ public class BybitTerminalActivity extends Activity {
         connectionCheckButton.setOnClickListener(v->checkBybitConnection());
         connectionStatusText=text("Авторизация Bybit ещё не проверена.",11,MUTED,false);
         connectionStatusText.setPadding(dp(10),dp(8),dp(10),dp(4));root.addView(connectionStatusText);
+        startDemoRunButton=button("ЗАПУСТИТЬ ДЕМО НА 48 ЧАСОВ",GOLD,BG);
+        LinearLayout.LayoutParams startParams=new LinearLayout.LayoutParams(-1,dp(52));startParams.topMargin=dp(8);root.addView(startDemoRunButton,startParams);
+        startDemoRunButton.setOnClickListener(v->confirmStartBybitDemoRun());
         serverRefreshButton=button("ОБНОВИТЬ ПОЛНЫЙ ОТЧЁТ",GOLD,BG);
         LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(46));rp.topMargin=dp(6);root.addView(serverRefreshButton,rp);
         serverRefreshButton.setOnClickListener(v->refreshServerReport());
@@ -187,6 +190,50 @@ public class BybitTerminalActivity extends Activity {
         state.setPadding(dp(4),dp(8),dp(4),0);root.addView(state);
     }
 
+
+
+    private void confirmStartBybitDemoRun(){
+        if(accessToken.isEmpty()){Toast.makeText(this,"Сначала войдите в аккаунт GOD OF TRADING.",Toast.LENGTH_LONG).show();return;}
+        new AlertDialog.Builder(this)
+            .setTitle("Запуск Bybit Demo на 48 часов")
+            .setMessage("Будут использоваться только демо-средства Bybit. Инструменты: BTCUSDT, ETHUSDT, SOLUSDT. Сервер будет работать независимо от телефона. Продолжить?")
+            .setNegativeButton("ОТМЕНА",null)
+            .setPositiveButton("ЗАПУСТИТЬ", (dialog,which)->startBybitDemoRun())
+            .show();
+    }
+
+    private void startBybitDemoRun(){
+        if(startDemoRunButton!=null)startDemoRunButton.setEnabled(false);
+        if(connectionStatusText!=null)connectionStatusText.setText("Проверяем Bybit Demo API перед запуском…");
+        io.execute(()->{
+            JSONObject check=null,started=null;String error=null;
+            try{
+                check=SupabaseApi.checkBybitDemoConnection(accessToken);
+                if(check==null||!check.optBoolean("connected",false))
+                    throw new Exception(check==null?"Не удалось проверить Bybit Demo API":check.optString("error","Bybit Demo API не подключён"));
+                JSONArray selected=new JSONArray();selected.put("BTCUSDT");selected.put("ETHUSDT");selected.put("SOLUSDT");
+                started=SupabaseApi.startBybitDemoRun(accessToken,selected);
+            }catch(Exception e){error=e.getMessage();}
+            final JSONObject verified=check,run=started;final String problem=error;
+            runOnUiThread(()->{
+                if(isFinishing())return;
+                if(startDemoRunButton!=null)startDemoRunButton.setEnabled(true);
+                if(run!=null){
+                    String id=run.optString("run_id","—");
+                    connectionStatusText.setText("48-ЧАСОВЫЙ BYBIT DEMO ТЕСТ ЗАПУЩЕН\nRun ID: "+id+
+                        "\nСтарт: "+run.optString("started_at","—")+"\nОкончание: "+run.optString("ends_at","—")+
+                        "\nИнструменты: BTCUSDT, ETHUSDT, SOLUSDT\nБаланс при проверке: "+
+                        (verified==null?"—":verified.optString("wallet_balance_usdt","—"))+" USDT");
+                    connectionStatusText.setTextColor(GREEN);
+                    Toast.makeText(this,"48-часовой демо-тест запущен",Toast.LENGTH_LONG).show();
+                    refreshServerReport();
+                }else{
+                    connectionStatusText.setText("ЗАПУСК НЕ ВЫПОЛНЕН\n"+(problem==null?"Неизвестная ошибка":problem));
+                    connectionStatusText.setTextColor(RED);
+                }
+            });
+        });
+    }
 
     private void runMultiScan(){
         if(multiScanButton==null)return;
