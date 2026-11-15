@@ -50,16 +50,28 @@ export async function submitOrReconcileDemoOrder(input: {
   const { apiKey, apiSecret, order, payload, rpc } = input;
   if (payload.orderLinkId !== order.order_link_id ||
       payload.symbol !== order.symbol || payload.side !== order.side ||
-      payload.marketUnit !== order.qty_unit) {
+      payload.marketUnit !== order.qty_unit ||
+      !Number.isFinite(Number(payload.qty)) ||
+      Number(payload.qty) !== Number(order.requested_qty)) {
     throw new Error("Заявка не совпадает с сохранённым серверным намерением.");
   }
-  if (order.purpose === "PROTECTION") {
-    if (!("triggerPrice" in payload) || payload.orderFilter !== "StopOrder" ||
+  if (order.purpose === "ENTRY") {
+    if (order.side !== "Buy" || order.qty_unit !== "quoteCoin" || order.position_id !== null ||
+        payload.orderFilter !== "Order" || "triggerPrice" in payload) {
+      throw new Error("Некорректное серверное намерение на вход.");
+    }
+  } else if (order.purpose === "EXIT") {
+    if (order.side !== "Sell" || order.qty_unit !== "baseCoin" || !order.position_id ||
+        payload.orderFilter !== "Order" || "triggerPrice" in payload) {
+      throw new Error("Некорректное серверное намерение на выход.");
+    }
+  } else if (order.purpose === "PROTECTION") {
+    if (order.side !== "Sell" || order.qty_unit !== "baseCoin" || !order.position_id ||
+        !("triggerPrice" in payload) || payload.orderFilter !== "StopOrder" ||
+        !Number.isFinite(Number(order.trigger_price)) ||
         Number(payload.triggerPrice) !== Number(order.trigger_price)) {
       throw new Error("Параметры биржевого стоп-ордера не совпадают с сохранёнными.");
     }
-  } else if ("triggerPrice" in payload) {
-    throw new Error("Условный стоп-ордер нельзя отправить как обычный вход/выход.");
   }
 
   if (order.status === "REJECTED") {
