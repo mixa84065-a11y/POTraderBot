@@ -156,7 +156,12 @@ public class BybitTerminalActivity extends Activity {
         Button connect=button("ПОДКЛЮЧИТЬ BYBIT DEMO API",PANEL,WHITE);
         root.addView(connect,new LinearLayout.LayoutParams(-1,dp(46)));
         connect.setOnClickListener(v->showBybitCredentialsDialog());
-        connectionCheckButton=button("ПРОВЕРИТЬ ПОДКЛЮЧЕНИЕ",PANEL,WHITE);\n        LinearLayout.LayoutParams checkParams=new LinearLayout.LayoutParams(-1,dp(46));checkParams.topMargin=dp(6);root.addView(connectionCheckButton,checkParams);\n        connectionCheckButton.setOnClickListener(v->checkBybitConnection());\n        connectionStatusText=text("Авторизация Bybit ещё не проверена.",11,MUTED,false);\n        connectionStatusText.setPadding(dp(10),dp(8),dp(10),dp(4));root.addView(connectionStatusText);\n        serverRefreshButton=button("ОБНОВИТЬ ПОЛНЫЙ ОТЧЁТ",GOLD,BG);
+        connectionCheckButton=button("ПРОВЕРИТЬ ПОДКЛЮЧЕНИЕ",PANEL,WHITE);
+        LinearLayout.LayoutParams checkParams=new LinearLayout.LayoutParams(-1,dp(46));checkParams.topMargin=dp(6);root.addView(connectionCheckButton,checkParams);
+        connectionCheckButton.setOnClickListener(v->checkBybitConnection());
+        connectionStatusText=text("Авторизация Bybit ещё не проверена.",11,MUTED,false);
+        connectionStatusText.setPadding(dp(10),dp(8),dp(10),dp(4));root.addView(connectionStatusText);
+        serverRefreshButton=button("ОБНОВИТЬ ПОЛНЫЙ ОТЧЁТ",GOLD,BG);
         LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(46));rp.topMargin=dp(6);root.addView(serverRefreshButton,rp);
         serverRefreshButton.setOnClickListener(v->refreshServerReport());
         serverReportText=text("Проверяем серверный отчёт…",11,WHITE,false);
