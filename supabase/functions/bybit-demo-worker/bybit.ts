@@ -253,6 +253,26 @@ export async function getDemoSpotOrder(
   throw new Error("Заявка ещё не найдена в активных или последних закрытых ордерах; статус оставлен неизвестным.");
 }
 
+/** Looks up an order by its client ID after an ambiguous network timeout.
+ * A null result is not permission to blindly retry: the caller must keep the intent UNKNOWN.
+ */
+export async function findDemoSpotOrderByLinkId(
+  apiKey: string,
+  apiSecret: string,
+  symbol: string,
+  orderLinkId: string,
+): Promise<DemoSpotOrder | null> {
+  for (const openOnly of [0, 1]) {
+    const response = await demoPrivateRequest<{ list?: DemoSpotOrder[] }>(
+      apiKey, apiSecret, "GET", "/v5/order/realtime",
+      { category: "spot", symbol, orderLinkId, openOnly },
+    );
+    const order = response.result?.list?.find((item) => item.orderLinkId === orderLinkId);
+    if (order) return order;
+  }
+  return null;
+}
+
 export async function getDemoSpotExecutions(
   apiKey: string,
   apiSecret: string,
@@ -274,7 +294,9 @@ export async function getDemoSpotExecutions(
       if (fill.orderId === orderId && fill.symbol === symbol && fill.execId) fills.push(fill);
     }
     const next = response.result?.nextPageCursor ?? "";
-    if (!next || next === cursor) break;
+    if (!next) break;
+    if (next === cursor) throw new Error("Bybit execution pagination cursor did not advance.");
+    if (page === 9) throw new Error("Bybit execution history exceeded the safe pagination limit; reconciliation is incomplete.");
     cursor = next;
   }
   return fills;
