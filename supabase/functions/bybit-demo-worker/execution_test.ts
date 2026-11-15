@@ -1,4 +1,4 @@
-import { buildSpotMarketBuy } from "./bybit.ts";
+import { buildSpotMarketBuy, buildSpotStopLossSell } from "./bybit.ts";
 import { submitOrReconcileDemoOrder, type PendingDemoOrder } from "./execution.ts";
 
 const baseOrder: PendingDemoOrder = {
@@ -147,5 +147,35 @@ Deno.test("REJECTED order is acknowledged in DB and never resubmitted", async ()
     }
   } finally {
     Object.defineProperty(globalThis, "fetch", { configurable: true, writable: true, value: originalFetch });
+  }
+});
+
+
+Deno.test("native protection payload must match the persisted trigger price", async () => {
+  let rpcCalls = 0;
+  const order: PendingDemoOrder = {
+    ...baseOrder,
+    purpose: "PROTECTION",
+    side: "Sell",
+    qty_unit: "baseCoin",
+    requested_qty: "0.002",
+    order_link_id: "g2stop1234567890123456789012345",
+    trigger_price: "49650",
+    status: "REJECTED",
+  };
+  let rejected = false;
+  try {
+    await submitOrReconcileDemoOrder({
+      apiKey: "test-api-key-123456",
+      apiSecret: "test-api-secret-123456789012",
+      order,
+      payload: buildSpotStopLossSell("BTCUSDT", "0.002", "49500", order.order_link_id),
+      rpc: async () => { rpcCalls++; return null; },
+    });
+  } catch {
+    rejected = true;
+  }
+  if (!rejected || rpcCalls !== 0) {
+    throw new Error("mismatched native stop trigger was accepted");
   }
 });
