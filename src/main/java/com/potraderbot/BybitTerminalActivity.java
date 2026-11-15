@@ -104,7 +104,7 @@ public class BybitTerminalActivity extends Activity {
         root.addView(select);
         LinearLayout multiScan=horizontal();
         scanCategoryPicker=new Spinner(this);
-        String[] scanCategories={"Спот","USDT фьючерсы","Inverse фьючерсы","Опционы","TradFi: акции","TradFi: ETF","TradFi: Forex","TradFi: сырьё","CFD (MT5 — подключение отдельно)"};
+        String[] scanCategories={"ВСЕ РЫНКИ • ОБЩИЙ АНАЛИЗ","Спот","USDT фьючерсы","Inverse фьючерсы","Опционы","TradFi: акции","TradFi: ETF","TradFi: Forex","TradFi: сырьё","CFD (MT5 — подключение отдельно)"};
         ArrayAdapter<String> scanAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,scanCategories);
         scanAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         scanCategoryPicker.setAdapter(scanAdapter);
@@ -238,8 +238,26 @@ public class BybitTerminalActivity extends Activity {
     private void runMultiScan(){
         if(multiScanButton==null)return;
         final int selected=scanCategoryPicker.getSelectedItemPosition();
-        final String category=new String[]{"spot","linear","inverse","option","stock","ETF","forex","commodity","cfd"}[selected];
+        final String category=new String[]{"all","spot","linear","inverse","option","stock","ETF","forex","commodity","cfd"}[selected];
         multiScanButton.setEnabled(false);
+        if("all".equals(category)){
+            multiScanText.setText("ОБЩИЙ АНАЛИЗ: проверяем Spot, оба типа фьючерсов, опционы и все категории TradFi. Только анализ, без ордеров…");
+            io.execute(()->{
+                StringBuilder out=new StringBuilder("GOD OF TRADING • ОБЩИЙ ОБЗОР РЫНКОВ\\n");
+                appendSignalGroup(out,"SPOT",safeScan("spot",3));
+                appendSignalGroup(out,"USDT / LINEAR FUTURES",safeScan("linear",3));
+                appendSignalGroup(out,"INVERSE FUTURES",safeScan("inverse",3));
+                appendSignalGroup(out,"OPTIONS • GREEKS / IV",safeOptionScan(3));
+                appendSignalGroup(out,"TRADFI STOCKS",safeTradFiScan("stock",3));
+                appendSignalGroup(out,"TRADFI ETF",safeTradFiScan("ETF",3));
+                appendSignalGroup(out,"TRADFI FOREX",safeTradFiScan("forex",3));
+                appendSignalGroup(out,"TRADFI COMMODITIES",safeTradFiScan("commodity",3));
+                out.append("\\nCFD: отдельное MT5-подключение; в Bybit V5 не сканируется.\\n");
+                out.append("\\nЭто исследовательские сигналы. Score не является вероятностью выигрыша; автоматические ордера не отправляются.");
+                runOnUiThread(()->{if(!isFinishing()){multiScanButton.setEnabled(true);multiScanText.setText(out.toString());}});
+            });
+            return;
+        }
         if("cfd".equals(category)){
             multiScanButton.setEnabled(true);
             multiScanText.setText("CFD НА BYBIT: отдельный MT5 CFD-счёт и отдельный API/интеграционный контур. V5 API для спота/деривативов не предоставляет CFD-каталог. Этот раздел зарезервирован; сначала нужно проверить доступный официальный способ подключения MT5 CFD для вашего аккаунта и региона. Торговля не запускается.");
@@ -298,6 +316,26 @@ public class BybitTerminalActivity extends Activity {
                 multiScanText.setText(out.toString());
             });
         });
+    }
+
+    private java.util.List<BybitMarketScanner.Signal> safeScan(String category,int limit){
+        try{return BybitMarketScanner.scan(category,limit);}catch(Exception ignored){return java.util.Collections.emptyList();}
+    }
+    private java.util.List<BybitMarketScanner.Signal> safeTradFiScan(String category,int limit){
+        try{return BybitMarketScanner.scanTradFi(category,limit);}catch(Exception ignored){return java.util.Collections.emptyList();}
+    }
+    private java.util.List<BybitMarketScanner.Signal> safeOptionScan(int limit){
+        try{return BybitMarketScanner.scanOptions(limit);}catch(Exception ignored){return java.util.Collections.emptyList();}
+    }
+    private void appendSignalGroup(StringBuilder out,String title,java.util.List<BybitMarketScanner.Signal> signals){
+        out.append("\\n").append(title).append(" (").append(signals.size()).append(")\\n");
+        if(signals.isEmpty()){out.append("Нет подтверждённых свежих сигналов.\\n");return;}
+        for(BybitMarketScanner.Signal signal:signals){
+            out.append("• ").append(signal.instrument.symbol).append(" — ").append(signal.direction)
+                .append(" | риск: ").append(signal.risk).append(" | score: ").append(signal.score)
+                .append(" | цена: ").append(String.format(java.util.Locale.US,"%.8f",signal.lastPrice)).append("\\n");
+            out.append("  ").append(signal.explanation).append("\\n");
+        }
     }
 
     private void showBybitCredentialsDialog(){
