@@ -214,7 +214,7 @@ public class MainActivity extends Activity {
             @Override public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){
                 String selected=pairs[position];
                 if(!selected.equals(symbol)){
-                    symbol=selected;quoteFresh=false;demoEnabled=false;
+                    symbol=selected;chart.setSymbol(symbol);quoteFresh=false;demoEnabled=false;
                     instrumentText.setText(symbol+"  •  ОБЫЧНЫЙ РЫНОК  •  M1");
                     updateTradeButtons();
                     quoteText.setText("Загружаем котировки для "+symbol+"…");
@@ -223,7 +223,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
         });
-        chart=new ChartView(this);
+        chart=new ChartView(this);chart.setSymbol(symbol);
         int chartHeight=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?dp(175):dp(245);
         LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,chartHeight);content.addView(chart,cp);
 
