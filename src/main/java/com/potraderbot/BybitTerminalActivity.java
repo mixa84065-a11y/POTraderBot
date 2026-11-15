@@ -47,7 +47,7 @@ public class BybitTerminalActivity extends Activity {
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
     private String accessToken="";
-    private TextView serverReportText, connectionStatusText, paperAutoReportText;
+    private TextView serverReportText, connectionStatusText, paperAutoReportText, paperStatsHeader, paperStatsText;
     private Button paperStartButton, paperStopButton;
     private String activePaperRunId="";
     private boolean paperReportLoading=false;
@@ -261,6 +261,16 @@ public class BybitTerminalActivity extends Activity {
         Button refresh=button("ОБНОВИТЬ ОТЧЁТ МУЛЬТИРЫНКА",PANEL,WHITE);
         LinearLayout.LayoutParams refreshLp=new LinearLayout.LayoutParams(-1,dp(44));refreshLp.topMargin=dp(6);root.addView(refresh,refreshLp);
         refresh.setOnClickListener(v->refreshPaperAutoReport());
+        paperStatsHeader=text("СТАТИСТИКА ТОРГОВЛИ  ▾",11,GOLD,true);
+        paperStatsHeader.setPadding(dp(4),dp(14),0,dp(5));root.addView(paperStatsHeader);
+        paperStatsText=text("Статистика появится после первых закрытых сделок.",11,WHITE,false);
+        styleCard(paperStatsText,12);
+        root.addView(paperStatsText,new LinearLayout.LayoutParams(-1,-2));
+        paperStatsHeader.setOnClickListener(v->{
+            boolean expanded=paperStatsText.getVisibility()==View.VISIBLE;
+            paperStatsText.setVisibility(expanded?View.GONE:View.VISIBLE);
+            paperStatsHeader.setText(expanded?"СТАТИСТИКА ТОРГОВЛИ  ▸":"СТАТИСТИКА ТОРГОВЛИ  ▾");
+        });
         paperAutoReportText=text("Проверяем состояние автономного автодемо…",11,WHITE,false);
         styleCard(paperAutoReportText,12);
         LinearLayout.LayoutParams reportLp=new LinearLayout.LayoutParams(-1,-2);reportLp.topMargin=dp(8);root.addView(paperAutoReportText,reportLp);
@@ -332,11 +342,13 @@ public class BybitTerminalActivity extends Activity {
                     .append("\nСвободные средства: ").append(run.optString("cash_usdt","—")).append(" USDT")
                     .append("\nПоследний серверный цикл: ").append(run.optString("last_cycle_at","ещё не выполнялся"));
                 JSONObject summary=data.optJSONObject("summary");
-                if(summary!=null)b.append("\n\nСТАТИСТИКА: сделок ").append(summary.optInt("trades_total"))
-                    .append(" • плюсовых ").append(summary.optInt("wins")).append(" • минусовых ").append(summary.optInt("losses"))
-                    .append("\nWin rate: ").append(summary.optString("win_rate_pct","0")).append("%")
-                    .append(" • чистый P/L: ").append(summary.optString("net_pnl_usdt","0")).append(" USDT")
-                    .append("\nКомиссии: ").append(summary.optString("fees_usdt","0")).append(" USDT");
+                if(summary!=null&&paperStatsText!=null){
+                    paperStatsText.setText("Всего сделок: "+summary.optInt("trades_total")
+                        +"\nПлюсовых: "+summary.optInt("wins")+" • минусовых: "+summary.optInt("losses")
+                        +"\nWin rate: "+summary.optString("win_rate_pct","0")+"%"
+                        +"\nЧистый P/L: "+summary.optString("net_pnl_usdt","0")+" USDT"
+                        +"\nКомиссии: "+summary.optString("fees_usdt","0")+" USDT");
+                }
                 if(!run.optString("last_error","").isEmpty())b.append("\nПримечание: ").append(run.optString("last_error"));
                 JSONArray positions=data.optJSONArray("positions");
                 b.append("\n\nОТКРЫТЫЕ ПОЗИЦИИ: ").append(positions==null?0:positions.length());
