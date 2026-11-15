@@ -187,7 +187,7 @@ public class BybitTerminalActivity extends Activity {
             io.execute(()->{
                 try{
                     SupabaseApi.saveBybitDemoCredentials(accessToken,key,secret);
-                    runOnUiThread(()->{keyInput.setText("");secretInput.setText("");status.setText("Ключи сохранены в Vault. Само приложение их не хранит.");save.setEnabled(true);Toast.makeText(this,"Bybit Demo API подключён к защищённому хранилищу",Toast.LENGTH_LONG).show();refreshServerReport();});
+                    runOnUiThread(()->{keyInput.setText("");secretInput.setText("");status.setText("Ключи сохранены в защищённом хранилище. Подключение к Bybit ещё не проверено: серверный тест будет выполнен при запуске исполнителя.");save.setEnabled(true);Toast.makeText(this,"Ключи сохранены. Доступ к Bybit ещё не проверен.",Toast.LENGTH_LONG).show();refreshServerReport();});
                 }catch(Exception e){runOnUiThread(()->{status.setText("Не удалось сохранить ключи: "+e.getMessage());save.setEnabled(true);});}
             });
         }));
