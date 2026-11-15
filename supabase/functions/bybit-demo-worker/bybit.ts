@@ -75,17 +75,17 @@ function decimalToScaled(value: string, decimals: number): bigint {
   const [mantissa, exponentText] = value.toLowerCase().split("e");
   const exponent = exponentText ? Number(exponentText) : 0;
   const [whole, fraction = ""] = mantissa.split(".");
-  if (!/^\\d+$/.test(whole) || !/^\\d*$/.test(fraction) || !Number.isInteger(exponent)) {
+  if (!/^\d+$/.test(whole) || !/^\d*$/.test(fraction) || !Number.isInteger(exponent)) {
     throw new Error("Некорректное десятичное значение.");
   }
-  const digits = BigInt((whole + fraction).replace(/^0+(?=\\d)/, ""));
+  const digits = BigInt((whole + fraction).replace(/^0+(?=\d)/, ""));
   const shift = decimals - fraction.length + exponent;
   return shift >= 0 ? digits * (10n ** BigInt(shift)) : digits / (10n ** BigInt(-shift));
 }
 
 /** Floors a positive quantity to the exchange step using integer arithmetic. */
 export function floorToStep(quantity: number, stepText: string): string {
-  if (!Number.isFinite(quantity) || quantity <= 0 || !/^\\d+(?:\\.\\d+)?$/.test(stepText)) {
+  if (!Number.isFinite(quantity) || quantity <= 0 || !/^\d+(?:\.\d+)?$/.test(stepText)) {
     throw new Error("Некорректное количество или шаг лота.");
   }
   const decimals = (stepText.split(".")[1] ?? "").length;
