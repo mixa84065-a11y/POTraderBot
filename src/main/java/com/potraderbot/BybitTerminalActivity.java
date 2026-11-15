@@ -46,7 +46,10 @@ public class BybitTerminalActivity extends Activity {
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
     private String accessToken="";
-    private TextView serverReportText, connectionStatusText, paperAutoReportText;\n    private Button paperStartButton, paperStopButton;\n    private String activePaperRunId="";\n    private boolean paperReportLoading=false;
+    private TextView serverReportText, connectionStatusText, paperAutoReportText;
+    private Button paperStartButton, paperStopButton;
+    private String activePaperRunId="";
+    private boolean paperReportLoading=false;
     private Button serverRefreshButton, connectionCheckButton, startDemoRunButton;
     private Spinner symbolPicker, scanCategoryPicker;
     private TextView multiScanText;
@@ -58,7 +61,8 @@ public class BybitTerminalActivity extends Activity {
     private boolean loading=false, autoEnabled=false;
     private JSONArray candles=new JSONArray();
     private double lastPrice=0;
-    private final Runnable poll=new Runnable(){@Override public void run(){loadMarket();handler.postDelayed(this,15000);}};\n    private final Runnable paperStatusPoll=new Runnable(){@Override public void run(){refreshPaperAutoReport();handler.postDelayed(this,60000);}};
+    private final Runnable poll=new Runnable(){@Override public void run(){loadMarket();handler.postDelayed(this,15000);}};
+    private final Runnable paperStatusPoll=new Runnable(){@Override public void run(){refreshPaperAutoReport();handler.postDelayed(this,60000);}};
 
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
