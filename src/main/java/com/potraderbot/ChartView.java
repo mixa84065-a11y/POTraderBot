@@ -18,7 +18,7 @@ public class ChartView extends View {
     private boolean showDecision = false;
     private String decision = "НЕТ СИГНАЛА";
     private int decisionStrength = 0;
-    private String message = "Ожидание проверенного потока котировок";
+    private String message = "Нажмите «АНАЛИЗ» для загрузки свечей";
     private String symbol = "EUR/USD";
 
     public ChartView(Context context) {
@@ -102,7 +102,7 @@ public class ChartView extends View {
         p.setFakeBoldText(false);
         if(candles.isEmpty()) {
             p.setColor(0xFF9AAFC9); p.setTextSize(12f);
-            String t="Свечи появятся после подключения источника";
+            String t="Нажмите «АНАЛИЗ» для загрузки свечей";
             c.drawText(t,Math.max(12,(w-p.measureText(t))/2f),h/2f,p);
         } else {
             double min=Double.MAX_VALUE,max=-Double.MAX_VALUE;
