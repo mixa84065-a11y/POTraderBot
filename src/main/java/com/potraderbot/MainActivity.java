@@ -348,7 +348,7 @@ public class MainActivity extends Activity {
 
     private void loadSectionData(String section,TextView target){
         if("ПРОФИЛЬ".equals(section)){
-            target.setText("Профиль GOD OF TRADING 2.0\\n\\nРежим: виртуальная торговля\\nБаланс: отображается на главном экране\\nРеальные ордера: отключены\\n\\nНастройки API и аккаунта доступны через меню главного экрана.");
+            target.setText("Профиль GOD OF TRADING 2.0\n\nРежим: виртуальная торговля\nБаланс: отображается на главном экране\nРеальные ордера: отключены\n\nНастройки API и аккаунта доступны через меню главного экрана.");
             return;
         }
         target.setText("Получаем статистику и историю демо-сделок…");
@@ -370,7 +370,7 @@ public class MainActivity extends Activity {
                     if("OPEN".equals(status))open++;
                     pnl+=t.optDouble("pnl",0);
                     if(i<30){
-                        if(history.length()>0)history.append("\\n\\n");
+                        if(history.length()>0)history.append("\n\n");
                         history.append(t.optString("symbol","—")).append("  •  ")
                             .append("UP".equals(t.optString("direction"))?"ВВЕРХ":"ВНИЗ")
                             .append("  •  ").append(status)
@@ -380,14 +380,14 @@ public class MainActivity extends Activity {
                 if("СТАТИСТИКА".equals(section)){
                     int closed=wins+losses;
                     double rate=closed==0?0:wins*100.0/closed;
-                    target.setText("РЕЗУЛЬТАТЫ ДЕМО\\n\\nВсего сделок: "+rows.length()
-                        +"\\nПобеды: "+wins+"\\nУбытки: "+losses+"\\nОткрытые: "+open
-                        +"\\nТочность закрытых сделок: "+String.format(Locale.US,"%.1f",rate)+"%"
-                        +"\\nЧистый P/L: "+String.format(Locale.US,"%+,.2f ₽",pnl));
+                    target.setText("РЕЗУЛЬТАТЫ ДЕМО\n\nВсего сделок: "+rows.length()
+                        +"\nПобеды: "+wins+"\nУбытки: "+losses+"\nОткрытые: "+open
+                        +"\nТочность закрытых сделок: "+String.format(Locale.US,"%.1f",rate)+"%"
+                        +"\nЧистый P/L: "+String.format(Locale.US,"%+,.2f ₽",pnl));
                 }else if("АНАЛИТИКА".equals(section)){
-                    target.setText("АНАЛИТИКА МОДЕЛИ\\n\\n"+(signalText==null?"Нажмите «АНАЛИЗ» на главном экране для получения свежего сигнала.":signalText.getText())
-                        +"\\n\\nОценка модели является эвристикой и не гарантирует прибыль.\\nЗакрытых сделок: "+(wins+losses)
-                        +"\\nПобеды: "+wins+" • Убытки: "+losses);
+                    target.setText("АНАЛИТИКА МОДЕЛИ\n\n"+(signalText==null?"Нажмите «АНАЛИЗ» на главном экране для получения свежего сигнала.":signalText.getText())
+                        +"\n\nОценка модели является эвристикой и не гарантирует прибыль.\nЗакрытых сделок: "+(wins+losses)
+                        +"\nПобеды: "+wins+" • Убытки: "+losses);
                 }else{
                     target.setText(history.length()==0?"Пока нет сделок.":history.toString());
                 }
