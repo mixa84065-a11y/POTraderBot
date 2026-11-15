@@ -251,7 +251,15 @@ export async function getDemoSpotOrder(
     const order = response.result?.list?.find((item) => item.orderId === orderId);
     if (order) return order;
   }
-  throw new Error("Заявка ещё не найдена в активных или последних закрытых ордерах; статус оставлен неизвестным.");
+  // Bybit notes that after a service restart, closed UTA orders may only
+  // be available through order history rather than the realtime cache.
+  const history = await demoPrivateRequest<{ list?: DemoSpotOrder[] }>(
+    apiKey, apiSecret, "GET", "/v5/order/history",
+    { category: "spot", symbol, orderId, limit: 50 },
+  );
+  const historical = history.result?.list?.find((item) => item.orderId === orderId);
+  if (historical) return historical;
+  throw new Error("Заявка не найдена в realtime и order history; статус оставлен неизвестным.");
 }
 
 /** Looks up an order by its client ID after an ambiguous network timeout.
@@ -271,7 +279,11 @@ export async function findDemoSpotOrderByLinkId(
     const order = response.result?.list?.find((item) => item.orderLinkId === orderLinkId);
     if (order) return order;
   }
-  return null;
+  const history = await demoPrivateRequest<{ list?: DemoSpotOrder[] }>(
+    apiKey, apiSecret, "GET", "/v5/order/history",
+    { category: "spot", symbol, orderLinkId, limit: 50 },
+  );
+  return history.result?.list?.find((item) => item.orderLinkId === orderLinkId) ?? null;
 }
 
 export async function getDemoSpotExecutions(
