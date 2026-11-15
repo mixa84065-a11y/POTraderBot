@@ -104,13 +104,13 @@ public class BybitTerminalActivity extends Activity {
     private LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(1);return l;}
     private LinearLayout horizontal(){LinearLayout l=new LinearLayout(this);l.setOrientation(0);l.setGravity(Gravity.CENTER_VERTICAL);return l;}
     private void buildScreen(){
-        LinearLayout root=vertical();root.setPadding(dp(14),dp(12),dp(14),dp(18));root.setBackgroundColor(BG);
+        LinearLayout root=vertical();root.setPadding(dp(16),dp(38),dp(16),dp(30));root.setBackgroundColor(BG);
         LinearLayout top=horizontal();
-        TextView title=text("♛  GOD OF TRADING 2.0",19,GOLD,true);
+        TextView title=text("♛  GOD OF TRADING 2.0",17,GOLD,true);
         top.addView(title,new LinearLayout.LayoutParams(0,dp(44),1));
         Button back=button("НАЗАД",PANEL,WHITE);top.addView(back,new LinearLayout.LayoutParams(-2,dp(40)));
         back.setOnClickListener(v->finish());root.addView(top);
-        TextView sub=text("BYBIT  •  ТОРГОВЫЙ ТЕРМИНАЛ",10,MUTED,true);sub.setPadding(0,dp(2),0,dp(10));root.addView(sub);
+        TextView sub=text("BYBIT  •  ТОРГОВЫЙ ТЕРМИНАЛ",11,MUTED,true);sub.setPadding(0,dp(2),0,dp(10));root.addView(sub);
         LinearLayout select=horizontal();
         TextView pairLabel=text("ИНСТРУМЕНТ",10,MUTED,true);select.addView(pairLabel);
         symbolPicker=new Spinner(this);
@@ -177,8 +177,7 @@ public class BybitTerminalActivity extends Activity {
         foot.setPadding(dp(4),dp(12),dp(4),0);root.addView(foot);
         // Keep the autonomous multi-market demo immediately after the local terminal,
         // before the longer 48-hour Bybit Demo section, so it is easy to find.
-        buildMultiMarketPaperSection(root);
-        buildServerReport(root);
+        buildMultiMarketPaperSection(root);        buildServerReport(root);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(BG);scroll.addView(root);setContentView(scroll);
         renderLedger();
     }
@@ -357,8 +356,7 @@ public class BybitTerminalActivity extends Activity {
                     String id=run.optString("run_id","—");
                     connectionStatusText.setText("48-ЧАСОВЫЙ BYBIT DEMO ТЕСТ ЗАПУЩЕН\nRun ID: "+id+
                         "\nСтарт: "+run.optString("started_at","—")+"\nОкончание: "+run.optString("ends_at","—")+
-                        "\nИнструменты: BTCUSDT, ETHUSDT, SOLUSDT\nБаланс при проверке: "+
-                        (verified==null?"—":verified.optString("wallet_balance_usdt","—"))+" USDT");
+                        "\nИнструменты: BTCUSDT, ETHUSDT, SOLUSDT\nБаланс при проверке: "+                        (verified==null?"—":verified.optString("wallet_balance_usdt","—"))+" USDT");
                     connectionStatusText.setTextColor(GREEN);
                     Toast.makeText(this,"48-часовой демо-тест запущен",Toast.LENGTH_LONG).show();
                     refreshServerReport();
@@ -537,8 +535,7 @@ public class BybitTerminalActivity extends Activity {
             try{report=SupabaseApi.getBybitDemoReport(accessToken);}catch(Exception e){error=e.getMessage();}
             final JSONObject result=report;final String problem=error;
             runOnUiThread(()->{
-                if(isFinishing())return;
-                if(serverRefreshButton!=null)serverRefreshButton.setEnabled(true);
+                if(isFinishing())return;                if(serverRefreshButton!=null)serverRefreshButton.setEnabled(true);
                 serverReportText.setText(result==null?"Отчёт недоступен: "+problem:formatServerReport(result));
             });
         });
@@ -717,8 +714,7 @@ public class BybitTerminalActivity extends Activity {
             if(cash>=STAKE){
                 prefs.edit().putFloat("cash",(float)(cash-STAKE)).putFloat("entry",(float)lastPrice)
                     .putFloat("stake",(float)STAKE).putString("trade_symbol",symbol).putBoolean("open",true)
-                    .putLong("last_entry_signal_candle",candleTime)
-                    .putString("last",String.format(Locale.US,"%s • BUY %.4f • объём 100 USDT • SL %.4f • TP %.4f",symbol,lastPrice,lastPrice*(1-STOP_PCT),lastPrice*(1+TAKE_PCT))).apply();
+                    .putLong("last_entry_signal_candle",candleTime)                    .putString("last",String.format(Locale.US,"%s • BUY %.4f • объём 100 USDT • SL %.4f • TP %.4f",symbol,lastPrice,lastPrice*(1-STOP_PCT),lastPrice*(1+TAKE_PCT))).apply();
             }
         }
     }
