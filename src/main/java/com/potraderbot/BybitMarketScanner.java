@@ -129,12 +129,27 @@ public final class BybitMarketScanner {
         double last=Double.parseDouble(ticker.getString("lastPrice"));
         double bid=ticker.optDouble("bid1Price",0), ask=ticker.optDouble("ask1Price",0);
         double funding=ticker.has("fundingRate")?ticker.optDouble("fundingRate",Double.NaN):Double.NaN;
-        double oiChange=ticker.has("openInterestChangePct")?ticker.optDouble("openInterestChangePct",Double.NaN):Double.NaN;
+        double oiChange=Double.NaN;
+        if("linear".equals(instrument.category)||"inverse".equals(instrument.category)){
+            try{oiChange=loadOpenInterestChange(instrument.category,instrument.symbol);}catch(Exception ignored){}
+        }
         String type=instrument.symbolType.isEmpty()?instrument.category:"tradfi";
         MarketStrategyEngine.Result result=MarketStrategyEngine.analyze(type,c,bid,ask,
             ticker.optDouble("turnover24h",instrument.turnover24h),funding,oiChange,
             System.currentTimeMillis()-lastTime,true);
         return new Signal(instrument,last,result.score,result.direction,result.risk,result.explanation);
+    }
+
+    /** Returns the percentage change between the latest two 5-minute OI observations. */
+    private static double loadOpenInterestChange(String category,String symbol) throws Exception {
+        JSONObject result=get("https://api.bybit.com/v5/market/open-interest?category="+category+
+            "&symbol="+enc(symbol)+"&intervalTime=5min&limit=2").getJSONObject("result");
+        JSONArray rows=result.optJSONArray("list");
+        if(rows==null||rows.length()<2)return Double.NaN;
+        double latest=Double.parseDouble(rows.getJSONObject(0).getString("openInterest"));
+        double previous=Double.parseDouble(rows.getJSONObject(1).getString("openInterest"));
+        if(!Double.isFinite(latest)||!Double.isFinite(previous)||previous<=0)return Double.NaN;
+        return (latest-previous)/previous*100.0;
     }
 
     /** Scans the most liquid active instruments concurrently; returns strongest signals first. */
