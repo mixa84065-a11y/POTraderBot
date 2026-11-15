@@ -47,7 +47,7 @@ public final class SupabaseApi {
             } catch (Exception ignored) {
                 errorBody = new JSONObject();
             }
-            String message = errorBody.optString("msg", errorBody.optString("message", errorBody.optString("error_description", "Сервер вернул ошибку " + code)));
+            String message = errorBody.optString("error", errorBody.optString("msg", errorBody.optString("message", errorBody.optString("error_description", "Сервер вернул ошибку " + code))));
             throw new Exception(message);
         }
         return raw.isEmpty() ? new JSONObject() : new JSONTokener(raw).nextValue();
