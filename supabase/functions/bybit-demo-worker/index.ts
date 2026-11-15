@@ -2,6 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   buildSpotMarketBuy,
   buildSpotMarketSell,
+  buildSpotStopLossSell,
+  cancelDemoSpotStopOrder,
   demoPrivateRequest,
   floorToStep,
   makeOrderLinkId,
@@ -74,6 +76,7 @@ type RunRiskState = {
   fees_paid: number;
   max_drawdown_pct: number;
 };
+type PendingProtectionOrder = PendingDemoOrder & { trigger_price: string | number };
 type PendingExitFill = {
   fill_id: number;
   order_id: string;
@@ -228,6 +231,10 @@ function buildPayload(order: PendingDemoOrder) {
   if (order.side === "Buy" && order.qty_unit === "quoteCoin") {
     return buildSpotMarketBuy(order.symbol, qty, order.order_link_id);
   }
+  if (order.purpose === "PROTECTION" && order.side === "Sell" &&
+      order.qty_unit === "baseCoin" && order.trigger_price !== null && order.trigger_price !== undefined) {
+    return buildSpotStopLossSell(order.symbol, qty, String(order.trigger_price), order.order_link_id);
+  }
   if (order.side === "Sell" && order.qty_unit === "baseCoin") {
     return buildSpotMarketSell(order.symbol, qty, order.order_link_id);
   }
@@ -236,6 +243,7 @@ function buildPayload(order: PendingDemoOrder) {
 
 async function reconcileOrders(run: ActiveRun, orders: PendingDemoOrder[]) {
   const blockedSymbols = new Set<string>();
+  const rejectedProtectionSymbols = new Set<string>();
   for (const order of orders) {
     try {
       const result = await submitOrReconcileDemoOrder({
@@ -264,6 +272,14 @@ async function reconcileOrders(run: ActiveRun, orders: PendingDemoOrder[]) {
           );
         }
       }
+      if (order.purpose === "PROTECTION" && result.status === "REJECTED") {
+        rejectedProtectionSymbols.add(order.symbol);
+        blockedSymbols.add(order.symbol);
+        await log(run.run_id, "ERROR", "NATIVE_STOP_REJECTED",
+          "Биржа отклонила защитный стоп-ордер. Позиция должна быть закрыта рыночной заявкой.",
+          { symbol: order.symbol, position_id: order.position_id, order_id: order.order_id },
+        );
+      }
       if (!result.feeConversionComplete) blockedSymbols.add(order.symbol);
     } catch (error) {
       blockedSymbols.add(order.symbol);
@@ -273,7 +289,7 @@ async function reconcileOrders(run: ActiveRun, orders: PendingDemoOrder[]) {
       });
     }
   }
-  return blockedSymbols;
+  return { blockedSymbols, rejectedProtectionSymbols };
 }
 
 async function applyPendingExitFills(runId: string) {
@@ -321,6 +337,32 @@ async function walletState(apiKey: string, apiSecret: string) {
     throw new Error("Не удалось безопасно определить доступный баланс USDT.");
   }
   return { equity, available_usdt: available };
+}
+
+async function createAndSubmitProtection(
+  run: ActiveRun, position: OpenPosition, market: SpotMarket, candleTime: number,
+) {
+  if (!market.base_precision) throw new Error(`${position.symbol}: отсутствует точность базового актива для защитного стопа.`);
+  const qty = floorToStep(Math.min(position.qty, market.max_market_order_qty), market.base_precision);
+  if (Number(qty) + 1e-12 < position.qty) {
+    throw new Error(`${position.symbol}: размер позиции превышает лимит одной защитной заявки; позиция не может быть полностью защищена.`);
+  }
+  const triggerPrice = floorToStep(position.stop_price, market.tick_size);
+  if (Number(triggerPrice) >= market.last_price) {
+    throw new Error(`${position.symbol}: цена уже достигла стоп-уровня; вместо установки условного ордера требуется немедленный выход.`);
+  }
+  const linkId = await makeOrderLinkId(run.run_id, position.symbol, "Sell", candleTime + 1);
+  const orderId = await rpc<string>("bybit_demo_worker_create_protection_intent", {
+    p_run_id: run.run_id, p_position_id: position.position_id,
+    p_order_link_id: linkId, p_requested_qty: qty, p_trigger_price: triggerPrice,
+  });
+  const pending = await rpc<PendingProtectionOrder[]>("bybit_demo_worker_pending_protections", { p_run_id: run.run_id });
+  const order = (pending ?? []).find((item) => item.order_id === orderId);
+  if (!order) throw new Error("Защитное намерение не найдено; условный ордер не отправлен.");
+  return await submitOrReconcileDemoOrder({
+    apiKey: run.api_key, apiSecret: run.api_secret,
+    order, payload: buildPayload(order), rpc,
+  });
 }
 
 async function createAndSubmitExit(
@@ -388,7 +430,10 @@ async function processRun(run: ActiveRun) {
 
     // Recover every persisted order before looking for new entries or finalizing a stop.
     let pendingOrders = await rpc<PendingDemoOrder[]>("bybit_demo_worker_pending_orders", { p_run_id: run.run_id });
-    const blockedSymbols = await reconcileOrders(run, pendingOrders ?? []);
+    let pendingProtections = await rpc<PendingProtectionOrder[]>("bybit_demo_worker_pending_protections", { p_run_id: run.run_id });
+    const recovery = await reconcileOrders(run, [...(pendingOrders ?? []), ...(pendingProtections ?? [])]);
+    const blockedSymbols = recovery.blockedSymbols;
+    const rejectedProtectionSymbols = recovery.rejectedProtectionSymbols;
     const appliedExitFills = await applyPendingExitFills(run.run_id);
 
     const positions = await rpc<OpenPosition[]>("bybit_demo_worker_open_positions", { p_run_id: run.run_id });
@@ -412,6 +457,7 @@ async function processRun(run: ActiveRun) {
     // Stop-loss, take-profit, and run-stop flattening. Spot has no short exposure.
     let exitOrders = 0;
     const pendingAfterRecovery = await rpc<PendingDemoOrder[]>("bybit_demo_worker_pending_orders", { p_run_id: run.run_id });
+    pendingProtections = await rpc<PendingProtectionOrder[]>("bybit_demo_worker_pending_protections", { p_run_id: run.run_id });
     for (const position of positions ?? []) {
       const market = markets.get(position.symbol);
       if (!market) continue;
@@ -419,26 +465,94 @@ async function processRun(run: ActiveRun) {
         order.purpose === "EXIT" && order.position_id === position.position_id
       );
       if (hasPendingExit) continue;
-      const reason = positionExitReason(
-        market.last_price, position.stop_price, position.target_price,
-        stopping ? "остановка запуска/лимит риска" : "",
-      );
-      if (!reason) continue;
+      const protection = (pendingProtections ?? []).find((order) => order.position_id === position.position_id);
+      const forceReason = stopping
+        ? "остановка запуска/лимит риска"
+        : rejectedProtectionSymbols.has(position.symbol) ? "отклонён защитный стоп-ордер" : "";
+      const reason = positionExitReason(market.last_price, position.stop_price, position.target_price, forceReason);
       const candleTime = Math.max(
         candleTimes.get(position.symbol) ?? 0,
         Math.floor(Date.now() / 60_000) * 60_000,
       );
-      try {
-        const result = await createAndSubmitExit(run, position, market, candleTime, reason);
-        exitOrders++;
-        if (result.status === "FILLED" || result.status === "CANCELLED") {
-          await applyPendingExitFills(run.run_id);
-        }
-      } catch (error) {
-        await log(run.run_id, "ERROR", "EXIT_ORDER_ERROR",
-          error instanceof Error ? error.message : "Exit order failed", {
-            symbol: position.symbol, position_id: position.position_id, reason,
+
+      // If a native stop is already armed and the stop level is crossed, do not
+      // race it with another sell. Let Bybit trigger and reconcile that order.
+      if (protection && reason === "stop-loss 0.7%" && !stopping) {
+        await log(run.run_id, "WARN", "NATIVE_STOP_TRIGGERED_WAIT",
+          "Цена достигла стоп-уровня; ожидается исполнение биржевого условного стоп-ордера.",
+          { symbol: position.symbol, stop_price: position.stop_price, last_price: market.last_price },
+        );
+        continue;
+      }
+
+      if (protection && reason) {
+        if (!protection.exchange_order_id) continue;
+        try {
+          await cancelDemoSpotStopOrder(run.api_key, run.api_secret, position.symbol, protection.exchange_order_id);
+          const reconciled = await submitOrReconcileDemoOrder({
+            apiKey: run.api_key, apiSecret: run.api_secret, order: protection,
+            payload: buildPayload(protection), rpc,
           });
+          await applyPendingExitFills(run.run_id);
+          if (reconciled.status !== "CANCELLED" && reconciled.status !== "FILLED") {
+            await log(run.run_id, "WARN", "NATIVE_STOP_CANCEL_PENDING",
+              "Отмена защитного стопа ещё не подтверждена; рыночный выход отложен во избежание двойной продажи.",
+              { symbol: position.symbol, order_id: protection.order_id, status: reconciled.status },
+            );
+            continue;
+          }
+          const refreshed = await rpc<OpenPosition[]>("bybit_demo_worker_open_positions", { p_run_id: run.run_id });
+          const stillOpen = (refreshed ?? []).find((item) => item.position_id === position.position_id);
+          if (!stillOpen) continue;
+          const result = await createAndSubmitExit(run, stillOpen, market, candleTime, reason);
+          exitOrders++;
+          if (result.status === "FILLED" || result.status === "CANCELLED") await applyPendingExitFills(run.run_id);
+        } catch (error) {
+          await log(run.run_id, "ERROR", "NATIVE_STOP_CANCEL_OR_EXIT_ERROR",
+            error instanceof Error ? error.message : "Stop cancel/exit failed",
+            { symbol: position.symbol, position_id: position.position_id },
+          );
+        }
+        continue;
+      }
+
+      if (!protection && reason) {
+        try {
+          const result = await createAndSubmitExit(run, position, market, candleTime, reason);
+          exitOrders++;
+          if (result.status === "FILLED" || result.status === "CANCELLED") await applyPendingExitFills(run.run_id);
+        } catch (error) {
+          await log(run.run_id, "ERROR", "EXIT_ORDER_ERROR",
+            error instanceof Error ? error.message : "Exit order failed", {
+              symbol: position.symbol, position_id: position.position_id, reason,
+            });
+        }
+        continue;
+      }
+
+      if (!protection && !reason && !stopping) {
+        try {
+          const result = await createAndSubmitProtection(run, position, market, candleTime);
+          if (result.status === "REJECTED") {
+            await log(run.run_id, "ERROR", "NATIVE_STOP_REJECTED",
+              "Биржа отклонила защитный стоп. Запускается безопасное закрытие позиции.",
+              { symbol: position.symbol, position_id: position.position_id },
+            );
+            const refreshed = await rpc<OpenPosition[]>("bybit_demo_worker_open_positions", { p_run_id: run.run_id });
+            const stillOpen = (refreshed ?? []).find((item) => item.position_id === position.position_id);
+            if (stillOpen) {
+              const exit = await createAndSubmitExit(run, stillOpen, market, candleTime, "отклонён защитный стоп-ордер");
+              exitOrders++;
+              if (exit.status === "FILLED" || exit.status === "CANCELLED") await applyPendingExitFills(run.run_id);
+            }
+          }
+        } catch (error) {
+          blockedSymbols.add(position.symbol);
+          await log(run.run_id, "ERROR", "NATIVE_STOP_SETUP_ERROR",
+            error instanceof Error ? error.message : "Native stop setup failed",
+            { symbol: position.symbol, position_id: position.position_id },
+          );
+        }
       }
     }
 
@@ -541,7 +655,8 @@ async function processRun(run: ActiveRun) {
     if (stopping) {
       const finalPositions = await rpc<OpenPosition[]>("bybit_demo_worker_open_positions", { p_run_id: run.run_id });
       const finalPending = await rpc<PendingDemoOrder[]>("bybit_demo_worker_pending_orders", { p_run_id: run.run_id });
-      if ((finalPositions ?? []).length === 0 && (finalPending ?? []).length === 0) {
+      const finalProtections = await rpc<PendingProtectionOrder[]>("bybit_demo_worker_pending_protections", { p_run_id: run.run_id });
+      if ((finalPositions ?? []).length === 0 && (finalPending ?? []).length === 0 && (finalProtections ?? []).length === 0) {
         const finalStatus = run.status === "STOPPING" || riskStop ? "STOPPED" : "COMPLETED";
         await rpc("bybit_demo_worker_heartbeat_v2", {
           p_run_id: run.run_id, p_equity: wallet.equity, p_realized_pnl: null,
@@ -554,11 +669,11 @@ async function processRun(run: ActiveRun) {
       }
       await log(run.run_id, "WARN", "STOPPING_WAITING_FOR_RECONCILIATION",
         "Новые входы отключены. Остановка ожидает закрытия позиций и подтверждения всех заявок.",
-        { open_positions: (finalPositions ?? []).length, pending_orders: (finalPending ?? []).length },
+        { open_positions: (finalPositions ?? []).length, pending_orders: (finalPending ?? []).length + (finalProtections ?? []).length },
       );
       return {
         run_id: run.run_id, status: "STOPPING_WAITING_FOR_SAFE_FLATTEN",
-        open_positions: (finalPositions ?? []).length, pending_orders: (finalPending ?? []).length,
+        open_positions: (finalPositions ?? []).length, pending_orders: (finalPending ?? []).length + (finalProtections ?? []).length,
         exit_orders, applied_exit_fills: appliedExitFills,
       };
     }
