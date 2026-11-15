@@ -105,7 +105,7 @@ public class MainActivity extends Activity {
         if(strokeColor!=0)d.setStroke(dp(1),strokeColor);return d;
     }
     private void stylePanel(View view,int paddingDp){
-        view.setBackground(surface(PANEL,14,0xFF38301C));
+        view.setBackground(surface(PANEL,14,0xFF51401D));
         if(view instanceof TextView)((TextView)view).setPadding(dp(paddingDp),dp(paddingDp),dp(paddingDp),dp(paddingDp));
         view.setElevation(dp(2));
     }
@@ -192,9 +192,9 @@ public class MainActivity extends Activity {
 
     private void showMain(){
         analysisMode=false;
-        LinearLayout content=vertical();content.setPadding(dp(16),dp(30),dp(16),dp(30));
+        LinearLayout content=vertical();content.setPadding(dp(16),dp(16),dp(16),dp(24));
         LinearLayout header=horizontal();
-        TextView brand=label("GOD OF TRADING",20,GOLD,true);header.addView(brand,new LinearLayout.LayoutParams(0,dp(42),1));
+        TextView brand=label("♛  GOD OF TRADING 2.0",18,GOLD,true);header.addView(brand,new LinearLayout.LayoutParams(0,dp(42),1));
         Button bybit=button("BYBIT",GOLD,NAVY);header.addView(bybit,new LinearLayout.LayoutParams(dp(82),dp(42)));
         bybit.setOnClickListener(v->openBybitTerminal());
         Button menu=button("⋮",PANEL,TEXT);header.addView(menu,new LinearLayout.LayoutParams(dp(48),dp(42)));
@@ -207,7 +207,7 @@ public class MainActivity extends Activity {
         balanceText=label("Загрузка…",18,TEXT,true);accountPanel.addView(balanceText);
         LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(-1,-2);ap.topMargin=dp(8);content.addView(accountPanel,ap);
 
-        TextView pairLabel=label("ВАЛЮТНАЯ ПАРА",10,MUTED,true);
+        TextView pairLabel=label("РЫНОК  •  ВАЛЮТНАЯ ПАРА",10,MUTED,true);
         pairLabel.setPadding(dp(4),dp(10),0,dp(3));content.addView(pairLabel);
         pairSelector=new Spinner(this);
         String[] pairs={"EUR/USD","GBP/USD","USD/JPY","AUD/USD","USD/CHF","USD/CAD","NZD/USD"};
