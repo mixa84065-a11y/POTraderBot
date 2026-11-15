@@ -359,7 +359,7 @@ public class BybitTerminalActivity extends Activity {
         if(open){
             // Remember the candle that was already occupied so a stop/exit cannot
             // immediately trigger a second entry from the same unchanged signal.
-            prefs.edit().putLong("last_entry_signal_candle",candleTime).apply();
+            if(candleTime>0)prefs.edit().putLong("last_entry_signal_candle",candleTime).apply();
             double entry=prefs.getFloat("entry",0),stake=prefs.getFloat("stake",0);
             if(entry<=0||stake<=0)return;
             double pnl=(lastPrice-entry)/entry*stake;
