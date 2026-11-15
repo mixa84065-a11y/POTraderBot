@@ -177,8 +177,7 @@ public class MainActivity extends Activity {
         io.execute(()->{
             try{
                 JSONObject auth=create?SupabaseApi.signUp(email,password):SupabaseApi.signIn(email,password);
-                String a=auth.optString("access_token",""),r=auth.optString("refresh_token","");
-                if(a.isEmpty()){
+                String a=auth.optString("access_token",""),r=auth.optString("refresh_token","");                if(a.isEmpty()){
                     runOnUiThread(()->{status.setText("Аккаунт создан. Подтвердите почту по письму, затем войдите.");login.setEnabled(true);register.setEnabled(true);});
                     return;
                 }
@@ -193,16 +192,16 @@ public class MainActivity extends Activity {
 
     private void showMain(){
         analysisMode=false;
-        LinearLayout content=vertical();content.setPadding(dp(14),dp(10),dp(14),dp(14));
+        LinearLayout content=vertical();content.setPadding(dp(16),dp(30),dp(16),dp(30));
         LinearLayout header=horizontal();
-        TextView brand=label("GOD OF TRADING",19,GOLD,true);header.addView(brand,new LinearLayout.LayoutParams(0,dp(42),1));
+        TextView brand=label("GOD OF TRADING",20,GOLD,true);header.addView(brand,new LinearLayout.LayoutParams(0,dp(42),1));
         Button bybit=button("BYBIT",GOLD,NAVY);header.addView(bybit,new LinearLayout.LayoutParams(dp(82),dp(42)));
         bybit.setOnClickListener(v->openBybitTerminal());
         Button menu=button("⋮",PANEL,TEXT);header.addView(menu,new LinearLayout.LayoutParams(dp(48),dp(42)));
         content.addView(header);
         menu.setOnClickListener(v->showMenu());
 
-        accountPanel=horizontal();accountPanel.setPadding(dp(12),dp(10),dp(12),dp(10));accountPanel.setBackground(surface(PANEL,15,0xFF51401D));accountPanel.setElevation(dp(2));
+        accountPanel=horizontal();accountPanel.setPadding(dp(16),dp(14),dp(16),dp(14));accountPanel.setBackground(surface(PANEL,15,0xFF51401D));accountPanel.setElevation(dp(2));
         TextView accountLabel=label("ВИРТУАЛЬНЫЙ БАЛАНС",10,MUTED,true);
         accountPanel.addView(accountLabel,new LinearLayout.LayoutParams(0,-2,1));
         balanceText=label("Загрузка…",18,TEXT,true);accountPanel.addView(balanceText);
@@ -238,14 +237,14 @@ public class MainActivity extends Activity {
         int chartHeight=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?dp(175):dp(245);
         LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,chartHeight);content.addView(chart,cp);
 
-        quoteText=label("Проверяем рыночный поток…",11,MUTED,false);quoteText.setPadding(dp(4),dp(6),0,dp(4));content.addView(quoteText);
+        quoteText=label("Нажмите «АНАЛИЗ», чтобы загрузить подтверждённые котировки.",11,MUTED,false);quoteText.setPadding(dp(4),dp(6),0,dp(4));content.addView(quoteText);
         analysisButton=button("АНАЛИЗ",GOLD,NAVY);
         LinearLayout.LayoutParams abp=new LinearLayout.LayoutParams(-1,dp(44));abp.topMargin=dp(5);content.addView(analysisButton,abp);
         analysisButton.setOnClickListener(v->toggleAnalysis());
 
         analysisDivider=new View(this);analysisDivider.setBackgroundColor(0xFF263D5A);
         LinearLayout.LayoutParams divp=new LinearLayout.LayoutParams(-1,dp(1));divp.topMargin=dp(8);content.addView(analysisDivider,divp);
-        analysisText=label("Для анализа ожидаются подтверждённые минутные свечи.",12,TEXT,false);
+        analysisText=label("РЫНОЧНЫЙ АНАЛИЗ\nНажмите «АНАЛИЗ», чтобы получить свечи и рассчитать направление. Без свежих данных сделки заблокированы.",12,TEXT,false);
         stylePanel(analysisText,10);content.addView(analysisText);
 
         controlsPanel=vertical();
@@ -357,8 +356,7 @@ public class MainActivity extends Activity {
             JSONObject snapshot=null;String error=null;
             try{snapshot=SupabaseApi.getMarketSnapshot(token,requestedSymbol);}
             catch(Exception e){error=e.getMessage();}
-            final JSONObject fs=snapshot;final String fe=error;
-            runOnUiThread(()->{
+            final JSONObject fs=snapshot;final String fe=error;            runOnUiThread(()->{
                 refreshingMarket=false;
                 if(isFinishing()||accessToken.isEmpty())return;
                 analysisButton.setEnabled(true);
@@ -537,8 +535,7 @@ public class MainActivity extends Activity {
             else if(which==2)refreshData();
             else if(which==3)new AlertDialog.Builder(this).setMessage("Ссылка на Telegram-бот ещё не настроена.").setPositiveButton("ОК",null).show();
             else logout();
-        }).show();
-    }
+        }).show();    }
 
 
     private void showTwelveDataSettings(){
