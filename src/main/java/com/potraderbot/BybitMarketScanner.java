@@ -132,11 +132,11 @@ public final class BybitMarketScanner {
         return scanCandidates(candidates,maxInstruments);
     }
 
-    /** TradFi stocks and ETFs are linear contracts, but are discovered through Bybit's instrument-summary. */
-    public static List<Signal> scanTradFi(String symbolType,int maxInstruments) throws Exception {
+    /** Returns the Bybit TradFi stock/ETF catalog even when the underlying market is closed. */
+    public static List<Instrument> loadTradFiCatalog(String symbolType,int maxItems) throws Exception {
         if(!"stock".equals(symbolType)&&!"ETF".equals(symbolType))
             throw new IllegalArgumentException("Поддерживаются только акции и ETF Bybit TradFi");
-        List<Instrument> candidates=new ArrayList<>();
+        List<Instrument> catalog=new ArrayList<>();
         String cursor="";
         for(int page=0;page<10;page++){
             String url="https://api.bybit.com/v5/market/instrument-summary?category=linear&symbolType="+enc(symbolType)+"&limit=1000"
@@ -148,13 +148,13 @@ public final class BybitMarketScanner {
                 String symbol=x.optString("symbol","");
                 if(symbol.isEmpty())continue;
                 String name=x.optString("fullName",x.optString("displayName",symbol));
-                candidates.add(new Instrument("linear",symbol,x.optString("baseCoin",""),x.optString("settleCoin","USDT"),
+                catalog.add(new Instrument("linear",symbol,x.optString("baseCoin",""),x.optString("settleCoin","USDT"),
                     0,name,x.optString("marketRegion",""),x.optString("symbolType",symbolType)));
             }
             cursor=result.optString("nextPageCursor","");
             if(cursor.isEmpty())break;
         }
-        if(candidates.isEmpty())return candidates;
+        if(catalog.isEmpty())return catalog;
         JSONObject tickers=get("https://api.bybit.com/v5/market/tickers?category=linear").getJSONObject("result");
         JSONArray tickerList=tickers.optJSONArray("list");
         java.util.Map<String,Double> turnoverBySymbol=new java.util.HashMap<>();
@@ -162,12 +162,21 @@ public final class BybitMarketScanner {
             JSONObject t=tickerList.getJSONObject(i);
             turnoverBySymbol.put(t.optString("symbol",""),t.optDouble("turnover24h",0));
         }
-        List<Instrument> active=new ArrayList<>();
-        for(Instrument x:candidates){
+        List<Instrument> ranked=new ArrayList<>();
+        for(Instrument x:catalog){
             double turnover=turnoverBySymbol.containsKey(x.symbol)?turnoverBySymbol.get(x.symbol):0;
-            if(turnover>0)active.add(new Instrument(x.category,x.symbol,x.baseCoin,x.quoteCoin,turnover,x.displayName,x.marketRegion,x.symbolType));
+            // Keep zero-turnover instruments in the catalog: TradFi markets close on weekends/holidays.
+            ranked.add(new Instrument(x.category,x.symbol,x.baseCoin,x.quoteCoin,turnover,x.displayName,x.marketRegion,x.symbolType));
         }
-        return scanCandidates(active,maxInstruments);
+        Collections.sort(ranked,(a,b)->Double.compare(b.turnover24h,a.turnover24h));
+        int keep=Math.min(Math.max(0,maxItems),ranked.size());
+        return new ArrayList<>(ranked.subList(0,keep));
+    }
+
+    /** Scores the most liquid available TradFi instruments; stale/closed markets produce no signal. */
+    public static List<Signal> scanTradFi(String symbolType,int maxInstruments) throws Exception {
+        List<Instrument> candidates=loadTradFiCatalog(symbolType,maxInstruments);
+        return scanCandidates(candidates,maxInstruments);
     }
 
     private static List<Signal> scanCandidates(List<Instrument> candidates,int maxInstruments) throws Exception {
