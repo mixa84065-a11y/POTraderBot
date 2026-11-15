@@ -210,6 +210,7 @@ export function normalizeDemoOrderStatus(status: string): DemoSpotOrderStatus {
     case "Filled":
       return "FILLED";
     case "Cancelled":
+    case "PartiallyFilledCanceled":
     case "Deactivated":
       return "CANCELLED";
     case "Rejected":
