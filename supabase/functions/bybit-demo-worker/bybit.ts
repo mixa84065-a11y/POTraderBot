@@ -161,3 +161,153 @@ export function buildSpotMarketSell(symbol: string, baseQuantity: string, orderL
     orderLinkId,
   };
 }
+
+export type DemoSpotOrderPayload = ReturnType<typeof buildSpotMarketBuy> | ReturnType<typeof buildSpotMarketSell>;
+export type DemoSpotOrderStatus = "NEW" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED" | "REJECTED" | "UNKNOWN";
+
+export type DemoSpotOrder = {
+  orderId: string;
+  orderLinkId: string;
+  orderStatus: string;
+  cumExecQty: string;
+  cumExecValue: string;
+  avgPrice: string;
+  leavesQty: string;
+};
+
+export type DemoSpotExecution = {
+  execId: string;
+  orderId: string;
+  symbol: string;
+  side: "Buy" | "Sell";
+  execQty: string;
+  execPrice: string;
+  execValue: string;
+  execFee: string;
+  feeCurrency: string;
+  execTime: string;
+};
+
+export type NormalizedSpotFill = {
+  execId: string;
+  qty: number;
+  price: number;
+  valueUsdt: number;
+  feeAmount: number;
+  feeCurrency: string;
+  feeUsdt: number | null;
+  executedAt: string;
+};
+
+export function normalizeDemoOrderStatus(status: string): DemoSpotOrderStatus {
+  switch (status) {
+    case "New":
+    case "Untriggered":
+    case "Triggered":
+      return "NEW";
+    case "PartiallyFilled":
+      return "PARTIALLY_FILLED";
+    case "Filled":
+      return "FILLED";
+    case "Cancelled":
+    case "Deactivated":
+      return "CANCELLED";
+    case "Rejected":
+      return "REJECTED";
+    default:
+      return "UNKNOWN";
+  }
+}
+
+export async function placeDemoSpotMarketOrder(
+  apiKey: string,
+  apiSecret: string,
+  payload: DemoSpotOrderPayload,
+): Promise<{ orderId: string; orderLinkId: string }> {
+  const response = await demoPrivateRequest<{ orderId?: string; orderLinkId?: string }>(
+    apiKey, apiSecret, "POST", "/v5/order/create", payload,
+  );
+  const orderId = response.result?.orderId;
+  const orderLinkId = response.result?.orderLinkId;
+  if (!orderId || !orderLinkId || orderLinkId !== payload.orderLinkId) {
+    throw new Error("Bybit не подтвердил идентификатор созданной демо-заявки.");
+  }
+  return { orderId, orderLinkId };
+}
+
+export async function getDemoSpotOrder(
+  apiKey: string,
+  apiSecret: string,
+  symbol: string,
+  orderId: string,
+): Promise<DemoSpotOrder> {
+  const response = await demoPrivateRequest<{ list?: DemoSpotOrder[] }>(
+    apiKey, apiSecret, "GET", "/v5/order/realtime",
+    { category: "spot", symbol, orderId, openOnly: 1 },
+  );
+  const order = response.result?.list?.find((item) => item.orderId === orderId);
+  if (!order) throw new Error("Заявка ещё не найдена в истории Bybit; статус оставлен неизвестным.");
+  return order;
+}
+
+export async function getDemoSpotExecutions(
+  apiKey: string,
+  apiSecret: string,
+  symbol: string,
+  orderId: string,
+): Promise<DemoSpotExecution[]> {
+  const fills: DemoSpotExecution[] = [];
+  let cursor = "";
+  for (let page = 0; page < 10; page++) {
+    const params: Record<string, string | number> = {
+      category: "spot", symbol, orderId, limit: 100,
+    };
+    if (cursor) params.cursor = cursor;
+    const response = await demoPrivateRequest<{
+      list?: DemoSpotExecution[];
+      nextPageCursor?: string;
+    }>(apiKey, apiSecret, "GET", "/v5/execution/list", params);
+    for (const fill of response.result?.list ?? []) {
+      if (fill.orderId === orderId && fill.symbol === symbol && fill.execId) fills.push(fill);
+    }
+    const next = response.result?.nextPageCursor ?? "";
+    if (!next || next === cursor) break;
+    cursor = next;
+  }
+  return fills;
+}
+
+/** Converts fees to USDT only when the exchange reports a known quote/base currency. */
+export function normalizeSpotFill(fill: DemoSpotExecution, quoteCoin = "USDT"): NormalizedSpotFill {
+  const qty = Number(fill.execQty);
+  const price = Number(fill.execPrice);
+  const value = Number(fill.execValue);
+  const feeAmount = Number(fill.execFee);
+  const execTime = Number(fill.execTime);
+  if (!fill.execId || !fill.orderId || !/^[A-Z0-9]{3,20}$/.test(fill.symbol) ||
+      (fill.side !== "Buy" && fill.side !== "Sell") ||
+      ![qty, price, feeAmount, execTime].every(Number.isFinite) ||
+      qty <= 0 || price <= 0 || feeAmount < 0 || execTime <= 0) {
+    throw new Error("Bybit вернул некорректные данные исполнения.");
+  }
+  const valueUsdt = Number.isFinite(value) && value > 0 ? value : qty * price;
+  const baseCoin = fill.symbol.endsWith(quoteCoin)
+    ? fill.symbol.slice(0, -quoteCoin.length)
+    : "";
+  if (!baseCoin || !Number.isFinite(valueUsdt) || valueUsdt <= 0 || !fill.feeCurrency) {
+    throw new Error("Невозможно однозначно определить валюту исполнения или комиссии.");
+  }
+  let feeUsdt: number | null = null;
+  if (fill.feeCurrency === quoteCoin) feeUsdt = feeAmount;
+  else if (fill.feeCurrency === baseCoin) feeUsdt = feeAmount * price;
+  return {
+    execId: fill.execId,
+    qty,
+    price,
+    valueUsdt,
+    feeAmount,
+    feeCurrency: fill.feeCurrency,
+    feeUsdt,
+    executedAt: new Date(execTime).toISOString(),
+  };
+}
