@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.os.Handler;
@@ -29,9 +30,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
-    private static final int NAVY=Color.rgb(8,20,39), PANEL=Color.rgb(14,31,55);
-    private static final int GOLD=Color.rgb(224,183,91), TEXT=Color.rgb(231,239,249);
-    private static final int MUTED=Color.rgb(139,160,187), GREEN=Color.rgb(29,143,111), RED=Color.rgb(190,67,78);
+    private static final int NAVY=Color.rgb(5,7,11), PANEL=Color.rgb(15,17,22);
+    private static final int GOLD=Color.rgb(247,190,55), TEXT=Color.rgb(242,242,245);
+    private static final int MUTED=Color.rgb(151,154,163), GREEN=Color.rgb(0,190,85), RED=Color.rgb(224,43,43);
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private final Handler handler=new Handler(Looper.getMainLooper());
     private String accessToken="", refreshToken="";
@@ -99,10 +100,20 @@ public class MainActivity extends Activity {
         TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(color);
         if(bold)t.setTypeface(null,1);return t;
     }
+    private GradientDrawable surface(int color,int radiusDp,int strokeColor){
+        GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radiusDp));
+        if(strokeColor!=0)d.setStroke(dp(1),strokeColor);return d;
+    }
+    private void stylePanel(View view,int paddingDp){
+        view.setBackground(surface(PANEL,14,0xFF38301C));
+        if(view instanceof TextView)((TextView)view).setPadding(dp(paddingDp),dp(paddingDp),dp(paddingDp),dp(paddingDp));
+        view.setElevation(dp(2));
+    }
     private Button button(String s,int bg,int fg){
         Button b=new Button(this);b.setText(s);b.setTextColor(fg);b.setTextSize(14);
-        b.setAllCaps(false);b.setTypeface(null,1);
-        b.setBackgroundTintList(ColorStateList.valueOf(bg));return b;
+        b.setAllCaps(false);b.setTypeface(null,1);b.setMinHeight(dp(44));
+        b.setPadding(dp(12),dp(8),dp(12),dp(8));
+        b.setBackground(surface(bg,13,bg==GOLD?0:0xFF51401D));b.setElevation(dp(2));return b;
     }
     private LinearLayout vertical(){
         LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;
@@ -191,7 +202,7 @@ public class MainActivity extends Activity {
         content.addView(header);
         menu.setOnClickListener(v->showMenu());
 
-        accountPanel=horizontal();accountPanel.setPadding(dp(12),dp(10),dp(12),dp(10));accountPanel.setBackgroundColor(PANEL);
+        accountPanel=horizontal();accountPanel.setPadding(dp(12),dp(10),dp(12),dp(10));accountPanel.setBackground(surface(PANEL,15,0xFF51401D));accountPanel.setElevation(dp(2));
         TextView accountLabel=label("ВИРТУАЛЬНЫЙ БАЛАНС",10,MUTED,true);
         accountPanel.addView(accountLabel,new LinearLayout.LayoutParams(0,-2,1));
         balanceText=label("Загрузка…",18,TEXT,true);accountPanel.addView(balanceText);
@@ -235,7 +246,7 @@ public class MainActivity extends Activity {
         analysisDivider=new View(this);analysisDivider.setBackgroundColor(0xFF263D5A);
         LinearLayout.LayoutParams divp=new LinearLayout.LayoutParams(-1,dp(1));divp.topMargin=dp(8);content.addView(analysisDivider,divp);
         analysisText=label("Для анализа ожидаются подтверждённые минутные свечи.",12,TEXT,false);
-        analysisText.setPadding(dp(8),dp(8),dp(8),dp(8));content.addView(analysisText);
+        stylePanel(analysisText,10);content.addView(analysisText);
 
         controlsPanel=vertical();
         TextView expiryLabel=label("ЭКСПИРАЦИЯ",10,MUTED,true);expiryLabel.setPadding(dp(4),dp(10),0,dp(4));controlsPanel.addView(expiryLabel);
@@ -263,9 +274,9 @@ public class MainActivity extends Activity {
 
         historyPanel=vertical();
         TextView statsTitle=label("СТАТИСТИКА СДЕЛОК",11,GOLD,true);statsTitle.setPadding(dp(4),dp(12),0,dp(5));historyPanel.addView(statsTitle);
-        statsText=label("Загружаем статистику…",12,TEXT,false);statsText.setPadding(dp(10),dp(10),dp(10),dp(10));statsText.setBackgroundColor(PANEL);historyPanel.addView(statsText);
+        statsText=label("Загружаем статистику…",12,TEXT,false);stylePanel(statsText,10);historyPanel.addView(statsText);
         TextView historyTitle=label("ПОСЛЕДНИЕ СДЕЛКИ",11,MUTED,true);historyTitle.setPadding(dp(4),dp(12),0,dp(5));historyPanel.addView(historyTitle);
-        historyText=label("Пока нет сделок",12,TEXT,false);historyText.setPadding(dp(8),dp(8),dp(8),dp(8));historyText.setBackgroundColor(PANEL);historyPanel.addView(historyText);
+        historyText=label("Пока нет сделок",12,TEXT,false);stylePanel(historyText,10);historyPanel.addView(historyText);
         content.addView(historyPanel);
         TextView footer=label("Только виртуальный счёт • Аналитика не гарантирует результат",10,MUTED,false);
         footer.setGravity(Gravity.CENTER);footer.setPadding(0,dp(14),0,dp(6));content.addView(footer);
