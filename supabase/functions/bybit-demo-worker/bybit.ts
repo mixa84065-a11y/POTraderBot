@@ -314,3 +314,27 @@ export function normalizeSpotFill(fill: DemoSpotExecution, quoteCoin = "USDT"): 
     executedAt: new Date(execTime).toISOString(),
   };
 }
+
+/** Resolves a third-token spot fee through a fresh public USDT market quote.
+ * If the fee asset has no liquid USDT spot pair, it throws instead of understating costs.
+ */
+export async function resolveSpotFeeUsdt(fill: NormalizedSpotFill): Promise<number> {
+  if (fill.feeUsdt !== null) return fill.feeUsdt;
+  if (!/^[A-Z0-9]{2,12}$/.test(fill.feeCurrency) || fill.feeCurrency === "USDT") {
+    throw new Error("Не удалось определить валюту комиссии для пересчёта в USDT.");
+  }
+  const symbol = fill.feeCurrency + "USDT";
+  const url = new URL("https://api.bybit.com/v5/market/tickers");
+  url.search = new URLSearchParams({ category: "spot", symbol }).toString();
+  const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+  const data = await response.json();
+  if (!response.ok || data.retCode !== 0) {
+    throw new Error("Не удалось получить курс токена комиссии " + fill.feeCurrency + "/USDT.");
+  }
+  const ticker = data.result?.list?.[0];
+  const price = Number(ticker?.lastPrice);
+  if (!Number.isFinite(price) || price <= 0) {
+    throw new Error("Нет достоверной котировки токена комиссии " + fill.feeCurrency + "/USDT.");
+  }
+  return fill.feeAmount * price;
+}
