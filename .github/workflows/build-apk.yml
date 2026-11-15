@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - feature/god-of-trading-2.0
+      - feature/god-of-trading-2.0\n      - feature/bybit-auto-terminal
 
 permissions:
   contents: read
