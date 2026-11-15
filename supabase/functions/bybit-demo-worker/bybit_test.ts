@@ -1,6 +1,8 @@
 import {
   buildSpotMarketBuy,
   buildSpotMarketSell,
+  buildSpotStopLossSell,
+  cancelDemoSpotStopOrder,
   floorToStep,
   getDemoSpotOrder,
   makeOrderLinkId,
@@ -97,6 +99,39 @@ Deno.test("closed order recovery falls back to Bybit order history after realtim
     const order = await getDemoSpotOrder("test-api-key-123456", "test-api-secret-123456789012", "BTCUSDT", "history-order-1");
     if (order.orderId !== "history-order-1" || !paths.includes("/v5/order/history")) {
       throw new Error("order history fallback was not used");
+    }
+  } finally {
+    Object.defineProperty(globalThis, "fetch", { configurable: true, writable: true, value: originalFetch });
+  }
+});
+
+
+Deno.test("spot native stop-loss builder uses conditional market sell", () => {
+  const order = buildSpotStopLossSell("BTCUSDT", "0.002", "49650", "g2stop123");
+  if (order.side !== "Sell" || order.orderType !== "Market" ||
+      order.orderFilter !== "StopOrder" || order.marketUnit !== "baseCoin" ||
+      order.triggerPrice !== "49650") {
+    throw new Error("native stop-loss payload mismatch");
+  }
+});
+
+Deno.test("spot stop cancellation uses StopOrder filter", async () => {
+  const originalFetch = globalThis.fetch;
+  let body: Record<string, unknown> | null = null;
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    writable: true,
+    value: async (_input: RequestInfo | URL, init?: RequestInit) => {
+      body = JSON.parse(String(init?.body ?? "{}"));
+      return new Response(JSON.stringify({
+        retCode: 0, retMsg: "OK", result: { orderId: "stop-order-1" },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    },
+  });
+  try {
+    await cancelDemoSpotStopOrder("test-api-key-123456", "test-api-secret-123456789012", "BTCUSDT", "stop-order-1");
+    if (!body || body.orderFilter !== "StopOrder" || body.orderId !== "stop-order-1") {
+      throw new Error("stop order cancellation payload mismatch");
     }
   } finally {
     Object.defineProperty(globalThis, "fetch", { configurable: true, writable: true, value: originalFetch });
