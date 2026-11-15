@@ -16,11 +16,12 @@ export type PendingDemoOrder = {
   position_id: string | null;
   symbol: string;
   side: "Buy" | "Sell";
-  purpose: "ENTRY" | "EXIT";
+  purpose: "ENTRY" | "EXIT" | "PROTECTION";
   order_link_id: string;
   exchange_order_id: string | null;
   requested_qty: string | number;
   qty_unit: "baseCoin" | "quoteCoin";
+  trigger_price?: string | number | null;
   status: "INTENT" | "SUBMITTED" | "PARTIALLY_FILLED" | "UNKNOWN" | "FILLED" | "CANCELLED" | "REJECTED";
 };
 
@@ -51,6 +52,14 @@ export async function submitOrReconcileDemoOrder(input: {
       payload.symbol !== order.symbol || payload.side !== order.side ||
       payload.marketUnit !== order.qty_unit) {
     throw new Error("Заявка не совпадает с сохранённым серверным намерением.");
+  }
+  if (order.purpose === "PROTECTION") {
+    if (!("triggerPrice" in payload) || payload.orderFilter !== "StopOrder" ||
+        Number(payload.triggerPrice) !== Number(order.trigger_price)) {
+      throw new Error("Параметры биржевого стоп-ордера не совпадают с сохранёнными.");
+    }
+  } else if ("triggerPrice" in payload) {
+    throw new Error("Условный стоп-ордер нельзя отправить как обычный вход/выход.");
   }
 
   if (order.status === "REJECTED") {
