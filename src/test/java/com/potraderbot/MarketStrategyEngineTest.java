@@ -6,7 +6,7 @@ import static org.junit.Assert.*;
 public class MarketStrategyEngineTest {
     private double[] trend(double start,double step) {
         double[] values=new double[80];
-        for(int i=0;i<values.length;i++)values[i]=start+i*step;
+        for(int i=0;i<values.length;i++)values[i]=start+i*step+(i%2==0?0.2:-0.15);
         return values;
     }
 
