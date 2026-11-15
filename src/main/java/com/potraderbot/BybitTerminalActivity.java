@@ -6,6 +6,7 @@ import android.text.InputType;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -84,20 +85,32 @@ public class BybitTerminalActivity extends Activity {
         TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(color);
         if(bold)t.setTypeface(null,1);return t;
     }
+    private GradientDrawable surface(int color,int radiusDp,int strokeColor){
+        GradientDrawable d=new GradientDrawable();
+        d.setColor(color);d.setCornerRadius(dp(radiusDp));
+        if(strokeColor!=0)d.setStroke(dp(1),strokeColor);
+        return d;
+    }
+    private void styleCard(View view,int paddingDp){
+        view.setBackground(surface(PANEL,14,0xFF263B56));
+        view.setElevation(dp(2));
+        if(view instanceof TextView)((TextView)view).setPadding(dp(paddingDp),dp(paddingDp),dp(paddingDp),dp(paddingDp));
+    }
     private Button button(String s,int bg,int fg){
-        Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(13);b.setTypeface(null,1);
-        b.setTextColor(fg);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(bg));return b;
+        Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(12);b.setTypeface(null,1);
+        b.setTextColor(fg);b.setMinHeight(dp(44));b.setPadding(dp(12),dp(8),dp(12),dp(8));
+        b.setBackground(surface(bg,12,bg==GOLD?0:0xFF304762));b.setElevation(dp(2));return b;
     }
     private LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(1);return l;}
     private LinearLayout horizontal(){LinearLayout l=new LinearLayout(this);l.setOrientation(0);l.setGravity(Gravity.CENTER_VERTICAL);return l;}
     private void buildScreen(){
         LinearLayout root=vertical();root.setPadding(dp(14),dp(12),dp(14),dp(18));root.setBackgroundColor(BG);
         LinearLayout top=horizontal();
-        TextView title=text("BYBIT  /  TRADING TERMINAL",18,GOLD,true);
+        TextView title=text("GOD OF TRADING",19,GOLD,true);
         top.addView(title,new LinearLayout.LayoutParams(0,dp(44),1));
         Button back=button("НАЗАД",PANEL,WHITE);top.addView(back,new LinearLayout.LayoutParams(-2,dp(40)));
         back.setOnClickListener(v->finish());root.addView(top);
-        TextView sub=text("SPOT • КОТИРОВКИ BYBIT • ЛОКАЛЬНАЯ СИМУЛЯЦИЯ",10,MUTED,true);sub.setPadding(0,dp(2),0,dp(10));root.addView(sub);
+        TextView sub=text("BYBIT TERMINAL  •  MARKET INTELLIGENCE",10,MUTED,true);sub.setPadding(0,dp(2),0,dp(10));root.addView(sub);
         LinearLayout select=horizontal();
         TextView pairLabel=text("ИНСТРУМЕНТ",10,MUTED,true);select.addView(pairLabel);
         symbolPicker=new Spinner(this);
@@ -117,7 +130,7 @@ public class BybitTerminalActivity extends Activity {
         multiScan.addView(multiScanButton,new LinearLayout.LayoutParams(0,dp(46),1));
         LinearLayout.LayoutParams msp=new LinearLayout.LayoutParams(-1,-2);msp.topMargin=dp(6);root.addView(multiScan,msp);
         multiScanText=text("Мультианализ: нажмите «Сканировать рынок». Будут проверены наиболее ликвидные инструменты Bybit.",11,MUTED,false);
-        multiScanText.setPadding(dp(10),dp(8),dp(10),dp(8));multiScanText.setBackgroundColor(PANEL);root.addView(multiScanText);
+        styleCard(multiScanText,12);root.addView(multiScanText);
         multiScanButton.setOnClickListener(v->runMultiScan());
         symbolPicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
             @Override public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){
@@ -130,7 +143,7 @@ public class BybitTerminalActivity extends Activity {
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> p){}
         });
-        LinearLayout quote=horizontal();quote.setPadding(dp(12),dp(12),dp(12),dp(12));quote.setBackgroundColor(PANEL);
+        LinearLayout quote=horizontal();quote.setPadding(dp(14),dp(14),dp(14),dp(14));quote.setBackground(surface(PANEL,16,0xFF263B56));quote.setElevation(dp(2));
         LinearLayout qleft=vertical();
         priceText=text("Загрузка цены…",25,WHITE,true);qleft.addView(priceText);
         changeText=text("24ч: —",11,MUTED,false);qleft.addView(changeText);
@@ -139,7 +152,7 @@ public class BybitTerminalActivity extends Activity {
         LinearLayout.LayoutParams qp=new LinearLayout.LayoutParams(-1,-2);qp.topMargin=dp(8);root.addView(quote,qp);
         priceChart=new PriceChart();LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(220));cp.topMargin=dp(8);root.addView(priceChart,cp);
         TextView tf=text("ГРАФИК • 1 МИНУТА • ПОСЛЕДНИЕ 100 СВЕЧЕЙ",10,MUTED,true);tf.setPadding(dp(3),dp(5),0,dp(5));root.addView(tf);
-        LinearLayout wallet=horizontal();wallet.setPadding(dp(12),dp(12),dp(12),dp(12));wallet.setBackgroundColor(PANEL);
+        LinearLayout wallet=horizontal();wallet.setPadding(dp(14),dp(14),dp(14),dp(14));wallet.setBackground(surface(PANEL,16,0xFF263B56));wallet.setElevation(dp(2));
         LinearLayout cashCol=vertical();cashCol.addView(text("ДЕМО-БАЛАНС",10,MUTED,true));
         balanceText=text("",20,WHITE,true);cashCol.addView(balanceText);
         wallet.addView(cashCol,new LinearLayout.LayoutParams(0,-2,1));
@@ -159,7 +172,7 @@ public class BybitTerminalActivity extends Activity {
         TextView real=text("РЕАЛЬНЫЙ СЧЁТ: ЗАБЛОКИРОВАН ДО ПОДКЛЮЧЕНИЯ ЗАЩИЩЁННОГО API И ПРОВЕРКИ ДЕМО",10,RED,true);
         real.setPadding(dp(4),dp(12),dp(4),dp(8));root.addView(real);
         TextView historyTitle=text("ПОСЛЕДНЯЯ ДЕМО-СДЕЛКА",10,GOLD,true);historyTitle.setPadding(dp(4),dp(10),0,dp(5));root.addView(historyTitle);
-        historyText=text("Сделок пока нет.",12,WHITE,false);historyText.setPadding(dp(12),dp(12),dp(12),dp(12));historyText.setBackgroundColor(PANEL);root.addView(historyText);
+        historyText=text("Сделок пока нет.",12,WHITE,false);styleCard(historyText,12);root.addView(historyText);
         TextView foot=text("Автостратегия — экспериментальная эвристика, не гарантия доходности. Это локальный симулятор, не Bybit Demo API.",10,MUTED,false);
         foot.setPadding(dp(4),dp(12),dp(4),0);root.addView(foot);
         // Keep the autonomous multi-market demo immediately after the local terminal,
@@ -201,7 +214,7 @@ public class BybitTerminalActivity extends Activity {
 
 
     private void buildMultiMarketPaperSection(LinearLayout root){
-        TextView heading=text("АВТОНОМНОЕ МУЛЬТИРЫНОЧНОЕ АВТОДЕМО",12,GOLD,true);
+        TextView heading=text("АВТОНОМНОЕ МУЛЬТИРЫНОЧНОЕ ДЕМО",13,GOLD,true);
         heading.setPadding(dp(4),dp(20),0,dp(8));root.addView(heading);
         TextView note=text("Отдельный серверный бумажный портфель: 200 USDT виртуально. Spot, USDT Futures, Inverse, Options, акции, ETF, Forex и сырьё Bybit TradFi. Цикл каждую минуту, работает при закрытом приложении. Только виртуальные сделки — ключи Bybit не используются.",10,MUTED,false);
         note.setPadding(dp(4),0,dp(4),dp(8));root.addView(note);
@@ -215,7 +228,7 @@ public class BybitTerminalActivity extends Activity {
         LinearLayout.LayoutParams refreshLp=new LinearLayout.LayoutParams(-1,dp(44));refreshLp.topMargin=dp(6);root.addView(refresh,refreshLp);
         refresh.setOnClickListener(v->refreshPaperAutoReport());
         paperAutoReportText=text("Проверяем состояние автономного автодемо…",11,WHITE,false);
-        paperAutoReportText.setPadding(dp(12),dp(12),dp(12),dp(12));paperAutoReportText.setBackgroundColor(PANEL);
+        styleCard(paperAutoReportText,12);
         LinearLayout.LayoutParams reportLp=new LinearLayout.LayoutParams(-1,-2);reportLp.topMargin=dp(8);root.addView(paperAutoReportText,reportLp);
         refreshPaperAutoReport();
     }
