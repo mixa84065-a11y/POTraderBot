@@ -717,6 +717,7 @@ public class BybitTerminalActivity extends Activity {
             managePaperTrade(0,0L);renderLedger();return;
         }
         int s=score();String dir=s>=3?"ПОКУПКА":s<=-3?"СЛАБЫЙ ТРЕНД / ВЫХОД":"НЕТ СИГНАЛА";
+        if(priceChart!=null)priceChart.setAnalysis(s,dir);
         signalText.setText("АНАЛИЗ: "+dir+"  •  SCORE "+s);
         signalText.setTextColor(s>=3?GREEN:s<=-3?RED:WHITE);
         statusText.setText("EMA 9/21 + RSI(14) + импульс. Балл — эвристика, не вероятность прибыли.");
@@ -771,9 +772,10 @@ public class BybitTerminalActivity extends Activity {
     @Override protected void onDestroy(){handler.removeCallbacks(poll);handler.removeCallbacks(paperStatusPoll);io.shutdownNow();super.onDestroy();}
 
     private final class PriceChart extends View{
-        private final Paint p=new Paint(3);private JSONArray data=new JSONArray();private double entryPrice=0;
+        private final Paint p=new Paint(3);private JSONArray data=new JSONArray();private double entryPrice=0;private int analysisScore=0;private String analysisLabel="ОЖИДАНИЕ АНАЛИЗА";
         PriceChart(){super(BybitTerminalActivity.this);setBackgroundColor(PANEL);}
         void setCandles(JSONArray d,double entry){data=d;entryPrice=entry;invalidate();}
+        void setAnalysis(int score,String label){analysisScore=score;analysisLabel=label;invalidate();}
         private double[] emaValues(int period){
             double[] out=new double[data.length()];if(data.length()==0)return out;
             try{
@@ -826,6 +828,12 @@ public class BybitTerminalActivity extends Activity {
             p.setColor(GOLD);c.drawText("EMA 9",dp(8),dp(15),p);
             p.setColor(0xFF979AA3);c.drawText("EMA 21",dp(58),dp(15),p);
             p.setFakeBoldText(false);
+            int signalColor=analysisScore>=3?GREEN:analysisScore<=-3?RED:MUTED;
+            String analysisTag="АНАЛИЗ: "+analysisLabel+"  •  "+(analysisScore>0?"+":"")+analysisScore;
+            p.setTextSize(dp(9));p.setFakeBoldText(true);
+            float aw=p.measureText(analysisTag)+dp(14);
+            p.setColor(0xFF20242C);c.drawRoundRect(w-aw-dp(6),dp(22),w-dp(6),dp(42),dp(5),dp(5),p);
+            p.setColor(signalColor);c.drawText(analysisTag,w-aw,p.getTextSize()+dp(17),p);p.setFakeBoldText(false);
             if(entryPrice>0){
                 float ey=(float)(bottom-(entryPrice-min)/range*plotH);
                 p.setColor(GOLD);p.setStrokeWidth(dp(1));p.setPathEffect(new android.graphics.DashPathEffect(new float[]{dp(5),dp(4)},0));
