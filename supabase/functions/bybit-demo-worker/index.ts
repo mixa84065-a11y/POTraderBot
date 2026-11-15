@@ -71,6 +71,68 @@ async function signedGet(apiKey: string, apiSecret: string, path: string, params
   return data;
 }
 
+type SpotInstrument = {
+  symbol: string;
+  status: string;
+  lotSizeFilter: {
+    minOrderAmt?: string;
+    maxMarketOrderQty?: string;
+    maxLimitOrderQty?: string;
+    basePrecision?: string;
+    quotePrecision?: string;
+  };
+  priceFilter: { tickSize?: string };
+};
+
+async function publicJson(path: string, params: Record<string, string>) {
+  const url = new URL(`${BYBIT_PUBLIC_BASE}${path}`);
+  url.search = new URLSearchParams(params).toString();
+  const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  const data = await response.json();
+  if (!response.ok || data.retCode !== 0) {
+    throw new Error(`Bybit public API ${path}: ${data.retMsg ?? response.status}`);
+  }
+  return data;
+}
+
+// Read live exchange constraints before any future order sizing. This is
+// deliberately informational until the complete execution/risk engine is verified.
+async function publicSpotPreflight(symbol: string) {
+  const [instrumentData, tickerData] = await Promise.all([
+    publicJson("/v5/market/instruments-info", { category: "spot", symbol }),
+    publicJson("/v5/market/tickers", { category: "spot", symbol }),
+  ]);
+  const instrument = (instrumentData.result?.list ?? [])[0] as SpotInstrument | undefined;
+  const ticker = (tickerData.result?.list ?? [])[0];
+  if (!instrument || instrument.symbol !== symbol || instrument.status !== "Trading") {
+    throw new Error(`${symbol}: инструмент отсутствует или не в статусе Trading.`);
+  }
+  const last = Number(ticker?.lastPrice);
+  const bid = Number(ticker?.bid1Price);
+  const ask = Number(ticker?.ask1Price);
+  const minOrderAmt = Number(instrument.lotSizeFilter?.minOrderAmt);
+  const maxMarketOrderQty = Number(instrument.lotSizeFilter?.maxMarketOrderQty);
+  const tickSize = Number(instrument.priceFilter?.tickSize);
+  if (![last, bid, ask, minOrderAmt, maxMarketOrderQty, tickSize].every(Number.isFinite) ||
+      last <= 0 || bid <= 0 || ask <= 0 || ask < bid ||
+      minOrderAmt <= 0 || maxMarketOrderQty <= 0 || tickSize <= 0) {
+    throw new Error(`${symbol}: биржа вернула неполные или некорректные торговые ограничения.`);
+  }
+  return {
+    status: instrument.status,
+    last_price: last,
+    best_bid: bid,
+    best_ask: ask,
+    spread_pct: Number(((ask - bid) / last * 100).toFixed(5)),
+    min_order_amount_usdt: minOrderAmt,
+    max_market_order_qty: maxMarketOrderQty,
+    tick_size: String(instrument.priceFilter.tickSize),
+    base_precision: instrument.lotSizeFilter.basePrecision ?? null,
+    quote_precision: instrument.lotSizeFilter.quotePrecision ?? null,
+    checked_at: new Date().toISOString(),
+  };
+}
+
 async function publicKlines(symbol: string) {
   const url = new URL(`${BYBIT_PUBLIC_BASE}/v5/market/kline`);
   url.search = new URLSearchParams({ category: "spot", symbol, interval: "1", limit: "80" }).toString();
@@ -186,8 +248,11 @@ async function processRun(run: ActiveRun) {
     for (const symbol of symbols) {
       const candles = await publicKlines(symbol);
       if (candles.length < 30) throw new Error(`Недостаточно свечей для ${symbol}.`);
-      const signal = analyze(candles);
-      results.push({ symbol, ...signal });
+      const [signal, market] = await Promise.all([
+        Promise.resolve(analyze(candles)),
+        publicSpotPreflight(symbol),
+      ]);
+      results.push({ symbol, ...signal, market });
     }
 
     await rpc("bybit_demo_worker_heartbeat_v2", {
