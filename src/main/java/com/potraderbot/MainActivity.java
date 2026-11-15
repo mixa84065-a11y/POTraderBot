@@ -339,7 +339,7 @@ public class MainActivity extends Activity {
                 bybitPrice.setText(price+" USDT");
                 bybitChange.setText(String.format(Locale.US,"24ч: %+.2f%%",change));
                 JSONArray candles=result.optJSONArray("candles");
-                bybitChart.setMarketData(candles,true);
+                bybitChart.setInstrumentLabel(requested+" • M1");\n                bybitChart.setMarketData(candles,true);
                 bybitStatus.setText("Данные получены с Bybit • "+requested+" • M1 • обновление каждые 5 сек.");
             });
         });
