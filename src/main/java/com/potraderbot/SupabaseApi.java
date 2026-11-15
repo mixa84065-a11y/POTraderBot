@@ -120,4 +120,29 @@ public final class SupabaseApi {
         b.put("expiry_seconds", expirySeconds);
         return (JSONObject) request("POST", "/functions/v1/demo-trade", b, token);
     }
+
+    public static JSONObject saveBybitDemoCredentials(String token, String apiKey, String apiSecret) throws Exception {
+        JSONObject b = new JSONObject();
+        b.put("p_api_key", apiKey);
+        b.put("p_api_secret", apiSecret);
+        return (JSONObject) request("POST", "/rest/v1/rpc/bybit_demo_save_credentials", b, token);
+    }
+
+    public static JSONObject startBybitDemoRun(String token, JSONArray symbols) throws Exception {
+        JSONObject b = new JSONObject();
+        b.put("p_symbols", symbols);
+        return (JSONObject) request("POST", "/rest/v1/rpc/bybit_demo_start_run", b, token);
+    }
+
+    public static JSONObject stopBybitDemoRun(String token, String runId) throws Exception {
+        JSONObject b = new JSONObject();
+        b.put("p_run_id", runId);
+        return (JSONObject) request("POST", "/rest/v1/rpc/bybit_demo_stop_run", b, token);
+    }
+
+    public static JSONObject getBybitDemoReport(String token) throws Exception {
+        JSONObject b = new JSONObject();
+        b.put("p_run_id", JSONObject.NULL);
+        return (JSONObject) request("POST", "/rest/v1/rpc/bybit_demo_get_report", b, token);
+    }
 }
