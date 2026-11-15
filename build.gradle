@@ -20,7 +20,7 @@ android {
         applicationId 'com.potraderbot.godoftrading2standalone'
         minSdk 23
         targetSdk 35
-        versionCode 23
+        versionCode 24
         versionName '2.0.0-alpha03'
         buildConfigField 'String', 'SUPABASE_URL', '"https://srzemjqjgceoebvimmct.supabase.co"'
         buildConfigField 'String', 'SUPABASE_PUBLISHABLE_KEY', '"sb_publishable_YAOzHx7szuwIStV4XOq0Ng_dNr1j5ia"'
@@ -29,6 +29,9 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.persistent
+            // Explicitly keep compatibility with Android 6–15 installers.
+            // APK Signature v1 supports older package verifiers; v2 is required on modern Android.
+            // (Gradle enables both by default for APKs.)
         }
     }
 }
