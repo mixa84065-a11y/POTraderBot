@@ -298,8 +298,13 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(4));content.addView(strengthBar,bp);
 
         historyPanel=vertical();
-        TextView statsTitle=label("СТАТИСТИКА СДЕЛОК",11,GOLD,true);statsTitle.setPadding(dp(4),dp(12),0,dp(5));historyPanel.addView(statsTitle);
+        TextView statsTitle=label("СТАТИСТИКА СДЕЛОК  ▾",11,GOLD,true);statsTitle.setPadding(dp(4),dp(12),0,dp(5));historyPanel.addView(statsTitle);
         statsText=label("Загружаем статистику…",12,TEXT,false);stylePanel(statsText,10);historyPanel.addView(statsText);
+        statsTitle.setOnClickListener(v->{
+            boolean expanded=statsText.getVisibility()==View.VISIBLE;
+            statsText.setVisibility(expanded?View.GONE:View.VISIBLE);
+            statsTitle.setText(expanded?"СТАТИСТИКА СДЕЛОК  ▸":"СТАТИСТИКА СДЕЛОК  ▾");
+        });
         TextView historyTitle=label("ПОСЛЕДНИЕ СДЕЛКИ",11,MUTED,true);historyTitle.setPadding(dp(4),dp(12),0,dp(5));historyPanel.addView(historyTitle);
         historyText=label("Пока нет сделок",12,TEXT,false);stylePanel(historyText,10);historyPanel.addView(historyText);
         content.addView(historyPanel);
