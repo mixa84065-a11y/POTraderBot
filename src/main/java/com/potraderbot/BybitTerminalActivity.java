@@ -240,29 +240,52 @@ public class BybitTerminalActivity extends Activity {
         final int selected=scanCategoryPicker.getSelectedItemPosition();
         final String category=selected==3?"stock":selected==4?"ETF":new String[]{"spot","linear","inverse"}[selected];
         multiScanButton.setEnabled(false);
-        multiScanText.setText("Сканируем до 30 наиболее ликвидных инструментов Bybit ("+category+") параллельно. Только публичные данные, ордера не отправляются…");
+        multiScanText.setText("Получаем каталог Bybit и проверяем котировки ("+category+"). Только публичные данные, ордера не отправляются…");
         io.execute(()->{
+            java.util.List<BybitMarketScanner.Instrument> catalog=null;
             java.util.List<BybitMarketScanner.Signal> signals=null;String error=null;
-            try{signals=("stock".equals(category)||"ETF".equals(category))
-                    ?BybitMarketScanner.scanTradFi(category,30):BybitMarketScanner.scan(category,30);}
-            catch(Exception e){error=e.getMessage();}
+            try{
+                if("stock".equals(category)||"ETF".equals(category)){
+                    catalog=BybitMarketScanner.loadTradFiCatalog(category,30);
+                    signals=BybitMarketScanner.scanTradFi(category,30);
+                }else signals=BybitMarketScanner.scan(category,30);
+            }catch(Exception e){error=e.getMessage();}
+            final java.util.List<BybitMarketScanner.Instrument> listed=catalog;
             final java.util.List<BybitMarketScanner.Signal> found=signals;final String problem=error;
             runOnUiThread(()->{
                 if(isFinishing())return;
                 multiScanButton.setEnabled(true);
-                if(found==null){multiScanText.setText("Ошибка сканирования: "+problem);return;}
-                if(found.isEmpty()){multiScanText.setText("Нет свежих сигналов. Новые входы не рекомендуются.");return;}
+                if(found==null&&listed==null){multiScanText.setText("Ошибка загрузки Bybit: "+problem);return;}
                 String categoryLabel=("stock".equals(category)?"АКЦИИ TRADFI":("ETF".equals(category)?"ETF TRADFI":category.toUpperCase(java.util.Locale.US)));
-                StringBuilder out=new StringBuilder("РЕЙТИНГ ИНСТРУМЕНТОВ BYBIT • "+categoryLabel+"\n");
-                int shown=Math.min(15,found.size());
-                for(int i=0;i<shown;i++){
-                    BybitMarketScanner.Signal x=found.get(i);
-                    out.append(i+1).append(". ").append(x.instrument.displayName).append(" (").append(x.instrument.symbol).append(")")
-                       .append(x.instrument.marketRegion.isEmpty()?"":" • "+x.instrument.marketRegion).append(" • ").append(x.direction)
-                       .append(" • score ").append(x.score).append(" • ").append(String.format(java.util.Locale.US,"%.8f",x.lastPrice)).append("\n");
+                StringBuilder out=new StringBuilder("BYBIT • "+categoryLabel+"\n");
+                if(listed!=null){
+                    out.append("КАТАЛОГ ДОСТУПНЫХ ИНСТРУМЕНТОВ (").append(listed.size()).append(")\n");
+                    int catalogShown=Math.min(15,listed.size());
+                    for(int i=0;i<catalogShown;i++){
+                        BybitMarketScanner.Instrument x=listed.get(i);
+                        out.append(i+1).append(". ").append(x.displayName).append(" (").append(x.symbol).append(")")
+                           .append(x.marketRegion.isEmpty()?"":" • "+x.marketRegion)
+                           .append(" • оборот 24ч ").append(String.format(java.util.Locale.US,"%,.0f",x.turnover24h)).append("\n");
+                    }
+                    if(listed.isEmpty())out.append("Bybit не вернул активные инструменты этой категории.\n");
+                    out.append("\nКаталог — публичный список Bybit; возможность торговли зависит от региона, KYC и допуска аккаунта.\n");
                 }
-                out.append("\nПроверено сигналов: ").append(found.size())
-                   .append(". Score — эвристика, не вероятность дохода. Это мультианализ, не открытие позиций.");
+                if(found==null){
+                    out.append("\nКаталог загружен, но анализ завершился ошибкой: ").append(problem==null?"неизвестная ошибка":problem);
+                }else if(found.isEmpty()){
+                    out.append("\nСвежих сигналов сейчас нет. Возможная причина — закрытая торговая сессия или устаревшие свечи. Новые входы не рекомендуются.");
+                }else{
+                    out.append("\nСИГНАЛЫ (").append(found.size()).append(")\n");
+                    int shown=Math.min(15,found.size());
+                    for(int i=0;i<shown;i++){
+                        BybitMarketScanner.Signal x=found.get(i);
+                        out.append(i+1).append(". ").append(x.instrument.displayName).append(" (").append(x.instrument.symbol).append(")")
+                           .append(x.instrument.marketRegion.isEmpty()?"":" • "+x.instrument.marketRegion).append(" • ").append(x.direction)
+                           .append(" • score ").append(x.score).append(" • ").append(String.format(java.util.Locale.US,"%.8f",x.lastPrice)).append("\n");
+                    }
+                    out.append("\nScore — эвристика, не вероятность дохода.");
+                }
+                out.append("\nМультианализ не открывает позиции и не отправляет ордера.");
                 multiScanText.setText(out.toString());
             });
         });
