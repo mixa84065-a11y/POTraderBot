@@ -709,7 +709,7 @@ public class BybitTerminalActivity extends Activity {
         historyText.setText(last);
     }
     @Override protected void onResume(){super.onResume();handler.removeCallbacks(poll);handler.post(poll);refreshServerReport();refreshPaperAutoReport();handler.removeCallbacks(paperStatusPoll);handler.postDelayed(paperStatusPoll,60000);}
-    @Override protected void onPause(){super.onPause();handler.removeCallbacks(poll);}
+    @Override protected void onPause(){super.onPause();handler.removeCallbacks(poll);handler.removeCallbacks(paperStatusPoll);}
     @Override protected void onDestroy(){handler.removeCallbacks(poll);io.shutdownNow();super.onDestroy();}
 
     private final class PriceChart extends View{
