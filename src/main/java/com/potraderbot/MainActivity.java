@@ -206,6 +206,7 @@ public class MainActivity extends Activity {
         accountPanel.addView(accountLabel,new LinearLayout.LayoutParams(0,-2,1));
         balanceText=label("Загрузка…",18,TEXT,true);accountPanel.addView(balanceText);
         LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(-1,-2);ap.topMargin=dp(8);content.addView(accountPanel,ap);
+        addDashboardNavigation(content);
 
         TextView pairLabel=label("РЫНОК  •  ВАЛЮТНАЯ ПАРА",10,MUTED,true);
         pairLabel.setPadding(dp(4),dp(10),0,dp(3));content.addView(pairLabel);
@@ -283,6 +284,94 @@ public class MainActivity extends Activity {
         updateExpiryButtons();
         handler.removeCallbacks(poll);
         handler.post(poll);
+    }
+
+
+    private void addDashboardNavigation(LinearLayout content){
+        LinearLayout nav=horizontal();nav.setPadding(0,dp(12),0,dp(8));
+        String[] labels={"BYBIT","АНАЛИЗ","СТАТИСТИКА","ИСТОРИЯ","ПРОФИЛЬ"};
+        for(int i=0;i<labels.length;i++){
+            final int index=i;Button item=button(labels[i],i==0?GOLD:PANEL,i==0?NAVY:TEXT);
+            item.setTextSize(9);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(42),1);
+            lp.leftMargin=dp(2);lp.rightMargin=dp(2);nav.addView(item,lp);
+            item.setOnClickListener(v->{
+                if(index==0)openBybitTerminal();
+                else if(index==1)showSection("АНАЛИТИКА");
+                else if(index==2)showSection("СТАТИСТИКА");
+                else if(index==3)showSection("ИСТОРИЯ СДЕЛОК");
+                else showSection("ПРОФИЛЬ");
+            });
+        }
+        content.addView(nav);
+    }
+
+    private void showSection(String section){
+        LinearLayout root=vertical();root.setPadding(dp(16),dp(18),dp(16),dp(24));root.setBackgroundColor(NAVY);
+        LinearLayout top=horizontal();
+        Button back=button("‹",PANEL,GOLD);top.addView(back,new LinearLayout.LayoutParams(dp(48),dp(42)));
+        TextView title=label("♛  GOD OF TRADING 2.0",17,GOLD,true);
+        LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(0,dp(42),1);tp.leftMargin=dp(10);top.addView(title,tp);root.addView(top);
+        back.setOnClickListener(v->showMain());
+        TextView heading=label(section,20,TEXT,true);heading.setPadding(dp(2),dp(20),0,dp(12));root.addView(heading);
+        TextView info=label("ДЕМО-РЕЖИМ  •  BYBIT / GOD OF TRADING",10,GOLD,true);root.addView(info);
+        TextView body=label("Загружаем подтверждённые данные…",13,TEXT,false);stylePanel(body,14);
+        LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,-2);bp.topMargin=dp(12);root.addView(body,bp);
+        Button refresh=button("ОБНОВИТЬ",GOLD,NAVY);
+        LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(48));rp.topMargin=dp(12);root.addView(refresh,rp);
+        refresh.setOnClickListener(v->loadSectionData(section,body));
+        Button terminal=button("ОТКРЫТЬ ТЕРМИНАЛ BYBIT",PANEL,TEXT);
+        LinearLayout.LayoutParams xp=new LinearLayout.LayoutParams(-1,dp(48));xp.topMargin=dp(8);root.addView(terminal,xp);
+        terminal.setOnClickListener(v->openBybitTerminal());
+        page(root);loadSectionData(section,body);
+    }
+
+    private void loadSectionData(String section,TextView target){
+        if("ПРОФИЛЬ".equals(section)){
+            target.setText("Профиль GOD OF TRADING 2.0\\n\\nРежим: виртуальная торговля\\nБаланс: отображается на главном экране\\nРеальные ордера: отключены\\n\\nНастройки API и аккаунта доступны через меню главного экрана.");
+            return;
+        }
+        target.setText("Получаем статистику и историю демо-сделок…");
+        final String token=accessToken;
+        io.execute(()->{
+            JSONArray trades=null;String error=null;
+            try{trades=SupabaseApi.getTrades(token);}catch(Exception e){error=e.getMessage();}
+            final JSONArray rows=trades;final String problem=error;
+            runOnUiThread(()->{
+                if(isFinishing())return;
+                if(rows==null){target.setText("Данные пока недоступны: "+problem);return;}
+                int wins=0,losses=0,open=0;double pnl=0;
+                StringBuilder history=new StringBuilder();
+                for(int i=0;i<rows.length();i++){
+                    JSONObject t=rows.optJSONObject(i);if(t==null)continue;
+                    String status=t.optString("status","OPEN");
+                    if("WIN".equals(status))wins++;
+                    if("LOSS".equals(status))losses++;
+                    if("OPEN".equals(status))open++;
+                    pnl+=t.optDouble("pnl",0);
+                    if(i<30){
+                        if(history.length()>0)history.append("\\n\\n");
+                        history.append(t.optString("symbol","—")).append("  •  ")
+                            .append("UP".equals(t.optString("direction"))?"ВВЕРХ":"ВНИЗ")
+                            .append("  •  ").append(status)
+                            .append("  •  ").append(t.optString("stake","—")).append(" ₽");
+                    }
+                }
+                if("СТАТИСТИКА".equals(section)){
+                    int closed=wins+losses;
+                    double rate=closed==0?0:wins*100.0/closed;
+                    target.setText("РЕЗУЛЬТАТЫ ДЕМО\\n\\nВсего сделок: "+rows.length()
+                        +"\\nПобеды: "+wins+"\\nУбытки: "+losses+"\\nОткрытые: "+open
+                        +"\\nТочность закрытых сделок: "+String.format(Locale.US,"%.1f",rate)+"%"
+                        +"\\nЧистый P/L: "+String.format(Locale.US,"%+,.2f ₽",pnl));
+                }else if("АНАЛИТИКА".equals(section)){
+                    target.setText("АНАЛИТИКА МОДЕЛИ\\n\\n"+(signalText==null?"Нажмите «АНАЛИЗ» на главном экране для получения свежего сигнала.":signalText.getText())
+                        +"\\n\\nОценка модели является эвристикой и не гарантирует прибыль.\\nЗакрытых сделок: "+(wins+losses)
+                        +"\\nПобеды: "+wins+" • Убытки: "+losses);
+                }else{
+                    target.setText(history.length()==0?"Пока нет сделок.":history.toString());
+                }
+            });
+        });
     }
 
     private void addExpiry(int seconds,String title){
