@@ -186,7 +186,7 @@ public class MainActivity extends Activity {
         LinearLayout header=horizontal();
         TextView brand=label("GOD OF TRADING",19,GOLD,true);header.addView(brand,new LinearLayout.LayoutParams(0,dp(42),1));
         Button bybit=button("BYBIT",GOLD,NAVY);header.addView(bybit,new LinearLayout.LayoutParams(dp(82),dp(42)));
-        bybit.setOnClickListener(v->{android.content.Intent intent=new android.content.Intent(this,BybitTerminalActivity.class);intent.putExtra("access_token",accessToken);startActivity(intent);});
+        bybit.setOnClickListener(v->openBybitTerminal());
         Button menu=button("⋮",PANEL,TEXT);header.addView(menu,new LinearLayout.LayoutParams(dp(48),dp(42)));
         content.addView(header);
         menu.setOnClickListener(v->showMenu());
@@ -512,12 +512,19 @@ public class MainActivity extends Activity {
         analysisText.setText(analysisMode?"ПОЛНЫЙ АНАЛИЗ\n"+currentAnalysis.explanation:currentAnalysis.explanation);
     }
 
+    private void openBybitTerminal(){
+        android.content.Intent intent=new android.content.Intent(this,BybitTerminalActivity.class);
+        intent.putExtra("access_token",accessToken);
+        startActivity(intent);
+    }
+
     private void showMenu(){
-        String[] items={"API-ключ Twelve Data","Обновить данные","Telegram-бот","Выйти из аккаунта"};
+        String[] items={"Открыть BYBIT","API-ключ Twelve Data","Обновить данные","Telegram-бот","Выйти из аккаунта"};
         new AlertDialog.Builder(this).setTitle("Настройки").setItems(items,(d,which)->{
-            if(which==0)showTwelveDataSettings();
-            else if(which==1)refreshData();
-            else if(which==2)new AlertDialog.Builder(this).setMessage("Ссылка на Telegram-бот ещё не настроена.").setPositiveButton("ОК",null).show();
+            if(which==0)openBybitTerminal();
+            else if(which==1)showTwelveDataSettings();
+            else if(which==2)refreshData();
+            else if(which==3)new AlertDialog.Builder(this).setMessage("Ссылка на Telegram-бот ещё не настроена.").setPositiveButton("ОК",null).show();
             else logout();
         }).show();
     }
