@@ -279,7 +279,11 @@ public class BybitTerminalActivity extends Activity {
                     JSONArray ordered=new JSONArray();for(int i=rr.length()-1;i>=0;i--)ordered.put(rr.getJSONArray(i));
                     // Discard the still-forming candle; only closed bars feed the strategy.
                     if(ordered.length()>1)ordered.remove(ordered.length()-1);
-                    candles=ordered;lastPrice=Double.parseDouble(tt.getString("lastPrice"));\n                    long latestClosed=Long.parseLong(candles.getJSONArray(candles.length()-1).getString(0));\n                    boolean marketFresh=System.currentTimeMillis()-latestClosed<=180000L;\n                    liveText.setText(marketFresh?"● LIVE":"● STALE");\n                    liveText.setTextColor(marketFresh?GREEN:RED);
+                    candles=ordered;lastPrice=Double.parseDouble(tt.getString("lastPrice"));
+                    long latestClosed=Long.parseLong(candles.getJSONArray(candles.length()-1).getString(0));
+                    boolean marketFresh=System.currentTimeMillis()-latestClosed<=180000L;
+                    liveText.setText(marketFresh?"● LIVE":"● STALE");
+                    liveText.setTextColor(marketFresh?GREEN:RED);
                     priceText.setText(String.format(Locale.US,"%s  %,.4f",requested,lastPrice));
                     double change=Double.parseDouble(tt.optString("price24hPcnt","0"))*100.0;
                     changeText.setText(String.format(Locale.US,"24ч: %+.2f%%",change));
