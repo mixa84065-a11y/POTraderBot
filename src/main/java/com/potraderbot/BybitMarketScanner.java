@@ -80,7 +80,11 @@ public final class BybitMarketScanner {
             JSONArray list=root.optJSONArray("list");
             if(list!=null)for(int i=0;i<list.length();i++){
                 JSONObject x=list.getJSONObject(i);
-                if(!"Trading".equalsIgnoreCase(x.optString("status","Trading")))continue;
+                String status=x.optString("status","Trading");
+                // Bybit options can be PreLaunch, Trading, or Delivering; keep the full active lifecycle catalog.
+                if("option".equals(category)){
+                    if(!("PreLaunch".equalsIgnoreCase(status)||"Trading".equalsIgnoreCase(status)||"Delivering".equalsIgnoreCase(status)))continue;
+                }else if(!"Trading".equalsIgnoreCase(status))continue;
                 String symbol=x.optString("symbol","");
                 if(symbol.isEmpty())continue;
                 result.add(new Instrument(category,symbol,x.optString("baseCoin",""),x.optString("quoteCoin",""),0));
