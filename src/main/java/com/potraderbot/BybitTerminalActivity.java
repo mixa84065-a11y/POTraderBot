@@ -252,9 +252,10 @@ public class BybitTerminalActivity extends Activity {
                 if("stock".equals(category)||"ETF".equals(category)||"forex".equals(category)||"commodity".equals(category)){
                     catalog=BybitMarketScanner.loadTradFiCatalog(category,30);
                     signals=BybitMarketScanner.scanTradFi(category,30);
-                }else if("option".equals(category)){
+                 }else if("option".equals(category)){
                     catalog=BybitMarketScanner.loadInstruments("option");
                     if(catalog.size()>30)catalog=new java.util.ArrayList<>(catalog.subList(0,30));
+                    signals=BybitMarketScanner.scanOptions(15);
                 }else signals=BybitMarketScanner.scan(category,30);
             }catch(Exception e){error=e.getMessage();}
             final java.util.List<BybitMarketScanner.Instrument> listed=catalog;
