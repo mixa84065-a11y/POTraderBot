@@ -58,6 +58,7 @@ public class BybitTerminalActivity extends Activity {
     private TextView priceText, changeText, balanceText, modeText, signalText, riskText, historyText, statusText, liveText;
     private Button autoButton;
     private PriceChart priceChart;
+    private ScrollView terminalScroll;
     private String symbol="BTCUSDT";
     private boolean loading=false, autoEnabled=false;
     private JSONArray candles=new JSONArray();
@@ -120,14 +121,15 @@ public class BybitTerminalActivity extends Activity {
     private void buildScreen(){
         LinearLayout root=vertical();root.setPadding(dp(16),dp(16),dp(16),dp(24));root.setBackgroundColor(BG);
         LinearLayout top=horizontal();
-        TextView title=text("♛  GOD OF TRADING 2.0",18,GOLD,true);
+        TextView title=text("♛  GOD OF TRADING 2.0",19,GOLD,true);
         top.addView(title,new LinearLayout.LayoutParams(0,dp(44),1));
         Button back=button("НАЗАД",PANEL,WHITE);top.addView(back,new LinearLayout.LayoutParams(-2,dp(40)));
         back.setOnClickListener(v->finish());root.addView(top);
-        TextView sub=text("BYBIT  •  ТОРГОВЫЙ ТЕРМИНАЛ",11,MUTED,true);sub.setPadding(0,dp(2),0,dp(10));root.addView(sub);
+        TextView sub=text("BYBIT  /  ПРОФЕССИОНАЛЬНЫЙ ТЕРМИНАЛ",10,MUTED,true);sub.setPadding(0,dp(2),0,dp(10));root.addView(sub);
         LinearLayout select=horizontal();
         TextView pairLabel=text("ИНСТРУМЕНТ",10,MUTED,true);select.addView(pairLabel);
         symbolPicker=new Spinner(this);
+        symbolPicker.setBackground(surface(PANEL,10,0xFF51401D));symbolPicker.setPadding(dp(8),0,dp(8),0);
         String[] symbols={"BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","BNBUSDT","DOGEUSDT"};
         ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,symbols);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);symbolPicker.setAdapter(adapter);
@@ -135,6 +137,7 @@ public class BybitTerminalActivity extends Activity {
         root.addView(select);
         LinearLayout multiScan=horizontal();
         scanCategoryPicker=new Spinner(this);
+        scanCategoryPicker.setBackground(surface(PANEL,10,0xFF51401D));scanCategoryPicker.setPadding(dp(8),0,dp(8),0);
         String[] scanCategories={"ВСЕ РЫНКИ • ОБЩИЙ АНАЛИЗ","Спот","USDT фьючерсы","Inverse фьючерсы","Опционы","TradFi: акции","TradFi: ETF","TradFi: Forex","TradFi: сырьё","CFD (MT5 — подключение отдельно)"};
         ArrayAdapter<String> scanAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,scanCategories);
         scanAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
@@ -164,8 +167,8 @@ public class BybitTerminalActivity extends Activity {
         quote.addView(qleft,new LinearLayout.LayoutParams(0,-2,1));
         liveText=text("● ОЖИДАНИЕ",11,MUTED,true);quote.addView(liveText); 
         LinearLayout.LayoutParams qp=new LinearLayout.LayoutParams(-1,-2);qp.topMargin=dp(8);root.addView(quote,qp);
-        priceChart=new PriceChart();LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(230));cp.topMargin=dp(8);root.addView(priceChart,cp);
-        TextView tf=text("РЫНОК  •  ГРАФИК M1  •  100 ЗАКРЫТЫХ СВЕЧЕЙ",10,MUTED,true);tf.setPadding(dp(3),dp(5),0,dp(5));root.addView(tf);
+        priceChart=new PriceChart();LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(250));cp.topMargin=dp(8);root.addView(priceChart,cp);
+        TextView tf=text("ГРАФИК  /  M1  /  100 ЗАКРЫТЫХ СВЕЧЕЙ",10,MUTED,true);tf.setPadding(dp(3),dp(5),0,dp(5));root.addView(tf);
         LinearLayout wallet=horizontal();wallet.setPadding(dp(14),dp(14),dp(14),dp(14));wallet.setBackground(surface(PANEL,16,0xFF51401D));wallet.setElevation(dp(2));
         LinearLayout cashCol=vertical();cashCol.addView(text("ДЕМО-БАЛАНС",10,MUTED,true));
         balanceText=text("",20,WHITE,true);cashCol.addView(balanceText);
@@ -192,7 +195,24 @@ public class BybitTerminalActivity extends Activity {
         // Keep the autonomous multi-market demo immediately after the local terminal,
         // before the longer 48-hour Bybit Demo section, so it is easy to find.
         buildMultiMarketPaperSection(root);        buildServerReport(root);
-        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(BG);scroll.addView(root);setContentView(scroll);
+        terminalScroll=new ScrollView(this);terminalScroll.setFillViewport(true);terminalScroll.setBackgroundColor(BG);terminalScroll.addView(root);
+        LinearLayout shell=vertical();shell.setBackgroundColor(BG);
+        shell.addView(terminalScroll,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout nav=horizontal();nav.setPadding(dp(7),dp(7),dp(7),dp(7));nav.setBackground(surface(PANEL,15,0xFF3B321E));
+        String[] tabs={"ОБЗОР","РЫНКИ","АНАЛИЗ","АВТОДЕМО"};
+        for(int i=0;i<tabs.length;i++){
+            final int tab=i;Button item=button(tabs[i],i==1?GOLD:PANEL,i==1?BG:WHITE);
+            item.setTextSize(9);item.setMinHeight(dp(46));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(48),1);lp.leftMargin=dp(2);lp.rightMargin=dp(2);nav.addView(item,lp);
+            item.setOnClickListener(v->{
+                if(tab==0)finish();
+                else if(tab==1)terminalScroll.smoothScrollTo(0,Math.max(0,multiScanText.getTop()));
+                else if(tab==2)terminalScroll.smoothScrollTo(0,Math.max(0,signalText.getTop()));
+                else terminalScroll.post(()->terminalScroll.smoothScrollTo(0,Math.max(0,paperStartButton.getTop())));
+            });
+        }
+        LinearLayout.LayoutParams navLp=new LinearLayout.LayoutParams(-1,-2);navLp.leftMargin=dp(8);navLp.rightMargin=dp(8);navLp.bottomMargin=dp(8);shell.addView(nav,navLp);
+        setContentView(shell);
         renderLedger();
     }
 

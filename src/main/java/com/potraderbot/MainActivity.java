@@ -125,6 +125,29 @@ public class MainActivity extends Activity {
         ScrollView s=new ScrollView(this);s.setFillViewport(true);s.setBackgroundColor(NAVY);
         s.addView(content);setContentView(s);return s;
     }
+    private void pageWithNavigation(LinearLayout content,int selected){
+        LinearLayout shell=vertical();shell.setBackgroundColor(NAVY);
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(NAVY);
+        scroll.addView(content);shell.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout nav=horizontal();nav.setPadding(dp(7),dp(7),dp(7),dp(7));
+        nav.setBackground(surface(PANEL,15,0xFF3B321E));
+        String[] labels={"ОБЗОР","BYBIT","АНАЛИЗ","СДЕЛКИ","ЕЩЁ"};
+        for(int i=0;i<labels.length;i++){
+            final int tab=i;Button item=button(labels[i],i==selected?GOLD:PANEL,i==selected?NAVY:TEXT);
+            item.setTextSize(9);item.setMinHeight(dp(46));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(48),1);
+            lp.leftMargin=dp(2);lp.rightMargin=dp(2);nav.addView(item,lp);
+            item.setOnClickListener(v->{
+                if(tab==0)showMain();
+                else if(tab==1)openBybitTerminal();
+                else if(tab==2)showSection("АНАЛИТИКА");
+                else if(tab==3)showSection("ИСТОРИЯ СДЕЛОК");
+                else showMenu();
+            });
+        }
+        LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(-1,-2);np.leftMargin=dp(8);np.rightMargin=dp(8);np.bottomMargin=dp(8);
+        shell.addView(nav,np);setContentView(shell);
+    }
     private void showLogin(String status){
         LinearLayout root=vertical();root.setPadding(dp(24),dp(30),dp(24),dp(24));
         root.setGravity(Gravity.CENTER_HORIZONTAL);root.setBackgroundColor(NAVY);
@@ -194,7 +217,7 @@ public class MainActivity extends Activity {
         analysisMode=false;
         LinearLayout content=vertical();content.setPadding(dp(16),dp(16),dp(16),dp(24));
         LinearLayout header=horizontal();
-        TextView brand=label("♛  GOD OF TRADING 2.0",18,GOLD,true);header.addView(brand,new LinearLayout.LayoutParams(0,dp(42),1));
+        TextView brand=label("♛  GOD OF TRADING 2.0",19,GOLD,true);header.addView(brand,new LinearLayout.LayoutParams(0,dp(42),1));
         Button bybit=button("BYBIT",GOLD,NAVY);header.addView(bybit,new LinearLayout.LayoutParams(dp(82),dp(42)));
         bybit.setOnClickListener(v->openBybitTerminal());
         Button menu=button("⋮",PANEL,TEXT);header.addView(menu,new LinearLayout.LayoutParams(dp(48),dp(42)));
@@ -206,9 +229,9 @@ public class MainActivity extends Activity {
         accountPanel.addView(accountLabel,new LinearLayout.LayoutParams(0,-2,1));
         balanceText=label("Загрузка…",18,TEXT,true);accountPanel.addView(balanceText);
         LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(-1,-2);ap.topMargin=dp(8);content.addView(accountPanel,ap);
-        addDashboardNavigation(content);
+        // Persistent navigation is rendered outside the scrolling content.
 
-        TextView pairLabel=label("РЫНОК  •  ВАЛЮТНАЯ ПАРА",10,MUTED,true);
+        TextView pairLabel=label("РЫНОК  /  ВАЛЮТНАЯ ПАРА",10,MUTED,true);
         pairLabel.setPadding(dp(4),dp(10),0,dp(3));content.addView(pairLabel);
         pairSelector=new Spinner(this);
         String[] pairs={"EUR/USD","GBP/USD","USD/JPY","AUD/USD","USD/CHF","USD/CAD","NZD/USD"};
@@ -216,6 +239,7 @@ public class MainActivity extends Activity {
         pairAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         pairSelector.setAdapter(pairAdapter);
         pairSelector.setSelection(java.util.Arrays.asList(pairs).indexOf(symbol));
+        pairSelector.setBackground(surface(PANEL,10,0xFF51401D));pairSelector.setPadding(dp(10),0,dp(10),0);
         content.addView(pairSelector,new LinearLayout.LayoutParams(-1,dp(44)));
         TextView pairNote=label("Доступность демо-сделок зависит от включённого потока котировок.",10,MUTED,false);
         content.addView(pairNote);
@@ -257,6 +281,7 @@ public class MainActivity extends Activity {
         stakeInput=new EditText(this);stakeInput.setText("500");stakeInput.setSingleLine(true);
         stakeInput.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
         stakeInput.setTextColor(TEXT);stakeInput.setHintTextColor(MUTED);stakeInput.setHint("Например, 500");
+        stakeInput.setBackground(surface(PANEL,10,0xFF51401D));stakeInput.setPadding(dp(12),0,dp(12),0);
         controlsPanel.addView(stakeInput,new LinearLayout.LayoutParams(-1,dp(48)));
         LinearLayout actions=horizontal();
         upButton=button("ВВЕРХ",GREEN,Color.WHITE);downButton=button("ВНИЗ",RED,Color.WHITE);
@@ -280,30 +305,12 @@ public class MainActivity extends Activity {
         content.addView(historyPanel);
         TextView footer=label("Только виртуальный счёт • Аналитика не гарантирует результат",10,MUTED,false);
         footer.setGravity(Gravity.CENTER);footer.setPadding(0,dp(14),0,dp(6));content.addView(footer);
-        page(content);
+        pageWithNavigation(content,0);
         updateExpiryButtons();
         handler.removeCallbacks(poll);
         handler.post(poll);
     }
 
-
-    private void addDashboardNavigation(LinearLayout content){
-        LinearLayout nav=horizontal();nav.setPadding(0,dp(12),0,dp(8));
-        String[] labels={"BYBIT","АНАЛИЗ","СТАТИСТИКА","ИСТОРИЯ","ПРОФИЛЬ"};
-        for(int i=0;i<labels.length;i++){
-            final int index=i;Button item=button(labels[i],i==0?GOLD:PANEL,i==0?NAVY:TEXT);
-            item.setTextSize(9);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(42),1);
-            lp.leftMargin=dp(2);lp.rightMargin=dp(2);nav.addView(item,lp);
-            item.setOnClickListener(v->{
-                if(index==0)openBybitTerminal();
-                else if(index==1)showSection("АНАЛИТИКА");
-                else if(index==2)showSection("СТАТИСТИКА");
-                else if(index==3)showSection("ИСТОРИЯ СДЕЛОК");
-                else showSection("ПРОФИЛЬ");
-            });
-        }
-        content.addView(nav);
-    }
 
     private void showSection(String section){
         LinearLayout root=vertical();root.setPadding(dp(16),dp(18),dp(16),dp(24));root.setBackgroundColor(NAVY);
@@ -322,7 +329,8 @@ public class MainActivity extends Activity {
         Button terminal=button("ОТКРЫТЬ ТЕРМИНАЛ BYBIT",PANEL,TEXT);
         LinearLayout.LayoutParams xp=new LinearLayout.LayoutParams(-1,dp(48));xp.topMargin=dp(8);root.addView(terminal,xp);
         terminal.setOnClickListener(v->openBybitTerminal());
-        page(root);loadSectionData(section,body);
+        int selected="АНАЛИТИКА".equals(section)?2:("ИСТОРИЯ СДЕЛОК".equals(section)?3:4);
+        pageWithNavigation(root,selected);loadSectionData(section,body);
     }
 
     private void loadSectionData(String section,TextView target){
