@@ -29,3 +29,8 @@ Deno.test("spot long entry gate rejects DOWN, stale risk, wide spread and low ba
   if (shouldEnterLong({ ...base, feesResolved: false })) throw new Error("unresolved fees accepted");
   if (shouldEnterLong({ ...base, availableUsdt: 50 })) throw new Error("insufficient balance accepted");
 });
+
+Deno.test("missing or zero equity baseline fails closed", () => {
+  const result = assessRunRisk(0, 0, 0, 200, 5);
+  if (!result.stop) throw new Error("zero baseline did not stop the run");
+});
