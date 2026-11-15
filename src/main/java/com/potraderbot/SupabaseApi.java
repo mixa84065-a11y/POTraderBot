@@ -128,6 +128,10 @@ public final class SupabaseApi {
         return (JSONObject) request("POST", "/rest/v1/rpc/bybit_demo_save_credentials", b, token);
     }
 
+    public static JSONObject checkBybitDemoConnection(String token) throws Exception {
+        return (JSONObject) request("POST", "/functions/v1/bybit-connection-check", new JSONObject(), token);
+    }
+
     public static JSONObject startBybitDemoRun(String token, JSONArray symbols) throws Exception {
         JSONObject b = new JSONObject();
         b.put("p_symbols", symbols);
