@@ -27,13 +27,18 @@ public final class BybitMarketScanner {
     public static final class Instrument {
         public final String category, symbol, baseCoin, quoteCoin, displayName, marketRegion, symbolType;
         public final double turnover24h;
+        public final long deliveryTime;
         Instrument(String category, String symbol, String baseCoin, String quoteCoin, double turnover24h) {
-            this(category,symbol,baseCoin,quoteCoin,turnover24h,symbol,"","");
+            this(category,symbol,baseCoin,quoteCoin,turnover24h,symbol,"","",0L);
         }
         Instrument(String category, String symbol, String baseCoin, String quoteCoin, double turnover24h,
                    String displayName, String marketRegion, String symbolType) {
+            this(category,symbol,baseCoin,quoteCoin,turnover24h,displayName,marketRegion,symbolType,0L);
+        }
+        Instrument(String category, String symbol, String baseCoin, String quoteCoin, double turnover24h,
+                   String displayName, String marketRegion, String symbolType, long deliveryTime) {
             this.category=category; this.symbol=symbol; this.baseCoin=baseCoin;
-            this.quoteCoin=quoteCoin; this.turnover24h=turnover24h;
+            this.quoteCoin=quoteCoin; this.turnover24h=turnover24h; this.deliveryTime=deliveryTime;
             this.displayName=displayName==null||displayName.isEmpty()?symbol:displayName;
             this.marketRegion=marketRegion==null?"":marketRegion;
             this.symbolType=symbolType==null?"":symbolType;
@@ -43,10 +48,13 @@ public final class BybitMarketScanner {
         public final Instrument instrument;
         public final double lastPrice;
         public final int score;
-        public final String direction;
+        public final String direction, risk, explanation;
         Signal(Instrument instrument, double lastPrice, int score) {
+            this(instrument,lastPrice,score,score>=4?"ВВЕРХ":score<=-4?"ВНИЗ":"НЕТ СИГНАЛА","ОЖИДАНИЕ","Оценка не рассчитана.");
+        }
+        Signal(Instrument instrument,double lastPrice,int score,String direction,String risk,String explanation) {
             this.instrument=instrument; this.lastPrice=lastPrice; this.score=score;
-            this.direction=score>=3?"ВВЕРХ":score<=-3?"ВНИЗ":"НЕТ СИГНАЛА";
+            this.direction=direction; this.risk=risk; this.explanation=explanation;
         }
     }
     private BybitMarketScanner() {}
@@ -87,7 +95,10 @@ public final class BybitMarketScanner {
                 }else if(!"Trading".equalsIgnoreCase(status))continue;
                 String symbol=x.optString("symbol","");
                 if(symbol.isEmpty())continue;
-                result.add(new Instrument(category,symbol,x.optString("baseCoin",""),x.optString("quoteCoin",""),0));
+                long delivery=0L;
+                try{delivery=Long.parseLong(x.optString("deliveryTime","0"));}catch(Exception ignored){}
+                result.add(new Instrument(category,symbol,x.optString("baseCoin",""),x.optString("quoteCoin",""),0,
+                    symbol,"","",delivery));
             }
             cursor=root.optString("nextPageCursor","");
             if(cursor.isEmpty())break;
@@ -114,14 +125,16 @@ public final class BybitMarketScanner {
         for(int i=rows.length()-2;i>=0;i--)closes.add(Double.parseDouble(rows.getJSONArray(i).getString(4)));
         if(closes.size()<30)throw new Exception("Недостаточно закрытых свечей");
         double[] c=new double[closes.size()];for(int i=0;i<c.length;i++)c[i]=closes.get(i);
-        int s=0;double e9=ema(c,9),e21=ema(c,21),r=rsi(c,14);
-        double mom=(c[c.length-1]-c[c.length-4])/c[c.length-4]*100;
-        if(e9>e21)s+=2;else if(e9<e21)s-=2;
-        if(mom>0.03)s++;else if(mom< -0.03)s--;
-        if(r>=52&&r<=68)s++;else if(r>=32&&r<=48)s--;
         long lastTime=Long.parseLong(rows.getJSONArray(1).getString(0));
-        if(System.currentTimeMillis()-lastTime>180000L)throw new Exception("Устаревшие котировки");
-        return new Signal(instrument,Double.parseDouble(ticker.getString("lastPrice")),s);
+        double last=Double.parseDouble(ticker.getString("lastPrice"));
+        double bid=ticker.optDouble("bid1Price",0), ask=ticker.optDouble("ask1Price",0);
+        double funding=ticker.has("fundingRate")?ticker.optDouble("fundingRate",Double.NaN):Double.NaN;
+        double oiChange=ticker.has("openInterestChangePct")?ticker.optDouble("openInterestChangePct",Double.NaN):Double.NaN;
+        String type=instrument.symbolType.isEmpty()?instrument.category:"tradfi";
+        MarketStrategyEngine.Result result=MarketStrategyEngine.analyze(type,c,bid,ask,
+            ticker.optDouble("turnover24h",instrument.turnover24h),funding,oiChange,
+            System.currentTimeMillis()-lastTime,true);
+        return new Signal(instrument,last,result.score,result.direction,result.risk,result.explanation);
     }
 
     /** Scans the most liquid active instruments concurrently; returns strongest signals first. */
@@ -184,6 +197,41 @@ public final class BybitMarketScanner {
     public static List<Signal> scanTradFi(String symbolType,int maxInstruments) throws Exception {
         List<Instrument> candidates=loadTradFiCatalog(symbolType,maxInstruments);
         return scanCandidates(candidates,maxInstruments);
+    }
+
+    /** Scores liquid option contracts using exchange Greeks/IV and the underlying trend. */
+    public static List<Signal> scanOptions(int maxInstruments) throws Exception {
+        List<Instrument> instruments=loadInstruments("option");
+        List<Instrument> candidates=new ArrayList<>();
+        for(Instrument x:instruments)if(x.deliveryTime>System.currentTimeMillis())candidates.add(x);
+        int count=Math.min(Math.max(0,maxInstruments),candidates.size());
+        if(count==0)return new ArrayList<>();
+        ExecutorService pool=Executors.newFixedThreadPool(6);
+        try{
+            List<Future<Signal>> futures=new ArrayList<>();
+            for(int i=0;i<count;i++){
+                final Instrument option=candidates.get(i);
+                futures.add(pool.submit(()->{
+                    JSONObject ticker=get("https://api.bybit.com/v5/market/tickers?category=option&symbol="+enc(option.symbol))
+                        .getJSONObject("result").getJSONArray("list").getJSONObject(0);
+                    Instrument underlying=new Instrument("linear",option.baseCoin+"USDT",option.baseCoin,"USDT",0);
+                    Signal baseSignal=analyze(underlying);
+                    double hours=(option.deliveryTime-System.currentTimeMillis())/3600000.0;
+                    MarketStrategyEngine.OptionResult result=MarketStrategyEngine.analyzeOption(
+                        ticker.optDouble("bid1Price",0),ticker.optDouble("ask1Price",0),
+                        ticker.optDouble("markPrice",0),ticker.optDouble("delta",Double.NaN),
+                        ticker.optDouble("gamma",Double.NaN),ticker.optDouble("vega",Double.NaN),
+                        ticker.optDouble("theta",Double.NaN),ticker.optDouble("markPriceIv",Double.NaN),
+                        ticker.optDouble("turnover24h",0),hours,baseSignal.score);
+                    return new Signal(option,ticker.optDouble("lastPrice",0),baseSignal.score,
+                        result.stance,result.risk,result.explanation);
+                }));
+            }
+            List<Signal> signals=new ArrayList<>();
+            for(Future<Signal> f:futures)try{signals.add(f.get());}catch(Exception ignored){}
+            Collections.sort(signals,(a,b)->Double.compare(b.instrument.turnover24h,a.instrument.turnover24h));
+            return signals;
+        }finally{pool.shutdownNow();}
     }
 
     private static List<Signal> scanCandidates(List<Instrument> candidates,int maxInstruments) throws Exception {
