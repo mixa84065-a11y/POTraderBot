@@ -221,7 +221,7 @@ public final class BybitMarketScanner {
                         ticker.optDouble("bid1Price",0),ticker.optDouble("ask1Price",0),
                         ticker.optDouble("markPrice",0),ticker.optDouble("delta",Double.NaN),
                         ticker.optDouble("gamma",Double.NaN),ticker.optDouble("vega",Double.NaN),
-                        ticker.optDouble("theta",Double.NaN),ticker.optDouble("markPriceIv",Double.NaN),
+                        ticker.optDouble("theta",Double.NaN),ticker.optDouble("markIv",Double.NaN),
                         ticker.optDouble("turnover24h",0),hours,baseSignal.score);
                     Instrument optionWithLiquidity=new Instrument("option",option.symbol,option.baseCoin,option.quoteCoin,
                         ticker.optDouble("turnover24h",0),option.displayName,option.marketRegion,option.symbolType,option.deliveryTime);
