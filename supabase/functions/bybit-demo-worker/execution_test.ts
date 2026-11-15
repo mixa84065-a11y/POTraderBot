@@ -92,7 +92,7 @@ Deno.test("UNKNOWN order is never blindly resubmitted when Bybit cannot find it"
     writable: true,
     value: async (input: RequestInfo | URL) => {
       const url = new URL(typeof input === "string" || input instanceof URL ? input.toString() : input.url);
-      if (url.pathname === "/v5/order/realtime") {
+      if (url.pathname === "/v5/order/realtime" || url.pathname === "/v5/order/history") {
         return json({ retCode: 0, retMsg: "OK", result: { list: [] } });
       }
       if (url.pathname === "/v5/order/create") createCount++;
@@ -114,6 +114,36 @@ Deno.test("UNKNOWN order is never blindly resubmitted when Bybit cannot find it"
     }
     if (!rejected || createCount !== 0) {
       throw new Error("UNKNOWN order was retried without exchange confirmation");
+    }
+  } finally {
+    Object.defineProperty(globalThis, "fetch", { configurable: true, writable: true, value: originalFetch });
+  }
+});
+
+
+Deno.test("REJECTED order is acknowledged in DB and never resubmitted", async () => {
+  const originalFetch = globalThis.fetch;
+  let exchangeRequests = 0;
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    writable: true,
+    value: async () => {
+      exchangeRequests++;
+      throw new Error("Rejected order must not call Bybit");
+    },
+  });
+  const rpcCalls: string[] = [];
+  try {
+    const result = await submitOrReconcileDemoOrder({
+      apiKey: "test-api-key-123456",
+      apiSecret: "test-api-secret-123456789012",
+      order: { ...baseOrder, status: "REJECTED" },
+      payload: buildSpotMarketBuy("BTCUSDT", "100", baseOrder.order_link_id),
+      rpc: async (name) => { rpcCalls.push(name); return null; },
+    });
+    if (result.status !== "REJECTED" || exchangeRequests !== 0 ||
+        !rpcCalls.includes("bybit_demo_worker_set_order_state")) {
+      throw new Error("Rejected order was not safely finalized");
     }
   } finally {
     Object.defineProperty(globalThis, "fetch", { configurable: true, writable: true, value: originalFetch });
