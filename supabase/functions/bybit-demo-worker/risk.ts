@@ -12,9 +12,12 @@ export function assessRunRisk(
   maxDrawdownPct: number,
 ): RiskAssessment {
   if (![equity, startEquity, peakEquity, dailyLossLimitUsdt, maxDrawdownPct].every(Number.isFinite) ||
-      equity < 0 || startEquity <= 0 || peakEquity <= 0 ||
+      equity < 0 || startEquity < 0 || peakEquity < 0 ||
       dailyLossLimitUsdt <= 0 || maxDrawdownPct <= 0) {
     throw new Error("Некорректные параметры контроля риска.");
+  }
+  if (startEquity === 0 || peakEquity === 0) {
+    return { daily_loss_usdt: 0, drawdown_pct: 0, stop: true };
   }
   const dailyLoss = Math.max(0, startEquity - equity);
   const drawdown = Math.max(0, (peakEquity - equity) / peakEquity * 100);
