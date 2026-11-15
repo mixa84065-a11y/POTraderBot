@@ -328,14 +328,24 @@ public class BybitTerminalActivity extends Activity {
     }
     private void evaluateStrategy(){
         resetDailyLossIfNeeded();
-        if(candles.length()<30){statusText.setText("Недостаточно закрытых минутных свечей.");return;}
+        if(candles.length()<30){
+            statusText.setText("Недостаточно закрытых минутных свечей. Новые входы заблокированы.");
+            // Keep protective stop/target checks alive even if indicator history is incomplete.
+            managePaperTrade(0,0L);renderLedger();return;
+        }
+        long candleTime;
         try{
-            long candleTime=Long.parseLong(candles.getJSONArray(candles.length()-1).getString(0));
+            candleTime=Long.parseLong(candles.getJSONArray(candles.length()-1).getString(0));
             if(System.currentTimeMillis()-candleTime>180000L){
                 statusText.setText("Последняя закрытая свеча устарела. Новые автосделки заблокированы.");
-                renderLedger();return;
+                // A stale signal must never open/reverse a position, but live-price
+                // stop-loss and take-profit checks must continue to run.
+                managePaperTrade(0,candleTime);renderLedger();return;
             }
-        }catch(Exception e){statusText.setText("Не удалось проверить время свечи. Автосделки заблокированы.");return;}
+        }catch(Exception e){
+            statusText.setText("Не удалось проверить время свечи. Новые автосделки заблокированы.");
+            managePaperTrade(0,0L);renderLedger();return;
+        }
         int s=score();String dir=s>=3?"ПОКУПКА":s<=-3?"СЛАБЫЙ ТРЕНД / ВЫХОД":"НЕТ СИГНАЛА";
         signalText.setText("АНАЛИЗ: "+dir+"  •  SCORE "+s);
         signalText.setTextColor(s>=3?GREEN:s<=-3?RED:WHITE);
