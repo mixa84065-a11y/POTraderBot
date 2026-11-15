@@ -128,7 +128,7 @@ export async function makeOrderLinkId(
 
 export function buildSpotMarketBuy(symbol: string, quoteAmountUsdt: string, orderLinkId: string) {
   validateOrderIdentity(symbol, orderLinkId);
-  if (!/^\\d+(?:\\.\\d+)?$/.test(quoteAmountUsdt) ||
+  if (!/^\d+(?:\.\d+)?$/.test(quoteAmountUsdt) ||
       !Number.isFinite(Number(quoteAmountUsdt)) || Number(quoteAmountUsdt) <= 0) {
     throw new Error("Сумма покупки USDT должна быть положительной.");
   }
@@ -146,7 +146,7 @@ export function buildSpotMarketBuy(symbol: string, quoteAmountUsdt: string, orde
 
 export function buildSpotMarketSell(symbol: string, baseQuantity: string, orderLinkId: string) {
   validateOrderIdentity(symbol, orderLinkId);
-  if (!/^\\d+(?:\\.\\d+)?$/.test(baseQuantity) ||
+  if (!/^\d+(?:\.\d+)?$/.test(baseQuantity) ||
       !Number.isFinite(Number(baseQuantity)) || Number(baseQuantity) <= 0) {
     throw new Error("Количество продажи базового актива должно быть положительным.");
   }
@@ -160,4 +160,4 @@ export function buildSpotMarketSell(symbol: string, baseQuantity: string, orderL
     orderFilter: "Order",
     orderLinkId,
   };
-}\n
+}
