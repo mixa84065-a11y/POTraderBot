@@ -191,7 +191,14 @@ public class BybitTerminalActivity extends Activity {
             return s;
         }catch(Exception e){return 0;}
     }
+    private void resetDailyLossIfNeeded(){
+        String today=new SimpleDateFormat("yyyyMMdd",Locale.US).format(new Date());
+        if(!today.equals(prefs.getString("loss_day",""))){
+            prefs.edit().putString("loss_day",today).putFloat("loss_today",0).apply();
+        }
+    }
     private void evaluateStrategy(){
+        resetDailyLossIfNeeded();
         if(candles.length()<30){statusText.setText("Недостаточно закрытых минутных свечей.");return;}
         try{
             long candleTime=Long.parseLong(candles.getJSONArray(candles.length()-1).getString(0));
