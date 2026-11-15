@@ -753,7 +753,7 @@ public class BybitTerminalActivity extends Activity {
         PriceChart(){super(BybitTerminalActivity.this);setBackgroundColor(PANEL);}
         void setCandles(JSONArray d){data=d;invalidate();}
         @Override protected void onDraw(Canvas c){
-            super.onDraw(c);float w=getWidth(),h=getHeight();p.setStrokeWidth(1);p.setColor(0xFF29405B);
+            super.onDraw(c);float w=getWidth(),h=getHeight();p.setStrokeWidth(1);p.setColor(0xFF202630);
             for(int i=1;i<4;i++)c.drawLine(0,h*i/4,w,h*i/4,p);
             if(data.length()<2)return;
             double min=Double.MAX_VALUE,max=-Double.MAX_VALUE;
