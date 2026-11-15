@@ -410,7 +410,7 @@ public class BybitTerminalActivity extends Activity {
         if("all".equals(category)){
             multiScanText.setText("ОБЩИЙ АНАЛИЗ: проверяем Spot, оба типа фьючерсов, опционы и все категории TradFi. Только анализ, без ордеров…");
             io.execute(()->{
-                StringBuilder out=new StringBuilder("GOD OF TRADING • ОБЩИЙ ОБЗОР РЫНКОВ\\n");
+                StringBuilder out=new StringBuilder("GOD OF TRADING • ОБЩИЙ ОБЗОР РЫНКОВ\n");
                 appendSignalGroup(out,"SPOT",safeScan("spot",3));
                 appendSignalGroup(out,"USDT / LINEAR FUTURES",safeScan("linear",3));
                 appendSignalGroup(out,"INVERSE FUTURES",safeScan("inverse",3));
@@ -419,8 +419,8 @@ public class BybitTerminalActivity extends Activity {
                 appendSignalGroup(out,"TRADFI ETF",safeTradFiScan("ETF",3));
                 appendSignalGroup(out,"TRADFI FOREX",safeTradFiScan("forex",3));
                 appendSignalGroup(out,"TRADFI COMMODITIES",safeTradFiScan("commodity",3));
-                out.append("\\nCFD: отдельное MT5-подключение; в Bybit V5 не сканируется.\\n");
-                out.append("\\nЭто исследовательские сигналы. Score не является вероятностью выигрыша; автоматические ордера не отправляются.");
+                out.append("\nCFD: отдельное MT5-подключение; в Bybit V5 не сканируется.\n");
+                out.append("\nЭто исследовательские сигналы. Score не является вероятностью выигрыша; автоматические ордера не отправляются.");
                 runOnUiThread(()->{if(!isFinishing()){multiScanButton.setEnabled(true);multiScanText.setText(out.toString());}});
             });
             return;
@@ -495,13 +495,13 @@ public class BybitTerminalActivity extends Activity {
         try{return BybitMarketScanner.scanOptions(limit);}catch(Exception ignored){return java.util.Collections.emptyList();}
     }
     private void appendSignalGroup(StringBuilder out,String title,java.util.List<BybitMarketScanner.Signal> signals){
-        out.append("\\n").append(title).append(" (").append(signals.size()).append(")\\n");
-        if(signals.isEmpty()){out.append("Нет подтверждённых свежих сигналов.\\n");return;}
+        out.append("\n").append(title).append(" (").append(signals.size()).append(")\n");
+        if(signals.isEmpty()){out.append("Нет подтверждённых свежих сигналов.\n");return;}
         for(BybitMarketScanner.Signal signal:signals){
             out.append("• ").append(signal.instrument.symbol).append(" — ").append(signal.direction)
                 .append(" | риск: ").append(signal.risk).append(" | score: ").append(signal.score)
-                .append(" | цена: ").append(String.format(java.util.Locale.US,"%.8f",signal.lastPrice)).append("\\n");
-            out.append("  ").append(signal.explanation).append("\\n");
+                .append(" | цена: ").append(String.format(java.util.Locale.US,"%.8f",signal.lastPrice)).append("\n");
+            out.append("  ").append(signal.explanation).append("\n");
         }
     }
 
