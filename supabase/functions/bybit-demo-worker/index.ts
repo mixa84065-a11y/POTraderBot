@@ -21,8 +21,6 @@ const ENTRY_NOTIONAL_USDT = 100;
 const DAILY_LOSS_LIMIT_USDT = 200;
 const MAX_DRAWDOWN_PCT = 5;
 const MAX_SPREAD_PCT = 0.15;
-const STOP_LOSS_PCT = 0.7;
-const TAKE_PROFIT_PCT = 1.4;
 
 type ActiveRun = {
   run_id: string;
@@ -405,14 +403,14 @@ async function processRun(run: ActiveRun) {
   try {
     const expired = Date.parse(run.ends_at) <= Date.now();
     const wallet = await walletState(run.api_key, run.api_secret);
-    let riskRows = await rpc<RunRiskState[]>("bybit_demo_worker_get_run_state", { p_run_id: run.run_id });
-    let risk = riskRows?.[0];
+    const riskRows = await rpc<RunRiskState[]>("bybit_demo_worker_get_run_state", { p_run_id: run.run_id });
+    const risk = riskRows?.[0];
     const startingEquity = Number(risk?.start_equity ?? wallet.equity);
     const peakEquity = Number(risk?.peak_equity ?? startingEquity);
     const riskAssessment = assessRunRisk(wallet.equity, startingEquity, peakEquity, DAILY_LOSS_LIMIT_USDT, MAX_DRAWDOWN_PCT);
     const dailyLoss = riskAssessment.daily_loss_usdt;
-    const drawdown = riskAssessment.drawdown_pct;
-    const riskStop = riskAssessment.stop;
+    const drawdown = Math.max(riskAssessment.drawdown_pct, Number(risk?.max_drawdown_pct ?? 0));
+    const riskStop = riskAssessment.stop || drawdown >= MAX_DRAWDOWN_PCT;
     if ((expired || riskStop) && run.status === "RUNNING") {
       await rpc("bybit_demo_worker_request_stop", {
         p_run_id: run.run_id,
@@ -429,7 +427,7 @@ async function processRun(run: ActiveRun) {
     }
 
     // Recover every persisted order before looking for new entries or finalizing a stop.
-    let pendingOrders = await rpc<PendingDemoOrder[]>("bybit_demo_worker_pending_orders", { p_run_id: run.run_id });
+    const pendingOrders = await rpc<PendingDemoOrder[]>("bybit_demo_worker_pending_orders", { p_run_id: run.run_id });
     let pendingProtections = await rpc<PendingProtectionOrder[]>("bybit_demo_worker_pending_protections", { p_run_id: run.run_id });
     const recovery = await reconcileOrders(run, [...(pendingOrders ?? []), ...(pendingProtections ?? [])]);
     const blockedSymbols = recovery.blockedSymbols;
