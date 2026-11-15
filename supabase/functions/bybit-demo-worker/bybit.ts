@@ -100,16 +100,36 @@ export function floorToStep(quantity: number, stepText: string): string {
   return decimals === 0 ? whole.toString() : `${whole}.${fraction}`;
 }
 
-export function makeOrderLinkId(runId: string, symbol: string, side: "Buy" | "Sell", candleTime: number): string {
-  const runPart = runId.replaceAll("-", "").slice(0, 12);
-  if (!/^[A-Z0-9]{3,20}$/.test(symbol) || !Number.isSafeInteger(candleTime) || candleTime <= 0) {
+function validateOrderIdentity(symbol: string, orderLinkId: string) {
+  if (!/^[A-Z0-9]{3,20}$/.test(symbol)) throw new Error("Некорректный символ Bybit.");
+  if (!/^[A-Za-z0-9]{1,36}$/.test(orderLinkId)) {
+    throw new Error("orderLinkId должен содержать 1–36 букв или цифр.");
+  }
+}
+
+/** Stable 34-character ID: SHA-256 avoids truncating the candle key. */
+export async function makeOrderLinkId(
+  runId: string,
+  symbol: string,
+  side: "Buy" | "Sell",
+  candleTime: number,
+): Promise<string> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(runId) ||
+      !/^[A-Z0-9]{3,20}$/.test(symbol) ||
+      (side !== "Buy" && side !== "Sell") ||
+      !Number.isSafeInteger(candleTime) || candleTime <= 0) {
     throw new Error("Невозможно сформировать безопасный orderLinkId.");
   }
-  return `g2${runPart}${symbol.slice(0, 8)}${side === "Buy" ? "B" : "S"}${candleTime.toString(36)}`.slice(0, 36);
+  const material = new TextEncoder().encode("god2|" + runId + "|" + symbol + "|" + side + "|" + candleTime);
+  const digest = await crypto.subtle.digest("SHA-256", material);
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return "g2" + hex.slice(0, 32);
 }
 
 export function buildSpotMarketBuy(symbol: string, quoteAmountUsdt: string, orderLinkId: string) {
-  if (!/^\d+(?:\.\d+)?$/.test(quoteAmountUsdt) || Number(quoteAmountUsdt) <= 0) {
+  validateOrderIdentity(symbol, orderLinkId);
+  if (!/^\\d+(?:\\.\\d+)?$/.test(quoteAmountUsdt) ||
+      !Number.isFinite(Number(quoteAmountUsdt)) || Number(quoteAmountUsdt) <= 0) {
     throw new Error("Сумма покупки USDT должна быть положительной.");
   }
   return {
@@ -125,7 +145,9 @@ export function buildSpotMarketBuy(symbol: string, quoteAmountUsdt: string, orde
 }
 
 export function buildSpotMarketSell(symbol: string, baseQuantity: string, orderLinkId: string) {
-  if (!/^\d+(?:\.\d+)?$/.test(baseQuantity) || Number(baseQuantity) <= 0) {
+  validateOrderIdentity(symbol, orderLinkId);
+  if (!/^\\d+(?:\\.\\d+)?$/.test(baseQuantity) ||
+      !Number.isFinite(Number(baseQuantity)) || Number(baseQuantity) <= 0) {
     throw new Error("Количество продажи базового актива должно быть положительным.");
   }
   return {
@@ -138,4 +160,4 @@ export function buildSpotMarketSell(symbol: string, baseQuantity: string, orderL
     orderFilter: "Order",
     orderLinkId,
   };
-}
+}\n
