@@ -21,7 +21,7 @@ export type PendingDemoOrder = {
   exchange_order_id: string | null;
   requested_qty: string | number;
   qty_unit: "baseCoin" | "quoteCoin";
-  status: "INTENT" | "SUBMITTED" | "PARTIALLY_FILLED" | "UNKNOWN";
+  status: "INTENT" | "SUBMITTED" | "PARTIALLY_FILLED" | "UNKNOWN" | "FILLED" | "CANCELLED" | "REJECTED";
 };
 
 function dbStatus(status: ReturnType<typeof normalizeDemoOrderStatus>) {
@@ -51,6 +51,20 @@ export async function submitOrReconcileDemoOrder(input: {
       payload.symbol !== order.symbol || payload.side !== order.side ||
       payload.marketUnit !== order.qty_unit) {
     throw new Error("Заявка не совпадает с сохранённым серверным намерением.");
+  }
+
+  if (order.status === "REJECTED") {
+    return {
+      orderId: order.exchange_order_id,
+      orderLinkId: order.order_link_id,
+      status: "REJECTED" as const,
+      filledQty: 0,
+      filledValueUsdt: 0,
+      averageFillPrice: 0,
+      feeUsdt: 0,
+      feeConversionComplete: true,
+      executionCount: 0,
+    };
   }
 
   let exchangeOrderId = order.exchange_order_id;
