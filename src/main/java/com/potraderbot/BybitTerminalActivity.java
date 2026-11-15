@@ -93,7 +93,12 @@ public class BybitTerminalActivity extends Activity {
         root.addView(select);
         symbolPicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
             @Override public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){
-                String next=symbols[pos];\n                if(prefs.getBoolean("open",false) && !next.equals(prefs.getString("trade_symbol","BTCUSDT"))){\n                    Toast.makeText(BybitTerminalActivity.this,"Сначала закройте открытую демо-позицию.",Toast.LENGTH_SHORT).show();\n                    symbolPicker.setSelection(java.util.Arrays.asList(symbols).indexOf(prefs.getString("trade_symbol","BTCUSDT")));return;\n                }\n                if(!next.equals(symbol)){symbol=next;loadMarket();}
+                String next=symbols[pos];
+                if(prefs.getBoolean("open",false) && !next.equals(prefs.getString("trade_symbol","BTCUSDT"))){
+                    Toast.makeText(BybitTerminalActivity.this,"Сначала закройте открытую демо-позицию.",Toast.LENGTH_SHORT).show();
+                    symbolPicker.setSelection(java.util.Arrays.asList(symbols).indexOf(prefs.getString("trade_symbol","BTCUSDT")));return;
+                }
+                if(!next.equals(symbol)){symbol=next;loadMarket();}
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> p){}
         });
