@@ -24,7 +24,7 @@ export type PendingDemoOrder = {
   status: "INTENT" | "SUBMITTED" | "PARTIALLY_FILLED" | "UNKNOWN" | "FILLED" | "CANCELLED" | "REJECTED";
 };
 
-function dbStatus(status: ReturnType<typeof normalizeDemoOrderStatus>) {
+function dbStatus(status: ReturnType<typeof normalizeDemoOrderStatus>): PendingDemoOrder["status"] {
   switch (status) {
     case "NEW": return "SUBMITTED";
     case "PARTIALLY_FILLED": return "PARTIALLY_FILLED";
@@ -54,6 +54,9 @@ export async function submitOrReconcileDemoOrder(input: {
   }
 
   if (order.status === "REJECTED") {
+    await rpc("bybit_demo_worker_set_order_state", {
+      p_order_id: order.order_id, p_exchange_order_id: order.exchange_order_id, p_status: "REJECTED",
+    });
     return {
       orderId: order.exchange_order_id,
       orderLinkId: order.order_link_id,
