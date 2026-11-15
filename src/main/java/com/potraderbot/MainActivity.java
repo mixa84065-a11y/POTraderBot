@@ -41,7 +41,12 @@ public class MainActivity extends Activity {
     private Spinner pairSelector;
     private TextView instrumentText;
     private int expirySeconds=180;
-    private boolean quoteFresh=false, demoEnabled=false, analysisMode=false, refreshing=false, refreshingMarket=false, autoTradeSubmitted=false;
+    private boolean quoteFresh=false, demoEnabled=false, analysisMode=false, refreshing=false, refreshingMarket=false, autoTradeSubmitted=false, bybitMode=false, bybitRefreshing=false;
+    private String bybitSymbol="BTCUSDT";
+    private ChartView bybitChart;
+    private TextView bybitStatus, bybitPrice, bybitChange;
+    private Spinner bybitPairSelector;
+    private final Runnable bybitPoll= new Runnable(){ @Override public void run(){ if(bybitMode){ refreshBybitMarket(); handler.postDelayed(this,5000); } } };
     private JSONArray latestCandles=new JSONArray();
     private ChartView chart;
     private TextView balanceText, quoteText, analysisText, historyText, statsText, signalText;
@@ -271,6 +276,73 @@ public class MainActivity extends Activity {
         updateExpiryButtons();
         handler.removeCallbacks(poll);
         handler.post(poll);
+    }
+
+    private void showBybitTerminal(){
+        bybitMode=true;handler.removeCallbacks(poll);handler.removeCallbacks(bybitPoll);
+        LinearLayout root=vertical();root.setPadding(dp(14),dp(12),dp(14),dp(16));root.setBackgroundColor(NAVY);
+        LinearLayout top=horizontal();
+        Button back=button("← НАЗАД",PANEL,TEXT);top.addView(back,new LinearLayout.LayoutParams(dp(108),dp(42)));
+        TextView title=label("BYBIT • AUTO TERMINAL",17,GOLD,true);title.setGravity(Gravity.CENTER);
+        top.addView(title,new LinearLayout.LayoutParams(0,dp(42),1));root.addView(top);
+        back.setOnClickListener(v->{bybitMode=false;handler.removeCallbacks(bybitPoll);showMain();});
+        TextView subtitle=label("ВСТРОЕННЫЙ ТЕРМИНАЛ • LINEAR USDT",10,MUTED,true);
+        subtitle.setPadding(dp(4),dp(10),0,dp(4));root.addView(subtitle);
+        bybitPairSelector=new Spinner(this);
+        String[] symbols={"BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","BNBUSDT","DOGEUSDT"};
+        ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,symbols);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);bybitPairSelector.setAdapter(adapter);
+        bybitPairSelector.setSelection(java.util.Arrays.asList(symbols).indexOf(bybitSymbol));
+        root.addView(bybitPairSelector,new LinearLayout.LayoutParams(-1,dp(46)));
+        bybitPairSelector.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            @Override public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){
+                if(!symbols[pos].equals(bybitSymbol)){bybitSymbol=symbols[pos];refreshBybitMarket();}
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> p){}
+        });
+        LinearLayout priceRow=horizontal();priceRow.setPadding(dp(12),dp(10),dp(12),dp(10));priceRow.setBackgroundColor(PANEL);
+        LinearLayout priceCol=vertical();
+        bybitPrice=label("ЗАГРУЗКА…",23,TEXT,true);priceCol.addView(bybitPrice);
+        bybitChange=label("24ч: —",11,MUTED,false);priceCol.addView(bybitChange);
+        priceRow.addView(priceCol,new LinearLayout.LayoutParams(0,-2,1));
+        TextView live=label("● LIVE",11,GREEN,true);priceRow.addView(live);root.addView(priceRow);
+        bybitChart=new ChartView(this);LinearLayout.LayoutParams chartParams=new LinearLayout.LayoutParams(-1,dp(300));chartParams.topMargin=dp(8);root.addView(bybitChart,chartParams);
+        bybitStatus=label("Подключаем публичный поток Bybit…",11,MUTED,false);bybitStatus.setPadding(dp(4),dp(8),0,dp(8));root.addView(bybitStatus);
+        TextView autoTitle=label("АВТОМАТИЧЕСКАЯ ТОРГОВЛЯ",12,GOLD,true);autoTitle.setPadding(dp(4),dp(12),0,dp(6));root.addView(autoTitle);
+        LinearLayout autoCard=vertical();autoCard.setPadding(dp(12),dp(12),dp(12),dp(12));autoCard.setBackgroundColor(PANEL);
+        TextView autoState=label("СТАТУС: ОТКЛЮЧЕНА",14,RED,true);autoCard.addView(autoState);
+        TextView autoInfo=label("Рыночные данные Bybit подключаются без ключа. Для автоматического выставления ордеров нужен отдельный API-ключ Bybit Demo с торговыми разрешениями. Реальные ордера пока заблокированы.",11,MUTED,false);
+        autoInfo.setPadding(0,dp(6),0,dp(10));autoCard.addView(autoInfo);
+        Button setup=button("ПОДГОТОВИТЬ DEMO API",GOLD,NAVY);autoCard.addView(setup,new LinearLayout.LayoutParams(-1,dp(46)));
+        setup.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Подключение Bybit Demo")
+            .setMessage("Следующий этап — безопасное сохранение Demo API Key и Secret на сервере, затем тест ордеров в Bybit Demo. Не вставляйте ключи в чат и не используйте ключ с правом вывода средств. На этом этапе терминал показывает публичные рыночные данные; автоторговля ещё не активирована.")
+            .setPositiveButton("ПОНЯТНО",null).show());
+        root.addView(autoCard);
+        TextView disclaimer=label("Публичные котировки • Автоторговля выключена • Реальные ордера не отправляются",10,MUTED,false);
+        disclaimer.setGravity(Gravity.CENTER);disclaimer.setPadding(0,dp(12),0,dp(4));root.addView(disclaimer);
+        page(root);refreshBybitMarket();handler.postDelayed(bybitPoll,5000);
+    }
+
+    private void refreshBybitMarket(){
+        if(!bybitMode||bybitRefreshing)return;
+        bybitRefreshing=true;final String requested=bybitSymbol;
+        if(bybitStatus!=null)bybitStatus.setText("Получаем котировки Bybit…");
+        io.execute(()->{
+            JSONObject data=null;String error=null;
+            try{data=BybitMarketApi.getLinearMarket(requested);}catch(Exception e){error=e.getMessage();}
+            final JSONObject result=data;final String failure=error;
+            runOnUiThread(()->{
+                bybitRefreshing=false;if(!bybitMode||!requested.equals(bybitSymbol))return;
+                if(result==null){bybitStatus.setText("Bybit временно недоступен: "+(failure==null?"ошибка соединения":failure));return;}
+                String price=result.optString("lastPrice","—");
+                double change=result.optDouble("price24hPcnt",0)*100.0;
+                bybitPrice.setText(price+" USDT");
+                bybitChange.setText(String.format(Locale.US,"24ч: %+.2f%%",change));
+                JSONArray candles=result.optJSONArray("candles");
+                bybitChart.setMarketData(candles,true);
+                bybitStatus.setText("Данные получены с Bybit • "+requested+" • M1 • обновление каждые 5 сек.");
+            });
+        });
     }
 
     private void addExpiry(int seconds,String title){
