@@ -1,6 +1,8 @@
 package com.potraderbot;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.text.InputType;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -10,6 +12,7 @@ import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Spinner;
@@ -42,6 +45,9 @@ public class BybitTerminalActivity extends Activity {
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
+    private String accessToken="";
+    private TextView serverReportText;
+    private Button serverRefreshButton;
     private Spinner symbolPicker;
     private TextView priceText, changeText, balanceText, modeText, signalText, riskText, historyText, statusText;
     private Button autoButton;
@@ -55,6 +61,8 @@ public class BybitTerminalActivity extends Activity {
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
         getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
+        accessToken=getIntent().getStringExtra("access_token");
+        if(accessToken==null)accessToken="";
         prefs=getSharedPreferences("bybit_paper_ledger",MODE_PRIVATE);
         if(!prefs.contains("cash"))prefs.edit().putFloat("cash",(float)START_BALANCE).apply();
         String today=new SimpleDateFormat("yyyyMMdd",Locale.US).format(new Date());
@@ -62,6 +70,7 @@ public class BybitTerminalActivity extends Activity {
         autoEnabled=prefs.getBoolean("auto",false);
         if(prefs.getBoolean("open",false))symbol=prefs.getString("trade_symbol","BTCUSDT");
         buildScreen();
+        refreshServerReport();
         handler.post(poll);
     }
     private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+0.5f);}
@@ -82,7 +91,7 @@ public class BybitTerminalActivity extends Activity {
         top.addView(title,new LinearLayout.LayoutParams(0,dp(44),1));
         Button back=button("НАЗАД",PANEL,WHITE);top.addView(back,new LinearLayout.LayoutParams(-2,dp(40)));
         back.setOnClickListener(v->finish());root.addView(top);
-        TextView sub=text("SPOT • ПУБЛИЧНЫЕ КОТИРОВКИ BYBIT",10,MUTED,true);sub.setPadding(0,dp(2),0,dp(10));root.addView(sub);
+        TextView sub=text("SPOT • КОТИРОВКИ BYBIT • ЛОКАЛЬНАЯ СИМУЛЯЦИЯ",10,MUTED,true);sub.setPadding(0,dp(2),0,dp(10));root.addView(sub);
         LinearLayout select=horizontal();
         TextView pairLabel=text("ИНСТРУМЕНТ",10,MUTED,true);select.addView(pairLabel);
         symbolPicker=new Spinner(this);
@@ -134,9 +143,126 @@ public class BybitTerminalActivity extends Activity {
         historyText=text("Сделок пока нет.",12,WHITE,false);historyText.setPadding(dp(12),dp(12),dp(12),dp(12));historyText.setBackgroundColor(PANEL);root.addView(historyText);
         TextView foot=text("Автостратегия — экспериментальная эвристика, не гарантия доходности. Это локальный симулятор, не Bybit Demo API.",10,MUTED,false);
         foot.setPadding(dp(4),dp(12),dp(4),0);root.addView(foot);
+        buildServerReport(root);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(BG);scroll.addView(root);setContentView(scroll);
         renderLedger();
     }
+
+    private void buildServerReport(LinearLayout root){
+        TextView heading=text("СЕРВЕРНЫЙ BYBIT DEMO • ОТЧЁТ 48 ЧАСОВ",12,GOLD,true);
+        heading.setPadding(dp(4),dp(18),0,dp(8));root.addView(heading);
+        TextView note=text("Серверная торговля будет работать независимо от телефона. API-ключи сохраняются в зашифрованном хранилище сервера; они не записываются в память приложения.",10,MUTED,false);
+        note.setPadding(dp(4),0,dp(4),dp(8));root.addView(note);
+        Button connect=button("ПОДКЛЮЧИТЬ BYBIT DEMO API",PANEL,WHITE);
+        root.addView(connect,new LinearLayout.LayoutParams(-1,dp(46)));
+        connect.setOnClickListener(v->showBybitCredentialsDialog());
+        serverRefreshButton=button("ОБНОВИТЬ ПОЛНЫЙ ОТЧЁТ",GOLD,BG);
+        LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(46));rp.topMargin=dp(6);root.addView(serverRefreshButton,rp);
+        serverRefreshButton.setOnClickListener(v->refreshServerReport());
+        serverReportText=text("Проверяем серверный отчёт…",11,WHITE,false);
+        serverReportText.setPadding(dp(12),dp(12),dp(12),dp(12));
+        serverReportText.setBackgroundColor(PANEL);
+        LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,-2);sp.topMargin=dp(8);root.addView(serverReportText,sp);
+        TextView state=text("Запуск 48-часового сервера станет доступен после завершения и проверки серверного исполнителя. Сейчас подготовлены защищённое хранение ключей и база полного отчёта.",10,MUTED,false);
+        state.setPadding(dp(4),dp(8),dp(4),0);root.addView(state);
+    }
+
+    private void showBybitCredentialsDialog(){
+        if(accessToken.isEmpty()){Toast.makeText(this,"Сначала войдите в аккаунт GOD OF TRADING.",Toast.LENGTH_LONG).show();return;}
+        LinearLayout box=vertical();box.setPadding(dp(18),dp(8),dp(18),0);
+        EditText keyInput=new EditText(this);keyInput.setSingleLine(true);keyInput.setHint("Bybit Demo API Key");
+        keyInput.setTextColor(WHITE);keyInput.setHintTextColor(MUTED);
+        keyInput.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);box.addView(keyInput);
+        EditText secretInput=new EditText(this);secretInput.setSingleLine(true);secretInput.setHint("Bybit Demo API Secret");
+        secretInput.setTextColor(WHITE);secretInput.setHintTextColor(MUTED);
+        secretInput.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);box.addView(secretInput);
+        TextView status=text("Создайте ключ именно в режиме Bybit Demo Trading. Разрешение на вывод средств не включайте.",10,MUTED,false);
+        status.setPadding(0,dp(8),0,dp(4));box.addView(status);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Подключение Bybit Demo")
+            .setView(box).setPositiveButton("СОХРАНИТЬ",null).setNegativeButton("ОТМЕНА",null).create();
+        dialog.setOnShowListener(ignored->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            String key=keyInput.getText().toString().trim(),secret=secretInput.getText().toString().trim();
+            if(key.length()<12||secret.length()<20){status.setText("Проверьте API Key и API Secret.");return;}
+            Button save=dialog.getButton(AlertDialog.BUTTON_POSITIVE);save.setEnabled(false);status.setText("Сохраняем ключи в защищённое хранилище…");
+            io.execute(()->{
+                try{
+                    SupabaseApi.saveBybitDemoCredentials(accessToken,key,secret);
+                    runOnUiThread(()->{keyInput.setText("");secretInput.setText("");status.setText("Ключи сохранены в Vault. Само приложение их не хранит.");save.setEnabled(true);Toast.makeText(this,"Bybit Demo API подключён к защищённому хранилищу",Toast.LENGTH_LONG).show();refreshServerReport();});
+                }catch(Exception e){runOnUiThread(()->{status.setText("Не удалось сохранить ключи: "+e.getMessage());save.setEnabled(true);});}
+            });
+        }));
+        dialog.show();
+    }
+
+    private void refreshServerReport(){
+        if(serverReportText==null)return;
+        if(accessToken.isEmpty()){serverReportText.setText("Нет активной сессии. Войдите в аккаунт, чтобы открыть серверный отчёт.");return;}
+        if(serverRefreshButton!=null)serverRefreshButton.setEnabled(false);
+        serverReportText.setText("Загружаем данные сервера…");
+        io.execute(()->{
+            JSONObject report=null;String error=null;
+            try{report=SupabaseApi.getBybitDemoReport(accessToken);}catch(Exception e){error=e.getMessage();}
+            final JSONObject result=report;final String problem=error;
+            runOnUiThread(()->{
+                if(isFinishing())return;
+                if(serverRefreshButton!=null)serverRefreshButton.setEnabled(true);
+                serverReportText.setText(result==null?"Отчёт недоступен: "+problem:formatServerReport(result));
+            });
+        });
+    }
+
+    private String formatServerReport(JSONObject report){
+        StringBuilder b=new StringBuilder();
+        b.append("КЛЮЧИ BYBIT DEMO: ").append(report.optBoolean("configured",false)?"СОХРАНЕНЫ В VAULT":"НЕ ПОДКЛЮЧЕНЫ");
+        JSONObject run=report.optJSONObject("run");
+        if(run==null){b.append("\n\n48-ЧАСОВЫЙ ТЕСТ ЕЩЁ НЕ ЗАПУСКАЛСЯ.");return b.toString();}
+        b.append("\n\nСТАТУС: ").append(run.optString("status","—"));
+        b.append("\nИнструменты: ").append(run.optString("symbols","—"));
+        b.append("\nСтарт: ").append(run.optString("started_at","—"));
+        b.append("\nПлановое завершение: ").append(run.optString("ends_at","—"));
+        b.append("\nПоследний сигнал сервера: ").append(run.optString("last_heartbeat","—"));
+        b.append("\nСтартовый капитал: ").append(run.optString("start_equity","—")).append(" USDT");
+        b.append("\nТекущий капитал: ").append(run.optString("end_equity","—")).append(" USDT");
+        b.append("\nРеализованный P/L: ").append(run.optString("realized_pnl","0")).append(" USDT");
+        b.append("\nКомиссии: ").append(run.optString("fees_paid","0")).append(" USDT");
+        b.append("\nМакс. просадка: ").append(run.optString("max_drawdown_pct","0")).append("%");
+        if(!run.optString("last_error","").isEmpty())b.append("\nПоследняя ошибка: ").append(run.optString("last_error"));
+        JSONObject summary=report.optJSONObject("summary");
+        if(summary!=null){
+            b.append("\n\nСТАТИСТИКА");
+            b.append("\nСделок: ").append(summary.optInt("trades_total"));
+            b.append("\nЗакрыто: ").append(summary.optInt("closed")).append(" • открыто: ").append(summary.optInt("open"));
+            b.append("\nПлюсовых: ").append(summary.optInt("wins")).append(" • минусовых: ").append(summary.optInt("losses"));
+            b.append("\nДоля плюсовых: ").append(summary.optString("win_rate_pct","0")).append("%");
+            b.append("\nЧистый P/L: ").append(summary.optString("net_pnl","0")).append(" USDT");
+            b.append("\nКомиссии по сделкам: ").append(summary.optString("fees","0")).append(" USDT");
+        }
+        JSONArray trades=report.optJSONArray("trades");
+        b.append("\n\nВСЕ СДЕЛКИ (").append(trades==null?0:trades.length()).append(")");
+        if(trades!=null)for(int i=0;i<trades.length();i++){
+            JSONObject t=trades.optJSONObject(i);if(t==null)continue;
+            b.append("\n").append(i+1).append(". ").append(t.optString("symbol","—")).append(" ").append(t.optString("side","—"))
+             .append(" • ").append(t.optString("status","—"));
+            b.append("\n   Вход: ").append(t.optString("entry_price","—")).append(" • выход: ").append(t.optString("exit_price","—"));
+            b.append("\n   Объём: ").append(t.optString("qty","—")).append(" • P/L: ").append(t.optString("pnl","—"))
+             .append(" • комиссия: ").append(t.optString("fees","—"));
+            b.append("\n   Время: ").append(t.optString("opened_at","—")).append(" → ").append(t.optString("closed_at","—"));
+            if(!t.optString("entry_reason","").isEmpty())b.append("\n   Причина входа: ").append(t.optString("entry_reason"));
+            if(!t.optString("exit_reason","").isEmpty())b.append("\n   Причина выхода: ").append(t.optString("exit_reason"));
+        }
+        JSONArray positions=report.optJSONArray("positions");
+        if(positions!=null&&positions.length()>0){
+            b.append("\n\nОТКРЫТЫЕ ПОЗИЦИИ");
+            for(int i=0;i<positions.length();i++){JSONObject p=positions.optJSONObject(i);if(p!=null)b.append("\n").append(p.optString("symbol")).append(" • qty ").append(p.optString("qty")).append(" • вход ").append(p.optString("entry_price")).append(" • SL ").append(p.optString("stop_price")).append(" • TP ").append(p.optString("target_price"));}
+        }
+        JSONArray events=report.optJSONArray("events");
+        b.append("\n\nЖУРНАЛ СОБЫТИЙ (").append(events==null?0:events.length()).append(")");
+        if(events!=null)for(int i=0;i<events.length();i++){
+            JSONObject e=events.optJSONObject(i);if(e!=null)b.append("\n").append(e.optString("created_at","")).append(" [").append(e.optString("level","INFO")).append("] ").append(e.optString("event_type","")).append(": ").append(e.optString("message",""));
+        }
+        return b.toString();
+    }
+
     private void loadMarket(){
         if(loading)return;loading=true;final String requested=symbol;
         io.execute(()->{
@@ -254,7 +380,7 @@ public class BybitTerminalActivity extends Activity {
         if(open)last+="\n\nОТКРЫТАЯ ПОЗИЦИЯ: "+prefs.getString("trade_symbol",symbol)+" • вход "+String.format(Locale.US,"%.4f",prefs.getFloat("entry",0))+" • стоп 0,7% / цель 1,4%";
         historyText.setText(last);
     }
-    @Override protected void onResume(){super.onResume();handler.removeCallbacks(poll);handler.post(poll);}
+    @Override protected void onResume(){super.onResume();handler.removeCallbacks(poll);handler.post(poll);refreshServerReport();}
     @Override protected void onPause(){super.onPause();handler.removeCallbacks(poll);}
     @Override protected void onDestroy(){handler.removeCallbacks(poll);io.shutdownNow();super.onDestroy();}
 
