@@ -38,9 +38,9 @@ import java.util.concurrent.Executors;
  * data and a local paper ledger only. No private credentials or real orders exist here.
  */
 public class BybitTerminalActivity extends Activity {
-    private static final int BG=Color.rgb(7,16,29), PANEL=Color.rgb(14,29,48);
-    private static final int GOLD=Color.rgb(245,190,65), WHITE=Color.rgb(230,238,247);
-    private static final int MUTED=Color.rgb(139,157,180), GREEN=Color.rgb(38,176,129), RED=Color.rgb(220,83,91);
+    private static final int BG=Color.rgb(5,7,11), PANEL=Color.rgb(15,17,22);
+    private static final int GOLD=Color.rgb(247,190,55), WHITE=Color.rgb(242,242,245);
+    private static final int MUTED=Color.rgb(151,154,163), GREEN=Color.rgb(0,190,85), RED=Color.rgb(224,43,43);
     private static final String API="https://api.bybit.com";
     private static final double START_BALANCE=20000.0, STAKE=100.0, STOP_PCT=0.007, TAKE_PCT=0.014, MAX_DAILY_LOSS=200.0;
     private final Handler handler=new Handler(Looper.getMainLooper());
@@ -92,25 +92,25 @@ public class BybitTerminalActivity extends Activity {
         return d;
     }
     private void styleCard(View view,int paddingDp){
-        view.setBackground(surface(PANEL,14,0xFF263B56));
+        view.setBackground(surface(PANEL,14,0xFF51401D));
         view.setElevation(dp(2));
         if(view instanceof TextView)((TextView)view).setPadding(dp(paddingDp),dp(paddingDp),dp(paddingDp),dp(paddingDp));
     }
     private Button button(String s,int bg,int fg){
         Button b=new Button(this);b.setText(s);b.setAllCaps(false);b.setTextSize(12);b.setTypeface(null,1);
         b.setTextColor(fg);b.setMinHeight(dp(44));b.setPadding(dp(12),dp(8),dp(12),dp(8));
-        b.setBackground(surface(bg,12,bg==GOLD?0:0xFF304762));b.setElevation(dp(2));return b;
+        b.setBackground(surface(bg,12,bg==GOLD?0:0xFF51401D));b.setElevation(dp(2));return b;
     }
     private LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(1);return l;}
     private LinearLayout horizontal(){LinearLayout l=new LinearLayout(this);l.setOrientation(0);l.setGravity(Gravity.CENTER_VERTICAL);return l;}
     private void buildScreen(){
         LinearLayout root=vertical();root.setPadding(dp(14),dp(12),dp(14),dp(18));root.setBackgroundColor(BG);
         LinearLayout top=horizontal();
-        TextView title=text("GOD OF TRADING",19,GOLD,true);
+        TextView title=text("♛  GOD OF TRADING 2.0",19,GOLD,true);
         top.addView(title,new LinearLayout.LayoutParams(0,dp(44),1));
         Button back=button("НАЗАД",PANEL,WHITE);top.addView(back,new LinearLayout.LayoutParams(-2,dp(40)));
         back.setOnClickListener(v->finish());root.addView(top);
-        TextView sub=text("BYBIT TERMINAL  •  MARKET INTELLIGENCE",10,MUTED,true);sub.setPadding(0,dp(2),0,dp(10));root.addView(sub);
+        TextView sub=text("BYBIT  •  ТОРГОВЫЙ ТЕРМИНАЛ",10,MUTED,true);sub.setPadding(0,dp(2),0,dp(10));root.addView(sub);
         LinearLayout select=horizontal();
         TextView pairLabel=text("ИНСТРУМЕНТ",10,MUTED,true);select.addView(pairLabel);
         symbolPicker=new Spinner(this);
@@ -143,7 +143,7 @@ public class BybitTerminalActivity extends Activity {
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> p){}
         });
-        LinearLayout quote=horizontal();quote.setPadding(dp(14),dp(14),dp(14),dp(14));quote.setBackground(surface(PANEL,16,0xFF263B56));quote.setElevation(dp(2));
+        LinearLayout quote=horizontal();quote.setPadding(dp(14),dp(14),dp(14),dp(14));quote.setBackground(surface(PANEL,16,0xFF51401D));quote.setElevation(dp(2));
         LinearLayout qleft=vertical();
         priceText=text("Загрузка цены…",25,WHITE,true);qleft.addView(priceText);
         changeText=text("24ч: —",11,MUTED,false);qleft.addView(changeText);
@@ -152,7 +152,7 @@ public class BybitTerminalActivity extends Activity {
         LinearLayout.LayoutParams qp=new LinearLayout.LayoutParams(-1,-2);qp.topMargin=dp(8);root.addView(quote,qp);
         priceChart=new PriceChart();LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(220));cp.topMargin=dp(8);root.addView(priceChart,cp);
         TextView tf=text("ГРАФИК • 1 МИНУТА • ПОСЛЕДНИЕ 100 СВЕЧЕЙ",10,MUTED,true);tf.setPadding(dp(3),dp(5),0,dp(5));root.addView(tf);
-        LinearLayout wallet=horizontal();wallet.setPadding(dp(14),dp(14),dp(14),dp(14));wallet.setBackground(surface(PANEL,16,0xFF263B56));wallet.setElevation(dp(2));
+        LinearLayout wallet=horizontal();wallet.setPadding(dp(14),dp(14),dp(14),dp(14));wallet.setBackground(surface(PANEL,16,0xFF51401D));wallet.setElevation(dp(2));
         LinearLayout cashCol=vertical();cashCol.addView(text("ДЕМО-БАЛАНС",10,MUTED,true));
         balanceText=text("",20,WHITE,true);cashCol.addView(balanceText);
         wallet.addView(cashCol,new LinearLayout.LayoutParams(0,-2,1));
