@@ -241,13 +241,16 @@ export async function getDemoSpotOrder(
   symbol: string,
   orderId: string,
 ): Promise<DemoSpotOrder> {
-  const response = await demoPrivateRequest<{ list?: DemoSpotOrder[] }>(
-    apiKey, apiSecret, "GET", "/v5/order/realtime",
-    { category: "spot", symbol, orderId, openOnly: 1 },
-  );
-  const order = response.result?.list?.find((item) => item.orderId === orderId);
-  if (!order) throw new Error("Заявка ещё не найдена в истории Bybit; статус оставлен неизвестным.");
-  return order;
+  // Query active orders first, then the recent closed-order cache.
+  for (const openOnly of [0, 1]) {
+    const response = await demoPrivateRequest<{ list?: DemoSpotOrder[] }>(
+      apiKey, apiSecret, "GET", "/v5/order/realtime",
+      { category: "spot", symbol, orderId, openOnly },
+    );
+    const order = response.result?.list?.find((item) => item.orderId === orderId);
+    if (order) return order;
+  }
+  throw new Error("Заявка ещё не найдена в активных или последних закрытых ордерах; статус оставлен неизвестным.");
 }
 
 export async function getDemoSpotExecutions(
