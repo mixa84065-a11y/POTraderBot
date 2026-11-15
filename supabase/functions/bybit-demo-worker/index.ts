@@ -141,9 +141,33 @@ async function processRun(run: ActiveRun) {
   if (!claimed) return { run_id: run.run_id, status: "SKIPPED_LOCKED" };
 
   try {
-    if (run.status === "STOPPING") {
-      await log(run.run_id, "WARN", "STOP_REQUEST_PENDING", "Остановка ожидает безопасного закрытия позиций. Новые заявки не отправляются.");
-      return { run_id: run.run_id, status: "STOPPING_REQUIRES_FLATTEN" };
+    // A run must never continue generating entry signals after its requested end time.
+    const expired = Date.parse(run.ends_at) <= Date.now();
+    if (expired && run.status === "RUNNING") {
+      await rpc("bybit_demo_worker_request_stop", {
+        p_run_id: run.run_id, p_reason: "Достигнуто запланированное время окончания демо-запуска.",
+      });
+    }
+    if (run.status === "STOPPING" || expired) {
+      const openPositions = await rpc<Array<{ position_id: string; symbol: string }>>(
+        "bybit_demo_worker_open_positions", { p_run_id: run.run_id },
+      );
+      if ((openPositions ?? []).length > 0) {
+        await log(run.run_id, "WARN", "STOPPING_OPEN_POSITIONS",
+          "Новые входы заблокированы. Завершение запуска ожидает безопасного закрытия открытых позиций.",
+          { open_positions: openPositions.length, symbols: openPositions.map((p) => p.symbol) },
+        );
+        return { run_id: run.run_id, status: "STOPPING_REQUIRES_FLATTEN", open_positions: openPositions.length };
+      }
+      const finalStatus = run.status === "STOPPING" ? "STOPPED" : "COMPLETED";
+      await rpc("bybit_demo_worker_heartbeat_v2", {
+        p_run_id: run.run_id, p_equity: null, p_realized_pnl: null,
+        p_fees: null, p_error: null, p_status: finalStatus,
+      });
+      await log(run.run_id, "INFO", finalStatus,
+        finalStatus === "STOPPED" ? "Демо-запуск остановлен: открытых позиций нет." : "Демо-запуск завершён по времени: открытых позиций нет.",
+      );
+      return { run_id: run.run_id, status: finalStatus };
     }
     const symbols = (run.symbols ?? []).filter((symbol) => ALLOWED_SYMBOLS.has(symbol)).slice(0, 3);
     if (symbols.length === 0 || symbols.length !== (run.symbols ?? []).length) {
