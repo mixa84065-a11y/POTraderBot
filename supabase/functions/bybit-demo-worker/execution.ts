@@ -169,6 +169,18 @@ export async function submitOrReconcileDemoOrder(input: {
     if (stored?.fee_conversion_complete === false) feeConversionComplete = false;
   }
 
+  const exchangeCumExecQty = Number(exchangeOrder.cumExecQty);
+  if (!Number.isFinite(exchangeCumExecQty) || exchangeCumExecQty < 0) {
+    throw new Error("Bybit не вернул достоверное cumExecQty; журнал исполнений не помечен завершённым.");
+  }
+  const quantityTolerance = Math.max(1e-12, exchangeCumExecQty * 1e-8);
+  if (Math.abs(filledQty - exchangeCumExecQty) > quantityTolerance) {
+    throw new Error(
+      `Исполнения ещё не синхронизированы: Bybit cumExecQty=${exchangeCumExecQty}, получено исполнений=${filledQty}. Повторная сверка будет выполнена позже.`,
+    );
+  }
+  await rpc("bybit_demo_worker_mark_executions_complete", { p_order_id: order.order_id });
+
   return {
     orderId: exchangeOrderId,
     orderLinkId: order.order_link_id,
@@ -179,5 +191,6 @@ export async function submitOrReconcileDemoOrder(input: {
     feeUsdt,
     feeConversionComplete,
     executionCount: executions.length,
+    exchangeCumExecQty,
   };
 }
