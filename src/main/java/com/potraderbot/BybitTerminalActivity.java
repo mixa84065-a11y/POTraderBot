@@ -139,6 +139,8 @@ public class BybitTerminalActivity extends Activity {
                 if(rr==null||tt==null){statusText.setText("Нет котировок Bybit: "+ee);return;}
                 try{
                     JSONArray ordered=new JSONArray();for(int i=rr.length()-1;i>=0;i--)ordered.put(rr.getJSONArray(i));
+                    // Discard the still-forming candle; only closed bars feed the strategy.
+                    if(ordered.length()>1)ordered.remove(ordered.length()-1);
                     candles=ordered;lastPrice=Double.parseDouble(tt.getString("lastPrice"));
                     priceText.setText(String.format(Locale.US,"%s  %,.4f",requested,lastPrice));
                     double change=Double.parseDouble(tt.optString("price24hPcnt","0"))*100.0;
@@ -181,10 +183,18 @@ public class BybitTerminalActivity extends Activity {
         }catch(Exception e){return 0;}
     }
     private void evaluateStrategy(){
+        if(candles.length()<30){statusText.setText("Недостаточно закрытых минутных свечей.");return;}
+        try{
+            long candleTime=Long.parseLong(candles.getJSONArray(candles.length()-1).getString(0));
+            if(System.currentTimeMillis()-candleTime>180000L){
+                statusText.setText("Последняя закрытая свеча устарела. Новые автосделки заблокированы.");
+                renderLedger();return;
+            }
+        }catch(Exception e){statusText.setText("Не удалось проверить время свечи. Автосделки заблокированы.");return;}
         int s=score();String dir=s>=3?"ПОКУПКА":s<=-3?"СЛАБЫЙ ТРЕНД / ВЫХОД":"НЕТ СИГНАЛА";
         signalText.setText("АНАЛИЗ: "+dir+"  •  SCORE "+s);
         signalText.setTextColor(s>=3?GREEN:s<=-3?RED:WHITE);
-        statusText.setText("EMA 9/21 + RSI(14) + импульс. Условный балл не является вероятностью прибыли.");
+        statusText.setText("EMA 9/21 + RSI(14) + импульс. Балл — эвристика, не вероятность прибыли.");
         managePaperTrade(s);renderLedger();
     }
     private void managePaperTrade(int s){
@@ -196,8 +206,13 @@ public class BybitTerminalActivity extends Activity {
             boolean stop=lastPrice<=entry*(1-STOP_PCT),take=lastPrice>=entry*(1+TAKE_PCT),reverse=s<=-3;
             if(stop||take||reverse){
                 double cash=prefs.getFloat("cash",(float)START_BALANCE);
-                prefs.edit().putFloat("cash",(float)(cash+stake+pnl)).putBoolean("open",false)
-                    .putString("last",String.format(Locale.US,"%s • %s • вход %.4f • выход %.4f • P/L %+.2f USDT",symbol,stop?"STOP":take?"TAKE PROFIT":"СИГНАЛ ЗАКРЫТ",entry,lastPrice,pnl)).apply();\n                if(stopAuto)autoEnabled=false;
+                double lossToday=prefs.getFloat("loss_today",0)+(pnl<0?-pnl:0);
+                boolean stopAuto=lossToday>=MAX_DAILY_LOSS;
+                prefs.edit().putFloat("cash",(float)(cash+stake+pnl))
+                    .putFloat("loss_today",(float)lossToday).putBoolean("auto",stopAuto?false:autoEnabled)
+                    .putBoolean("open",false)
+                    .putString("last",String.format(Locale.US,"%s • %s • вход %.4f • выход %.4f • P/L %+.2f USDT",symbol,stop?"STOP":take?"TAKE PROFIT":"СИГНАЛ ЗАКРЫТ",entry,lastPrice,pnl)).apply();
+                if(stopAuto){autoEnabled=false;statusText.setText("Достигнут дневной лимит убытка 200 USDT. Автоторговля остановлена.");}
             }
         }else if(autoEnabled&&s>=3&&lastPrice>0){
             double cash=prefs.getFloat("cash",(float)START_BALANCE);
@@ -217,7 +232,7 @@ public class BybitTerminalActivity extends Activity {
         autoButton.setText(autoEnabled?"ОСТАНОВИТЬ АВТОДЕМО":"ЗАПУСТИТЬ АВТОДЕМО");
         autoButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(autoEnabled?GREEN:GOLD));
         String last=prefs.getString("last","Сделок пока нет.");
-        if(open)last+="\n\nОТКРЫТАЯ ПОЗИЦИЯ: "+symbol+" • вход "+String.format(Locale.US,"%.4f",prefs.getFloat("entry",0))+" • стоп 0,7% / цель 1,4%";
+        if(open)last+="\n\nОТКРЫТАЯ ПОЗИЦИЯ: "+prefs.getString("trade_symbol",symbol)+" • вход "+String.format(Locale.US,"%.4f",prefs.getFloat("entry",0))+" • стоп 0,7% / цель 1,4%";
         historyText.setText(last);
     }
     @Override protected void onResume(){super.onResume();handler.removeCallbacks(poll);handler.post(poll);}
