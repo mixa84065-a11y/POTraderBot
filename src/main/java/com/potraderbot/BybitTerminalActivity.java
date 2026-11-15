@@ -104,7 +104,7 @@ public class BybitTerminalActivity extends Activity {
         root.addView(select);
         LinearLayout multiScan=horizontal();
         scanCategoryPicker=new Spinner(this);
-        String[] scanCategories={"Spot","USDT Futures","Inverse Futures","Акции TradFi","ETF TradFi"};
+        String[] scanCategories={"Спот","USDT фьючерсы","Inverse фьючерсы","Опционы","TradFi: акции","TradFi: ETF","TradFi: Forex","TradFi: сырьё","CFD (MT5 — подключение отдельно)"};
         ArrayAdapter<String> scanAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,scanCategories);
         scanAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         scanCategoryPicker.setAdapter(scanAdapter);
@@ -238,16 +238,23 @@ public class BybitTerminalActivity extends Activity {
     private void runMultiScan(){
         if(multiScanButton==null)return;
         final int selected=scanCategoryPicker.getSelectedItemPosition();
-        final String category=selected==3?"stock":selected==4?"ETF":new String[]{"spot","linear","inverse"}[selected];
+        final String category=new String[]{"spot","linear","inverse","option","stock","ETF","forex","commodity","cfd"}[selected];
         multiScanButton.setEnabled(false);
+        if("cfd".equals(category)){
+            multiScanText.setText("CFD НА BYBIT: отдельный MT5 CFD-счёт и отдельный API/интеграционный контур. V5 API для спота/деривативов не предоставляет CFD-каталог. Этот раздел зарезервирован; сначала нужно проверить доступный официальный способ подключения MT5 CFD для вашего аккаунта и региона. Торговля не запускается.");
+            return;
+        }
         multiScanText.setText("Получаем каталог Bybit и проверяем котировки ("+category+"). Только публичные данные, ордера не отправляются…");
         io.execute(()->{
             java.util.List<BybitMarketScanner.Instrument> catalog=null;
             java.util.List<BybitMarketScanner.Signal> signals=null;String error=null;
             try{
-                if("stock".equals(category)||"ETF".equals(category)){
+                if("stock".equals(category)||"ETF".equals(category)||"forex".equals(category)||"commodity".equals(category)){
                     catalog=BybitMarketScanner.loadTradFiCatalog(category,30);
                     signals=BybitMarketScanner.scanTradFi(category,30);
+                }else if("option".equals(category)){
+                    catalog=BybitMarketScanner.loadInstruments("option");
+                    if(catalog.size()>30)catalog=new java.util.ArrayList<>(catalog.subList(0,30));
                 }else signals=BybitMarketScanner.scan(category,30);
             }catch(Exception e){error=e.getMessage();}
             final java.util.List<BybitMarketScanner.Instrument> listed=catalog;
@@ -256,7 +263,7 @@ public class BybitTerminalActivity extends Activity {
                 if(isFinishing())return;
                 multiScanButton.setEnabled(true);
                 if(found==null&&listed==null){multiScanText.setText("Ошибка загрузки Bybit: "+problem);return;}
-                String categoryLabel=("stock".equals(category)?"АКЦИИ TRADFI":("ETF".equals(category)?"ETF TRADFI":category.toUpperCase(java.util.Locale.US)));
+                String categoryLabel=("stock".equals(category)?"АКЦИИ TRADFI":("ETF".equals(category)?"ETF TRADFI":("forex".equals(category)?"FOREX TRADFI":("commodity".equals(category)?"СЫРЬЁ TRADFI":("option".equals(category)?"ОПЦИОНЫ":category.toUpperCase(java.util.Locale.US))))));
                 StringBuilder out=new StringBuilder("BYBIT • "+categoryLabel+"\n");
                 if(listed!=null){
                     out.append("КАТАЛОГ ДОСТУПНЫХ ИНСТРУМЕНТОВ (").append(listed.size()).append(")\n");
