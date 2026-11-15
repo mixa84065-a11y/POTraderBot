@@ -74,7 +74,7 @@ public final class BybitMarketScanner {
         for(int page=0;page<10;page++){
             String url="https://api.bybit.com/v5/market/instruments-info?category="+category
                 +( "option".equals(category)?"&baseCoin=All":"")
-                +("&spot".equals(category)?"":"&limit=1000")
+                +("spot".equals(category)?"":"&limit=1000")
                 +(cursor.isEmpty()?"":"&cursor="+enc(cursor));
             JSONObject root=get(url).getJSONObject("result");
             JSONArray list=root.optJSONArray("list");
