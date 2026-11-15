@@ -3,6 +3,8 @@ import {
   buildSpotMarketSell,
   floorToStep,
   makeOrderLinkId,
+  normalizeDemoOrderStatus,
+  normalizeSpotFill,
 } from "./bybit.ts";
 
 Deno.test("floorToStep respects decimal lot increments", () => {
@@ -45,4 +47,26 @@ Deno.test("order builders reject malformed symbols, IDs and amounts", () => {
     try { test(); } catch { rejected = true; }
     if (!rejected) throw new Error("invalid order input was accepted");
   }
+});
+
+Deno.test("order status mapping preserves partial and terminal states", () => {
+  if (normalizeDemoOrderStatus("PartiallyFilled") !== "PARTIALLY_FILLED") throw new Error("partial status mapping failed");
+  if (normalizeDemoOrderStatus("Filled") !== "FILLED") throw new Error("filled status mapping failed");
+  if (normalizeDemoOrderStatus("Cancelled") !== "CANCELLED") throw new Error("cancel status mapping failed");
+  if (normalizeDemoOrderStatus("Rejected") !== "REJECTED") throw new Error("reject status mapping failed");
+  if (normalizeDemoOrderStatus("mystery") !== "UNKNOWN") throw new Error("unknown status must fail closed");
+});
+
+Deno.test("spot fill fee conversion handles quote/base currencies and flags third tokens", () => {
+  const common = {
+    execId: "exec-1", orderId: "order-1", symbol: "BTCUSDT", side: "Buy" as const,
+    execQty: "0.01", execPrice: "50000", execValue: "500",
+    execFee: "0.00001", execTime: "1800000000000",
+  };
+  const baseFee = normalizeSpotFill({ ...common, feeCurrency: "BTC" });
+  if (baseFee.feeUsdt !== 0.5) throw new Error("base-coin fee conversion failed");
+  const quoteFee = normalizeSpotFill({ ...common, feeCurrency: "USDT", execFee: "0.5" });
+  if (quoteFee.feeUsdt !== 0.5) throw new Error("quote-coin fee conversion failed");
+  const thirdCoinFee = normalizeSpotFill({ ...common, feeCurrency: "BNB" });
+  if (thirdCoinFee.feeUsdt !== null) throw new Error("third-token fee must remain unconverted");
 });
