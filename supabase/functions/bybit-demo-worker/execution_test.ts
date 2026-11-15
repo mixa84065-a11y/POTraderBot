@@ -162,6 +162,7 @@ Deno.test("native protection payload must match the persisted trigger price", as
   const order: PendingDemoOrder = {
     ...baseOrder,
     purpose: "PROTECTION",
+    position_id: "00000000-0000-4000-8000-000000000002",
     side: "Sell",
     qty_unit: "baseCoin",
     requested_qty: "0.002",
