@@ -340,11 +340,16 @@ public class BybitTerminalActivity extends Activity {
         signalText.setText("АНАЛИЗ: "+dir+"  •  SCORE "+s);
         signalText.setTextColor(s>=3?GREEN:s<=-3?RED:WHITE);
         statusText.setText("EMA 9/21 + RSI(14) + импульс. Балл — эвристика, не вероятность прибыли.");
-        managePaperTrade(s);renderLedger();
+        // Position exits are checked on every quote refresh, but a new entry is allowed
+        // only once per completed candle. This prevents duplicate entries on 15s polling.
+        managePaperTrade(s,candleTime);renderLedger();
     }
-    private void managePaperTrade(int s){
+    private void managePaperTrade(int s,long candleTime){
         boolean open=prefs.getBoolean("open",false);
         if(open){
+            // Remember the candle that was already occupied so a stop/exit cannot
+            // immediately trigger a second entry from the same unchanged signal.
+            prefs.edit().putLong("last_entry_signal_candle",candleTime).apply();
             double entry=prefs.getFloat("entry",0),stake=prefs.getFloat("stake",0);
             if(entry<=0||stake<=0)return;
             double pnl=(lastPrice-entry)/entry*stake;
@@ -359,11 +364,13 @@ public class BybitTerminalActivity extends Activity {
                     .putString("last",String.format(Locale.US,"%s • %s • вход %.4f • выход %.4f • P/L %+.2f USDT",symbol,stop?"STOP":take?"TAKE PROFIT":"СИГНАЛ ЗАКРЫТ",entry,lastPrice,pnl)).apply();
                 if(stopAuto){autoEnabled=false;statusText.setText("Достигнут дневной лимит убытка 200 USDT. Автоторговля остановлена.");}
             }
-        }else if(autoEnabled&&s>=3&&lastPrice>0){
+        }else if(autoEnabled&&s>=3&&lastPrice>0
+                &&candleTime!=prefs.getLong("last_entry_signal_candle",0)){
             double cash=prefs.getFloat("cash",(float)START_BALANCE);
             if(cash>=STAKE){
                 prefs.edit().putFloat("cash",(float)(cash-STAKE)).putFloat("entry",(float)lastPrice)
                     .putFloat("stake",(float)STAKE).putString("trade_symbol",symbol).putBoolean("open",true)
+                    .putLong("last_entry_signal_candle",candleTime)
                     .putString("last",String.format(Locale.US,"%s • BUY %.4f • объём 100 USDT • SL %.4f • TP %.4f",symbol,lastPrice,lastPrice*(1-STOP_PCT),lastPrice*(1+TAKE_PCT))).apply();
             }
         }
