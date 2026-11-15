@@ -163,7 +163,7 @@ public class BybitTerminalActivity extends Activity {
         serverReportText.setPadding(dp(12),dp(12),dp(12),dp(12));
         serverReportText.setBackgroundColor(PANEL);
         LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,-2);sp.topMargin=dp(8);root.addView(serverReportText,sp);
-        TextView state=text("Запуск 48-часового сервера станет доступен после завершения и проверки серверного исполнителя. Сейчас подготовлены защищённое хранение ключей и база полного отчёта.",10,MUTED,false);
+        TextView state=text("Серверный исполнитель Bybit Demo развернут. 48-часовой запуск пока не активирован: сначала нужно сохранить Demo API-ключи и проверить авторизацию, баланс и безопасную обработку заявок. Реальные ордера не используются.",10,MUTED,false);
         state.setPadding(dp(4),dp(8),dp(4),0);root.addView(state);
     }
 
