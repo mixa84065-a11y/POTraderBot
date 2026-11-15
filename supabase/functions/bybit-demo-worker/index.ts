@@ -7,6 +7,7 @@ import {
   makeOrderLinkId,
 } from "./bybit.ts";
 import { submitOrReconcileDemoOrder, type PendingDemoOrder } from "./execution.ts";
+import { assessRunRisk, positionExitReason, shouldEnterLong } from "./risk.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -366,9 +367,10 @@ async function processRun(run: ActiveRun) {
     let risk = riskRows?.[0];
     const startingEquity = Number(risk?.start_equity ?? wallet.equity);
     const peakEquity = Number(risk?.peak_equity ?? startingEquity);
-    const dailyLoss = Math.max(0, startingEquity - wallet.equity);
-    const drawdown = peakEquity > 0 ? Math.max(0, (peakEquity - wallet.equity) / peakEquity * 100) : 0;
-    const riskStop = dailyLoss >= DAILY_LOSS_LIMIT_USDT || drawdown >= MAX_DRAWDOWN_PCT;
+    const riskAssessment = assessRunRisk(wallet.equity, startingEquity, peakEquity, DAILY_LOSS_LIMIT_USDT, MAX_DRAWDOWN_PCT);
+    const dailyLoss = riskAssessment.daily_loss_usdt;
+    const drawdown = riskAssessment.drawdown_pct;
+    const riskStop = riskAssessment.stop;
     if ((expired || riskStop) && run.status === "RUNNING") {
       await rpc("bybit_demo_worker_request_stop", {
         p_run_id: run.run_id,
@@ -417,10 +419,10 @@ async function processRun(run: ActiveRun) {
         order.purpose === "EXIT" && order.position_id === position.position_id
       );
       if (hasPendingExit) continue;
-      let reason = "";
-      if (stopping) reason = "остановка запуска/лимит риска";
-      else if (market.last_price <= position.stop_price) reason = "stop-loss 0.7%";
-      else if (market.last_price >= position.target_price) reason = "take-profit 1.4%";
+      const reason = positionExitReason(
+        market.last_price, position.stop_price, position.target_price,
+        stopping ? "остановка запуска/лимит риска" : "",
+      );
       if (!reason) continue;
       const candleTime = Math.max(
         candleTimes.get(position.symbol) ?? 0,
@@ -442,12 +444,11 @@ async function processRun(run: ActiveRun) {
 
     const unpricedFees = await rpc<number>("bybit_demo_worker_unpriced_order_count", { p_run_id: run.run_id });
     const currentPositions = await rpc<OpenPosition[]>("bybit_demo_worker_open_positions", { p_run_id: run.run_id });
-    const hasOpenPosition = (currentPositions ?? []).length > 0;
 
     // Only long spot entries are supported. Never convert a DOWN signal into
     // an unsupported short sale. One open position per symbol is enforced in SQL.
     let entryOrders = 0;
-    if (!stopping && unpricedFees === 0 && !blockedSymbols.size) {
+    if (!stopping && unpricedFees === 0) {
       const currentPending = await rpc<PendingDemoOrder[]>("bybit_demo_worker_pending_orders", { p_run_id: run.run_id });
       const openSymbols = new Set((currentPositions ?? []).map((position) => position.symbol));
       const pendingEntrySymbols = new Set((currentPending ?? [])
@@ -456,28 +457,34 @@ async function processRun(run: ActiveRun) {
       for (const symbol of symbols) {
         const signal = signals.get(symbol);
         const market = markets.get(symbol);
-        if (!signal || !market || openSymbols.has(symbol) || pendingEntrySymbols.has(symbol)) continue;
-        if (signal.direction !== "UP" || signal.score < 2) continue;
-        if (market.spread_pct > MAX_SPREAD_PCT) {
-          await log(run.run_id, "INFO", "ENTRY_SKIPPED_SPREAD",
-            "Вход пропущен из-за широкого спреда.", { symbol, spread_pct: market.spread_pct });
+        if (!signal || !market) continue;
+        const eligible = shouldEnterLong({
+          direction: signal.direction,
+          score: signal.score,
+          spreadPct: market.spread_pct,
+          maxSpreadPct: MAX_SPREAD_PCT,
+          positionOpen: openSymbols.has(symbol),
+          pendingEntry: pendingEntrySymbols.has(symbol),
+          feesResolved: !blockedSymbols.has(symbol),
+          stopping,
+          availableUsdt: wallet.available_usdt,
+          stakeUsdt: ENTRY_NOTIONAL_USDT,
+          minOrderAmountUsdt: market.min_order_amount_usdt,
+          estimatedBaseQty: ENTRY_NOTIONAL_USDT / market.last_price,
+          maxMarketOrderQty: market.max_market_order_qty,
+        });
+        if (!eligible) {
+          if (signal.direction === "UP" && signal.score >= 2 && market.spread_pct > MAX_SPREAD_PCT) {
+            await log(run.run_id, "INFO", "ENTRY_SKIPPED_SPREAD",
+              "Вход пропущен из-за широкого спреда.", { symbol, spread_pct: market.spread_pct });
+          } else if (signal.direction === "UP" && signal.score >= 2 && wallet.available_usdt < ENTRY_NOTIONAL_USDT * 1.01) {
+            await log(run.run_id, "WARN", "ENTRY_SKIPPED_BALANCE",
+              "Недостаточно свободных USDT для следующей демо-покупки.", {
+                available_usdt: wallet.available_usdt, required_usdt: ENTRY_NOTIONAL_USDT * 1.01,
+              });
+            break;
+          }
           continue;
-        }
-        if (market.min_order_amount_usdt > ENTRY_NOTIONAL_USDT ||
-            ENTRY_NOTIONAL_USDT / market.last_price > market.max_market_order_qty) {
-          await log(run.run_id, "WARN", "ENTRY_SKIPPED_EXCHANGE_LIMIT",
-            "Размер демо-заявки не проходит ограничения инструмента.", {
-              symbol, min_order_amount_usdt: market.min_order_amount_usdt,
-              max_market_order_qty: market.max_market_order_qty,
-            });
-          continue;
-        }
-        if (wallet.available_usdt < ENTRY_NOTIONAL_USDT * 1.01) {
-          await log(run.run_id, "WARN", "ENTRY_SKIPPED_BALANCE",
-            "Недостаточно свободных USDT для следующей демо-покупки.", {
-              available_usdt: wallet.available_usdt, required_usdt: ENTRY_NOTIONAL_USDT * 1.01,
-            });
-          break;
         }
         const linkId = await makeOrderLinkId(run.run_id, symbol, "Buy", signal.candle_time);
         const orderId = await rpc<string>("bybit_demo_worker_create_order_intent", {
