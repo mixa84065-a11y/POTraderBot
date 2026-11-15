@@ -53,6 +53,7 @@ Deno.test("order status mapping preserves partial and terminal states", () => {
   if (normalizeDemoOrderStatus("PartiallyFilled") !== "PARTIALLY_FILLED") throw new Error("partial status mapping failed");
   if (normalizeDemoOrderStatus("Filled") !== "FILLED") throw new Error("filled status mapping failed");
   if (normalizeDemoOrderStatus("Cancelled") !== "CANCELLED") throw new Error("cancel status mapping failed");
+  if (normalizeDemoOrderStatus("PartiallyFilledCanceled") !== "CANCELLED") throw new Error("partial-cancel status mapping failed");
   if (normalizeDemoOrderStatus("Rejected") !== "REJECTED") throw new Error("reject status mapping failed");
   if (normalizeDemoOrderStatus("mystery") !== "UNKNOWN") throw new Error("unknown status must fail closed");
 });
