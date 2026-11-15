@@ -25,8 +25,24 @@ Deno.test("spot market sell uses exact base quantity", () => {
   }
 });
 
-Deno.test("order link IDs are deterministic and bounded", () => {
-  const a = makeOrderLinkId("12345678-1234-1234-1234-123456789abc", "BTCUSDT", "Buy", 1_800_000_000_000);
-  const b = makeOrderLinkId("12345678-1234-1234-1234-123456789abc", "BTCUSDT", "Buy", 1_800_000_000_000);
-  if (a !== b || a.length > 36) throw new Error("orderLinkId stability/length check failed");
+Deno.test("order link IDs are deterministic, unique by input and bounded", async () => {
+  const run = "12345678-1234-4234-8234-123456789abc";
+  const a = await makeOrderLinkId(run, "BTCUSDT", "Buy", 1_800_000_000_000);
+  const b = await makeOrderLinkId(run, "BTCUSDT", "Buy", 1_800_000_000_000);
+  const c = await makeOrderLinkId(run, "BTCUSDT", "Buy", 1_800_000_060_000);
+  if (a !== b || a === c || a.length !== 34) throw new Error("orderLinkId stability/uniqueness/length check failed");
+});
+
+Deno.test("order builders reject malformed symbols, IDs and amounts", () => {
+  const invalid = [
+    () => buildSpotMarketBuy("BTC/USDT", "25", "g2test"),
+    () => buildSpotMarketBuy("BTCUSDT", "0", "g2test"),
+    () => buildSpotMarketBuy("BTCUSDT", "25", "id with spaces"),
+    () => buildSpotMarketSell("BTCUSDT", "NaN", "g2test"),
+  ];
+  for (const test of invalid) {
+    let rejected = false;
+    try { test(); } catch { rejected = true; }
+    if (!rejected) throw new Error("invalid order input was accepted");
+  }
 });
