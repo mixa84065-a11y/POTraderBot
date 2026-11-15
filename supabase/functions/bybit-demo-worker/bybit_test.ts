@@ -117,12 +117,12 @@ Deno.test("spot native stop-loss builder uses conditional market sell", () => {
 
 Deno.test("spot stop cancellation uses StopOrder filter", async () => {
   const originalFetch = globalThis.fetch;
-  let body: Record<string, unknown> | null = null;
+  const capturedBodies: Record<string, unknown>[] = [];
   Object.defineProperty(globalThis, "fetch", {
     configurable: true,
     writable: true,
     value: async (_input: RequestInfo | URL, init?: RequestInit) => {
-      body = JSON.parse(String(init?.body ?? "{}"));
+      capturedBodies.push(JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>);
       return new Response(JSON.stringify({
         retCode: 0, retMsg: "OK", result: { orderId: "stop-order-1" },
       }), { status: 200, headers: { "content-type": "application/json" } });
@@ -130,6 +130,7 @@ Deno.test("spot stop cancellation uses StopOrder filter", async () => {
   });
   try {
     await cancelDemoSpotStopOrder("test-api-key-123456", "test-api-secret-123456789012", "BTCUSDT", "stop-order-1");
+    const body = capturedBodies[0];
     if (!body || body.orderFilter !== "StopOrder" || body.orderId !== "stop-order-1") {
       throw new Error("stop order cancellation payload mismatch");
     }
