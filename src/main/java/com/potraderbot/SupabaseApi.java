@@ -196,7 +196,7 @@ public final class SupabaseApi {
             "/rest/v1/paper_events?select=event_type,message,created_at&run_id=eq."
                 + java.net.URLEncoder.encode(id, "UTF-8") + "&order=created_at.desc&limit=8", null, token);
         report.put("has_run", true); report.put("run", run); report.put("positions", positions);
-        report.put("trades", trades); report.put("events", events);
+        report.put("trades", trades); report.put("events", events); report.put("summary", summary);
         return report;
     }
 
