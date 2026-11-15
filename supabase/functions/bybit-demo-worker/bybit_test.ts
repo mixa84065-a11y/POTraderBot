@@ -2,6 +2,7 @@ import {
   buildSpotMarketBuy,
   buildSpotMarketSell,
   floorToStep,
+  getDemoSpotOrder,
   makeOrderLinkId,
   normalizeDemoOrderStatus,
   normalizeSpotFill,
@@ -70,4 +71,34 @@ Deno.test("spot fill fee conversion handles quote/base currencies and flags thir
   if (quoteFee.feeUsdt !== 0.5) throw new Error("quote-coin fee conversion failed");
   const thirdCoinFee = normalizeSpotFill({ ...common, feeCurrency: "BNB" });
   if (thirdCoinFee.feeUsdt !== null) throw new Error("third-token fee must remain unconverted");
+});
+
+
+Deno.test("closed order recovery falls back to Bybit order history after realtime cache misses", async () => {
+  const originalFetch = globalThis.fetch;
+  const paths: string[] = [];
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    writable: true,
+    value: async (input: RequestInfo | URL) => {
+      const url = new URL(typeof input === "string" || input instanceof URL ? input.toString() : input.url);
+      paths.push(url.pathname);
+      return new Response(JSON.stringify({
+        retCode: 0, retMsg: "OK",
+        result: { list: url.pathname === "/v5/order/history" ? [{
+          orderId: "history-order-1", orderLinkId: "g2history",
+          orderStatus: "Filled", cumExecQty: "0.01", cumExecValue: "500",
+          avgPrice: "50000", leavesQty: "0",
+        }] : [] },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    },
+  });
+  try {
+    const order = await getDemoSpotOrder("test-api-key-123456", "test-api-secret-123456789012", "BTCUSDT", "history-order-1");
+    if (order.orderId !== "history-order-1" || !paths.includes("/v5/order/history")) {
+      throw new Error("order history fallback was not used");
+    }
+  } finally {
+    Object.defineProperty(globalThis, "fetch", { configurable: true, writable: true, value: originalFetch });
+  }
 });
