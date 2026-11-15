@@ -68,6 +68,7 @@ public class BybitTerminalActivity extends Activity {
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
         getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
+        applyImmersiveMode();
         accessToken=getIntent().getStringExtra("access_token");
         if(accessToken==null)accessToken="";
         prefs=getSharedPreferences("bybit_paper_ledger",MODE_PRIVATE);
@@ -79,6 +80,19 @@ public class BybitTerminalActivity extends Activity {
         buildScreen();
         refreshServerReport();
         handler.post(poll);
+    }
+    private void applyImmersiveMode(){
+        getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            | View.SYSTEM_UI_FLAG_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+    }
+    @Override public void onWindowFocusChanged(boolean hasFocus){
+        super.onWindowFocusChanged(hasFocus);
+        if(hasFocus)applyImmersiveMode();
     }
     private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+0.5f);}
     private TextView text(String s,int size,int color,boolean bold){
