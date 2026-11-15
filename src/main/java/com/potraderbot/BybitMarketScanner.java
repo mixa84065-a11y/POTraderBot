@@ -123,7 +123,7 @@ public final class BybitMarketScanner {
         List<Double> closes=new ArrayList<>();
         // Bybit returns newest candle first; omit the still-forming candle.
         for(int i=rows.length()-2;i>=0;i--)closes.add(Double.parseDouble(rows.getJSONArray(i).getString(4)));
-        if(closes.size()<30)throw new Exception("Недостаточно закрытых свечей");
+        if(closes.size()<55)throw new Exception("Недостаточно закрытых свечей: требуется 55");
         double[] c=new double[closes.size()];for(int i=0;i<c.length;i++)c[i]=closes.get(i);
         long lastTime=Long.parseLong(rows.getJSONArray(1).getString(0));
         double last=Double.parseDouble(ticker.getString("lastPrice"));
@@ -223,7 +223,9 @@ public final class BybitMarketScanner {
                         ticker.optDouble("gamma",Double.NaN),ticker.optDouble("vega",Double.NaN),
                         ticker.optDouble("theta",Double.NaN),ticker.optDouble("markPriceIv",Double.NaN),
                         ticker.optDouble("turnover24h",0),hours,baseSignal.score);
-                    return new Signal(option,ticker.optDouble("lastPrice",0),baseSignal.score,
+                    Instrument optionWithLiquidity=new Instrument("option",option.symbol,option.baseCoin,option.quoteCoin,
+                        ticker.optDouble("turnover24h",0),option.displayName,option.marketRegion,option.symbolType,option.deliveryTime);
+                    return new Signal(optionWithLiquidity,ticker.optDouble("lastPrice",0),baseSignal.score,
                         result.stance,result.risk,result.explanation);
                 }));
             }
