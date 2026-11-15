@@ -58,6 +58,7 @@ public class BybitTerminalActivity extends Activity {
     private TextView priceText, changeText, balanceText, modeText, signalText, riskText, historyText, statusText, liveText;
     private Button autoButton;
     private PriceChart priceChart;
+    private double chartEntryPrice=0;
     private ScrollView terminalScroll;
     private String symbol="BTCUSDT";
     private boolean loading=false, autoEnabled=false;
@@ -652,7 +653,8 @@ public class BybitTerminalActivity extends Activity {
                     double change=Double.parseDouble(tt.optString("price24hPcnt","0"))*100.0;
                     changeText.setText(String.format(Locale.US,"24ч: %+.2f%%",change));
                     changeText.setTextColor(change>=0?GREEN:RED);
-                    priceChart.setCandles(candles);
+                    chartEntryPrice=prefs.getBoolean("open",false) && requested.equals(prefs.getString("trade_symbol","")) ? prefs.getFloat("entry",0) : 0;
+                    priceChart.setCandles(candles,chartEntryPrice);
                     evaluateStrategy();
                 }catch(Exception e){statusText.setText("Ошибка обработки данных: "+e.getMessage());}
             });
@@ -769,16 +771,39 @@ public class BybitTerminalActivity extends Activity {
     @Override protected void onDestroy(){handler.removeCallbacks(poll);handler.removeCallbacks(paperStatusPoll);io.shutdownNow();super.onDestroy();}
 
     private final class PriceChart extends View{
-        private final Paint p=new Paint(3);private JSONArray data=new JSONArray();
+        private final Paint p=new Paint(3);private JSONArray data=new JSONArray();private double entryPrice=0;
         PriceChart(){super(BybitTerminalActivity.this);setBackgroundColor(PANEL);}
-        void setCandles(JSONArray d){data=d;invalidate();}
+        void setCandles(JSONArray d,double entry){data=d;entryPrice=entry;invalidate();}
+        private double[] emaValues(int period){
+            double[] out=new double[data.length()];if(data.length()==0)return out;
+            try{
+                double alpha=2.0/(period+1.0);
+                out[0]=Double.parseDouble(data.getJSONArray(0).getString(4));
+                for(int i=1;i<data.length();i++)out[i]=Double.parseDouble(data.getJSONArray(i).getString(4))*alpha+out[i-1]*(1-alpha);
+            }catch(Exception ignored){}
+            return out;
+        }
+        private void drawEma(Canvas c,double[] values,int color,float slot,float bottom,float plotH,double min,double range){
+            if(values.length<2)return;
+            p.setColor(color);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(2));p.setStrokeCap(Paint.Cap.ROUND);
+            android.graphics.Path path=new android.graphics.Path();
+            for(int i=0;i<values.length;i++){
+                float x=(i+0.5f)*slot,y=(float)(bottom-(values[i]-min)/range*plotH);
+                if(i==0)path.moveTo(x,y);else path.lineTo(x,y);
+            }
+            c.drawPath(path,p);p.setStyle(Paint.Style.FILL);
+        }
         @Override protected void onDraw(Canvas c){
             super.onDraw(c);float w=getWidth(),h=getHeight();p.setStrokeWidth(1);p.setColor(0xFF202630);
             for(int i=1;i<4;i++)c.drawLine(0,h*i/4,w,h*i/4,p);
             if(data.length()<2)return;
             double min=Double.MAX_VALUE,max=-Double.MAX_VALUE;
             for(int i=0;i<data.length();i++){try{JSONArray row=data.getJSONArray(i);min=Math.min(min,Double.parseDouble(row.getString(3)));max=Math.max(max,Double.parseDouble(row.getString(2)));}catch(Exception ignored){}}
-            double range=Math.max(1e-9,max-min);float top=dp(18),bottom=h-dp(18),plotH=bottom-top;
+            if(entryPrice>0){min=Math.min(min,entryPrice);max=Math.max(max,entryPrice);}
+            double[] ema9=emaValues(9),ema21=emaValues(21);
+            for(double v:ema9){min=Math.min(min,v);max=Math.max(max,v);}
+            for(double v:ema21){min=Math.min(min,v);max=Math.max(max,v);}
+            double range=Math.max(1e-9,max-min);float top=dp(30),bottom=h-dp(22),plotH=bottom-top;
             float slot=w/data.length(),bodyW=Math.max(dp(2),slot*0.58f);
             for(int i=0;i<data.length();i++){
                 try{
@@ -795,9 +820,25 @@ public class BybitTerminalActivity extends Activity {
                     c.drawRect(x-bodyW/2,bodyTop,x+bodyW/2,bodyBottom,p);
                 }catch(Exception ignored){}
             }
-            p.setColor(MUTED);p.setTextSize(dp(10));
-            c.drawText(String.format(Locale.US,"%.4f",max),dp(7),dp(13),p);
-            c.drawText(String.format(Locale.US,"%.4f",min),dp(7),h-dp(4),p);
+            drawEma(c,ema9,GOLD,slot,bottom,plotH,min,range);
+            drawEma(c,ema21,0xFF979AA3,slot,bottom,plotH,min,range);
+            p.setStyle(Paint.Style.FILL);p.setTextSize(dp(9));p.setFakeBoldText(true);
+            p.setColor(GOLD);c.drawText("EMA 9",dp(8),dp(15),p);
+            p.setColor(0xFF979AA3);c.drawText("EMA 21",dp(58),dp(15),p);
+            p.setFakeBoldText(false);
+            if(entryPrice>0){
+                float ey=(float)(bottom-(entryPrice-min)/range*plotH);
+                p.setColor(GOLD);p.setStrokeWidth(dp(1));p.setPathEffect(new android.graphics.DashPathEffect(new float[]{dp(5),dp(4)},0));
+                c.drawLine(0,ey,w,ey,p);p.setPathEffect(null);
+                p.setTextSize(dp(10));p.setFakeBoldText(true);
+                String tag="ВХОД  "+String.format(Locale.US,"%.4f",entryPrice);
+                float tw=p.measureText(tag)+dp(14),ty=Math.max(dp(27),Math.min(h-dp(24),ey-dp(5)));
+                p.setColor(0xFF2B2414);c.drawRoundRect(dp(6),ty-dp(14),dp(6)+tw,ty+dp(4),dp(5),dp(5),p);
+                p.setColor(GOLD);c.drawText(tag,dp(13),ty,p);p.setFakeBoldText(false);
+            }
+            p.setColor(MUTED);p.setTextSize(dp(9));
+            c.drawText(String.format(Locale.US,"H %.4f",max),w-dp(95),dp(15),p);
+            c.drawText(String.format(Locale.US,"L %.4f",min),w-dp(95),h-dp(5),p);
         }
     }
 }
