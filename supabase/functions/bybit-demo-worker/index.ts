@@ -696,7 +696,7 @@ async function processRun(run: ActiveRun) {
       return {
         run_id: run.run_id, status: "STOPPING_WAITING_FOR_SAFE_FLATTEN",
         open_positions: (finalPositions ?? []).length, pending_orders: (finalPending ?? []).length + (finalProtections ?? []).length,
-        exit_orders, applied_exit_fills: appliedExitFills,
+        exit_orders: exitOrders, applied_exit_fills: appliedExitFills,
       };
     }
 
