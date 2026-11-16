@@ -165,7 +165,7 @@ async function processRun(run:Run){
    await db(`paper_runs?id=eq.${run.id}`,"PATCH",{status:"STOPPING",stopped_at:new Date().toISOString(),last_error:current.last_error});
    await log(run,"ERROR","PAPER_RISK_STOP","Новые входы остановлены по лимиту реализованного убытка; открытые позиции будут сопровождаться.",{realized_pnl_usdt:current.realized_pnl_usdt});
   }
-  const openRows=(await db(`paper_positions?run_id=eq.${run.id}&status=eq.OPEN&select=id,notional_usdt,unrealized_pnl_usdt`)) as Array<{id:string;notional_usdt:number;unrealized_pnl_usdt:number}>;
+  const openRows=(await db(`paper_positions?run_id=eq.${run.id}&status=eq.OPEN&select=id,symbol,market_category,side,notional_usdt,unrealized_pnl_usdt`)) as Array<{id:string;symbol:string;market_category:string;side:string;notional_usdt:number;unrealized_pnl_usdt:number}>;
   const reserved=openRows.reduce((sum,x)=>sum+num(x.notional_usdt)*0.10,0);
   const floating=openRows.reduce((sum,x)=>sum+num(x.unrealized_pnl_usdt),0);
   const equity=num(current.cash_usdt)+reserved+floating;
@@ -189,11 +189,21 @@ async function processRun(run:Run){
    const picks=await candidates(current);
    await log(run,"INFO","PAPER_SCAN_CYCLE","Мультисканер завершил цикл анализа.",{candidates:picks.slice(0,30).map(x=>({category:x.category,symbol:x.symbol,side:x.side,score:x.score,price:x.price,turnover:x.turnover})),open_positions:stillOpen.length,available_slots:room});
    const openAssets=((await db(`paper_positions?run_id=eq.${run.id}&status=eq.OPEN&select=symbol`)) as Array<{symbol:string}>).map(x=>assetKey(x.symbol));
-   const cooldownSince=new Date(Date.now()-30*60*1000).toISOString();
-   const recentStops=(await db(`paper_trades?run_id=eq.${run.id}&exit_reason=eq.STOP_LOSS&closed_at=gte.${encodeURIComponent(cooldownSince)}&select=symbol`)) as Array<{symbol:string}>;
+   const cooldownSince=new Date(Date.now()-45*60*1000).toISOString();
+   const recentStops=(await db(`paper_trades?run_id=eq.${run.id}&exit_reason=eq.STOP_LOSS&closed_at=gte.${encodeURIComponent(cooldownSince)}&select=symbol,closed_at`)) as Array<{symbol:string;closed_at:string}>;
    const blockedAssets=new Set([...openAssets,...recentStops.map(x=>assetKey(x.symbol))]);
+   const cryptoCategories=new Set(["spot","linear","inverse"]);
+   const cryptoExposureOpen=stillOpen.some(p=>cryptoCategories.has(p.market_category));
+   if(recentStops.length>0){
+    await log(run,"INFO","PAPER_GLOBAL_LOSS_COOLDOWN",
+     "Новые входы временно приостановлены после стоп-лосса; ожидается подтверждение нового рыночного цикла.",
+     {cooldown_minutes:45,recent_stop_losses:recentStops.length});
+   }
    for(const c of picks){
-    if(opened>=Math.min(room,1))break;if(blockedAssets.has(assetKey(c.symbol)))continue;
+    if(opened>=Math.min(room,1))break;
+    if(recentStops.length>0)break;
+    if(blockedAssets.has(assetKey(c.symbol)))continue;
+    if(cryptoCategories.has(c.category)&&cryptoExposureOpen)continue;
     const spread=(c.ask-c.bid)/c.price*100;if(!Number.isFinite(spread)||spread>0.08)continue;
     const price=c.price;const stopPct=c.stopPct??0.008;const targetPct=c.targetPct??(stopPct*2.2);
     const stop=c.side==="SHORT"?price*(1+stopPct):price*(1-stopPct);
