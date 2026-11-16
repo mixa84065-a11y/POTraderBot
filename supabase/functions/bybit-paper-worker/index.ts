@@ -17,7 +17,7 @@ type Position = {
 type Ticker = { symbol:string; lastPrice?:string; bid1Price?:string; ask1Price?:string; turnover24h?:string;
  markPrice?:string; delta?:string; gamma?:string; vega?:string; theta?:string; markIv?:string; }
 type Candidate = { category:string; symbol:string; price:number; bid:number; ask:number; turnover:number; score:number;
- side:"LONG"|"SHORT"|"CALL"|"PUT"; reason:string; expiry?:number; };
+ side:"LONG"|"SHORT"|"CALL"|"PUT"; reason:string; expiry?:number; stopPct?:number; targetPct?:number; };
 
 function response(data:unknown,status=200){return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json","cache-control":"no-store"}});}
 async function rpc<T>(name:string,args:Record<string,unknown>={}):Promise<T>{
@@ -36,23 +36,66 @@ async function bybit(path:string,params:Record<string,string>){
  const r=await fetch(u,{signal:AbortSignal.timeout(10000)});const j=await r.json();
  if(!r.ok||j.retCode!==0)throw new Error(`Bybit ${path}: ${j.retMsg??r.status}`);return j.result;
 }
+function assetKey(symbol:string){return symbol.includes("-")?symbol.split("-")[0]:symbol.replace(/(USDT|USDC|USD)$/,"");}
 function num(v:unknown){const n=Number(v);return Number.isFinite(n)?n:0;}
 function ema(a:number[],p:number){const k=2/(p+1);let v=a.slice(0,p).reduce((x,y)=>x+y,0)/p;for(const x of a.slice(p))v=x*k+v*(1-k);return v;}
 function rsi(a:number[],p=14){let up=0,down=0;for(let i=a.length-p;i<a.length;i++){const d=a[i]-a[i-1];if(d>0)up+=d;else down-=d;}if(down===0)return 100;return 100-100/(1+up/down);}
+function atr(rows:number[][],period=14){
+ const start=Math.max(1,rows.length-period);let total=0,count=0;
+ for(let i=start;i<rows.length;i++){
+  const high=rows[i][2],low=rows[i][3],prevClose=rows[i-1][4];
+  const tr=Math.max(high-low,Math.abs(high-prevClose),Math.abs(low-prevClose));
+  if(Number.isFinite(tr)&&tr>0){total+=tr;count++;}
+ }
+ return count?total/count:0;
+}
 async function signal(category:string,symbol:string){
- const [tk,kl]=await Promise.all([bybit("/v5/market/tickers",{category,symbol}),bybit("/v5/market/kline",{category,symbol,interval:"5",limit:"80"})]);
- const t=(tk.list??[])[0] as Ticker|undefined;const rows=(kl.list??[]) as string[][];
- if(!t||rows.length<35)throw new Error("Нет актуального тикера или истории свечей");
- const lastClosedTime=num(rows[1]?.[0]);
- if(lastClosedTime<=0||Date.now()-lastClosedTime>10*60*1000)throw new Error("Последняя закрытая свеча устарела: рынок закрыт или данные не обновляются");
- const closed=rows.slice(1).reverse().map(x=>num(x[4])).filter(x=>x>0);
- if(closed.length<30)throw new Error("Недостаточно закрытых свечей");
- const fast=ema(closed,9),slow=ema(closed,21),strength=rsi(closed);
+ const [tk,kl,ml,ht]=await Promise.all([
+  bybit("/v5/market/tickers",{category,symbol}),
+  bybit("/v5/market/kline",{category,symbol,interval:"5",limit:"80"}),
+  bybit("/v5/market/kline",{category,symbol,interval:"15",limit:"80"}),
+  bybit("/v5/market/kline",{category,symbol,interval:"60",limit:"80"})
+ ]);
+ const t=(tk.list??[])[0] as Ticker|undefined;
+ const rows=(kl.list??[]) as string[][];
+ const mRows=(ml.list??[]) as string[][];
+ const hRows=(ht.list??[]) as string[][];
+ if(!t||rows.length<55||mRows.length<55||hRows.length<55)throw new Error("Недостаточно закрытых свечей 5m/15m/1h");
+ const now=Date.now(),last5=num(rows[1]?.[0]),last15=num(mRows[1]?.[0]),last60=num(hRows[1]?.[0]);
+ if(last5<=0||now-last5>10*60*1000)throw new Error("5m история устарела");
+ if(last15<=0||now-last15>30*60*1000)throw new Error("15m история устарела");
+ if(last60<=0||now-last60>3*60*60*1000)throw new Error("1h история устарела");
+ const bars=rows.slice(1).reverse().map(x=>x.map(num));
+ const closed=bars.map(x=>x[4]).filter(x=>x>0);
+ const mClosed=mRows.slice(1).reverse().map(x=>num(x[4])).filter(x=>x>0);
+ const hClosed=hRows.slice(1).reverse().map(x=>num(x[4])).filter(x=>x>0);
+ if(closed.length<55||mClosed.length<55||hClosed.length<55)throw new Error("История свечей неполная");
+ const fast=ema(closed,9),slow=ema(closed,21);
+ const mFast=ema(mClosed,9),mSlow=ema(mClosed,21);
+ const hFast=ema(hClosed,9),hSlow=ema(hClosed,21);
+ const strength=rsi(closed);
  const momentum=(closed.at(-1)!/closed.at(-4)!-1)*100;
- const score=(fast>slow?1:-1)+(strength>52?1:strength<48?-1:0)+(momentum>0.06?1:momentum< -0.06?-1:0);
+ const lastBar=bars.at(-1)!;
+ const prevBar=bars.at(-2)!;
+ const bullish=lastBar[4]>lastBar[1]&&lastBar[4]>prevBar[4];
+ const bearish=lastBar[4]<lastBar[1]&&lastBar[4]<prevBar[4];
+ const trend5=fast>slow?"UP":"DOWN";
+ const trend15=mFast>mSlow?"UP":"DOWN";
+ const trend1h=hFast>hSlow?"UP":"DOWN";
  const price=num(t.lastPrice),bid=num(t.bid1Price),ask=num(t.ask1Price);
- if(price<=0||bid<=0||ask<bid||((ask-bid)/price*100)>0.18)throw new Error("Цена/спред не проходят фильтр качества");
- return {t,price,bid,ask,score,direction:score>=2?"UP":score<=-2?"DOWN":"NEUTRAL",reason:`EMA9/21 ${fast>slow?"bullish":"bearish"}, RSI ${strength.toFixed(1)}, momentum ${momentum.toFixed(3)}%`};
+ if(price<=0||bid<=0||ask<bid||((ask-bid)/price*100)>0.08)throw new Error("Цена/спред не проходят усиленный фильтр качества (макс. 0,08%)");
+ const volatility=atr(bars,14);
+ if(!Number.isFinite(volatility)||volatility<=0)throw new Error("Не удалось рассчитать ATR");
+ const distance=Math.abs(price-slow)/volatility;
+ if(distance>1.25)throw new Error("Цена слишком далеко от EMA21: вход после импульса запрещён");
+ const longOk=trend5==="UP"&&trend15==="UP"&&trend1h==="UP"&&strength>=52&&strength<=65&&momentum>=0.08&&bullish&&price>=fast;
+ const shortOk=trend5==="DOWN"&&trend15==="DOWN"&&trend1h==="DOWN"&&strength>=35&&strength<=48&&momentum<=-0.08&&bearish&&price<=fast;
+ const score=(trend5===trend15?1:0)+(trend15===trend1h?1:0)+(bullish||bearish?1:0)+((strength>=52&&strength<=65)||(strength>=35&&strength<=48)?1:0)+(Math.abs(momentum)>=0.08?1:0)+(distance<=1.25?1:0);
+ const direction=longOk?"UP":shortOk?"DOWN":"NEUTRAL";
+ const stopPct=Math.max(0.006,Math.min(0.012,(volatility/price)*1.5));
+ const targetPct=stopPct*2.2;
+ return {t,price,bid,ask,score,direction,stopPct,targetPct,
+  reason:`EMA 5m/15m/1h: ${trend5}/${trend15}/${trend1h}; RSI ${strength.toFixed(1)}; импульс ${momentum.toFixed(3)}%; свеча ${bullish?"бычья":bearish?"медвежья":"без подтверждения"}; расстояние до EMA21 ${distance.toFixed(2)} ATR`};
 }
 async function tickers(category:string):Promise<Ticker[]>{
  const r=await bybit("/v5/market/tickers",{category});return (r.list??[]) as Ticker[];
@@ -63,10 +106,10 @@ async function candidates(run:Run):Promise<Candidate[]>{
   if(!cats.includes(category))continue;
   try{
    const all=await tickers(category);
-   const filtered=all.filter(t=>category==="spot"?t.symbol.endsWith("USDT"):category==="linear"?t.symbol.endsWith("USDT"):t.symbol.endsWith("USD"));
+   const filtered=all.filter(t=>(category==="spot"?t.symbol.endsWith("USDT"):category==="linear"?t.symbol.endsWith("USDT"):t.symbol.endsWith("USD"))&&!(category==="spot"&&/^(USDC|USDE|FDUSD|TUSD|DAI|USDP)USDT$/.test(t.symbol)));
    const top=filtered.sort((a,b)=>num(b.turnover24h)-num(a.turnover24h)).slice(0,category==="spot"?3:2);
    for(const t of top){try{const s=await signal(category,t.symbol);if(s.direction==="NEUTRAL"||(category==="spot"&&s.direction!=="UP"))continue;
-    out.push({category,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:s.reason});
+    out.push({category,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:s.reason,stopPct:s.stopPct,targetPct:s.targetPct});
    }catch(_){/* Fail closed per symbol. */}}
   }catch(_){/* Category can be temporarily unavailable. */}
  }
@@ -79,27 +122,11 @@ async function candidates(run:Run):Promise<Candidate[]>{
    const linear=await tickers("linear");const map=new Map(linear.map(x=>[x.symbol,x]));
    const top=active.map(x=>map.get(x.symbol)).filter((x):x is Ticker=>!!x).sort((a,b)=>num(b.turnover24h)-num(a.turnover24h)).slice(0,2);
    for(const t of top){try{const s=await signal("linear",t.symbol);if(s.direction==="NEUTRAL")continue;
-    out.push({category:type,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:`TradFi ${type}: ${s.reason}`});
+    out.push({category:type,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:`TradFi ${type}: ${s.reason}`,stopPct:s.stopPct,targetPct:s.targetPct});
    }catch(_){/* Market closed, stale or illiquid. */}}
   }catch(_){/* Missing category data is not traded. */}
  }
- if(cats.includes("option")){
-  try{
-   const list=await bybit("/v5/market/instruments-info",{category:"option",baseCoin:"BTC",limit:"1000"});
-   const opts=(list.list??[]) as Array<{symbol:string;baseCoin:string;deliveryTime:string;status:string;lotSizeFilter?:{qtyStep?:string;minOrderQty?:string}}>;
-   const eligible=opts.filter(x=>x.status==="Trading"&&num(x.deliveryTime)>Date.now()+86400000&&num(x.deliveryTime)<Date.now()+45*86400000);
-   const ranked=eligible.slice(0,20);
-   for(const o of ranked){try{
-    const r=await bybit("/v5/market/tickers",{category:"option",symbol:o.symbol});const t=(r.list??[])[0] as Ticker|undefined;
-    if(!t)continue;const price=num(t.markPrice||t.lastPrice),bid=num(t.bid1Price),ask=num(t.ask1Price),delta=num(t.delta),iv=num(t.markIv);
-    if(price<=0||bid<=0||ask<bid||((ask-bid)/price*100)>12||num(t.turnover24h)<1000||iv<=0||!o.lotSizeFilter?.qtyStep)continue;
-    const underlying=await signal("linear",o.baseCoin+"USDT");if(underlying.direction==="NEUTRAL")continue;
-    const side=underlying.direction==="UP"?"CALL":"PUT";
-    if((side==="CALL"&&delta<=0)||(side==="PUT"&&delta>=0))continue;
-    out.push({category:"option",symbol:o.symbol,price:ask,bid,ask,turnover:num(t.turnover24h),score:underlying.score,side,expiry:num(o.deliveryTime),reason:`Option ${side}; delta ${delta.toFixed(3)}, IV ${iv.toFixed(1)}%, ${underlying.reason}`});
-   }catch(_){/* Contract-level safety gate. */}}
-  }catch(_){/* Options unavailable. */}
- }
+ // Options remain catalogued for manual analysis only: auto-paper is disabled until expiry settlement and Greeks-based exits are implemented.
  return out.sort((a,b)=>Math.abs(b.score)-Math.abs(a.score));
 }
 async function processRun(run:Run){
@@ -128,7 +155,7 @@ async function processRun(run:Run){
   }
   const summary=await db(`paper_runs?id=eq.${run.id}&select=*`) as Run[];
   const current=summary[0]??run;
-  if(current.realized_pnl_usdt<=-Math.abs(current.max_daily_loss_usdt)&&current.status==="RUNNING"){
+  if(num(current.max_daily_loss_usdt)>0&&current.realized_pnl_usdt<=-Math.abs(current.max_daily_loss_usdt)&&current.status==="RUNNING"){
    current.status="STOPPING";current.last_error="RISK_STOP: достигнут лимит реализованного убытка.";
    await db(`paper_runs?id=eq.${run.id}`,"PATCH",{status:"STOPPING",stopped_at:new Date().toISOString(),last_error:current.last_error});
    await log(run,"ERROR","PAPER_RISK_STOP","Новые входы остановлены по лимиту реализованного убытка; открытые позиции будут сопровождаться.",{realized_pnl_usdt:current.realized_pnl_usdt});
@@ -156,19 +183,23 @@ async function processRun(run:Run){
   if(room>0&&current.status==="RUNNING"){
    const picks=await candidates(current);
    await log(run,"INFO","PAPER_SCAN_CYCLE","Мультисканер завершил цикл анализа.",{candidates:picks.slice(0,30).map(x=>({category:x.category,symbol:x.symbol,side:x.side,score:x.score,price:x.price,turnover:x.turnover})),open_positions:stillOpen.length,available_slots:room});
-   const already=new Set(((await db(`paper_positions?run_id=eq.${run.id}&status=eq.OPEN&select=market_category,symbol`)) as Array<{market_category:string;symbol:string}>).map(x=>x.market_category+":"+x.symbol));
+   const openAssets=((await db(`paper_positions?run_id=eq.${run.id}&status=eq.OPEN&select=symbol`)) as Array<{symbol:string}>).map(x=>assetKey(x.symbol));
+   const cooldownSince=new Date(Date.now()-30*60*1000).toISOString();
+   const recentStops=(await db(`paper_trades?run_id=eq.${run.id}&exit_reason=eq.STOP_LOSS&closed_at=gte.${encodeURIComponent(cooldownSince)}&select=symbol`)) as Array<{symbol:string}>;
+   const blockedAssets=new Set([...openAssets,...recentStops.map(x=>assetKey(x.symbol))]);
    for(const c of picks){
-    if(opened>=Math.min(room,4))break;if(already.has(c.category+":"+c.symbol))continue;
-    const spread=(c.ask-c.bid)/c.price*100;if(!Number.isFinite(spread)||spread>0.18)continue;
-    const price=c.price;const stopPct=c.category==="option"?0.25:0.008;const targetPct=c.category==="option"?0.45:0.016;
+    if(opened>=Math.min(room,1))break;if(blockedAssets.has(assetKey(c.symbol)))continue;
+    const spread=(c.ask-c.bid)/c.price*100;if(!Number.isFinite(spread)||spread>0.08)continue;
+    const price=c.price;const stopPct=c.stopPct??0.008;const targetPct=c.targetPct??(stopPct*2.2);
     const stop=c.side==="SHORT"?price*(1+stopPct):price*(1-stopPct);
     const target=c.side==="SHORT"?price*(1-targetPct):price*(1+targetPct);
-    const notional=Math.min(100,current.starting_balance_usdt*0.05);
+    const notional=Math.min(100,equity*0.02);
+    if(c.category==="option"&&price>notional)continue;
     const qty=c.category==="option"?1:notional/price;
     const entryFee=qty*price*0.0006;
     try{
      await rpc("paper_worker_open_position",{p_run_id:run.id,p_symbol:c.symbol,p_market_category:c.category,p_side:c.side,p_qty:qty,p_price:price,p_stop:stop,p_target:target,p_score:c.score,p_reason:c.reason,p_fee:entryFee});
-     opened++;already.add(c.category+":"+c.symbol);
+     opened++;blockedAssets.add(assetKey(c.symbol));
      await log(run,"INFO","PAPER_POSITION_OPENED",`Открыта виртуальная ${c.side} позиция ${c.symbol}.`,{category:c.category,price,qty,score:c.score,stop,target,notional_usdt:qty*price});
     }catch(e){await log(run,"WARN","PAPER_ENTRY_SKIPPED",String(e),{category:c.category,symbol:c.symbol,score:c.score});}
    }
@@ -184,7 +215,7 @@ Deno.serve(async(req:Request)=>{
  const secret=req.headers.get("x-worker-secret");if(!secret)return response({error:"Unauthorized"},401);
  try{
   const ok=await rpc<boolean>("bybit_demo_worker_authorize",{p_secret:secret});if(!ok)return response({error:"Unauthorized"},401);
-  const runs=(await db("paper_runs?status=in.(RUNNING,STOPPING)&select=*")) as Run[];
+  const runs=(await db("paper_runs?status=in.(RUNNING,STOPPING,PAUSED)&select=*")) as Run[];
   const results=[];for(const run of runs??[])results.push(await processRun(run));
   return response({ok:true,processed:results.length,results});
  }catch(e){return response({error:String(e)},500);}
