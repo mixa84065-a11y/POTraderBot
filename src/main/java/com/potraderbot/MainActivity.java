@@ -86,6 +86,10 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        String[] savedSession=SessionStore.load(this);
+        if(savedSession!=null&&savedSession.length==2&&!savedSession[0].isEmpty()){
+            accessToken=savedSession[0];refreshToken=savedSession[1];
+        }
         if (!accessToken.isEmpty()) handler.removeCallbacks(poll);
         if (!accessToken.isEmpty()) handler.post(poll);
     }
@@ -632,8 +636,13 @@ public class MainActivity extends Activity {
     }
 
     private void openBybitTerminal(){
+        String[] savedSession=SessionStore.load(this);
+        if(savedSession!=null&&savedSession.length==2&&!savedSession[0].isEmpty()){
+            accessToken=savedSession[0];refreshToken=savedSession[1];
+        }
         android.content.Intent intent=new android.content.Intent(this,BybitTerminalActivity.class);
         intent.putExtra("access_token",accessToken);
+        intent.putExtra("refresh_token",refreshToken);
         startActivity(intent);
     }
 
