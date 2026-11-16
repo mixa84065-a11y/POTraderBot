@@ -28,8 +28,8 @@ async function db(path:string,method="GET",body?:unknown){
  const r=await fetch(`${SUPABASE_URL}/rest/v1/${path}`,{method,headers:{apikey:SERVICE_ROLE_KEY,authorization:`Bearer ${SERVICE_ROLE_KEY}`,"content-type":"application/json",Prefer:method==="GET"?"return=representation":"return=minimal"},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(12000)});
  const raw=await r.text(); if(!r.ok) throw new Error(`DB ${method} ${path} ${r.status}: ${raw.slice(0,300)}`); return raw?JSON.parse(raw):null;
 }
-async function log(run:Run,type:string,message:string,details:unknown={},level="INFO"){
- await db("paper_events","POST",{run_id:run.id,user_id:run.user_id,event_type:type,message,details,level});
+async function log(run:Run,level:string,type:string,message:string,details:unknown={}){
+ await db("paper_events","POST",{run_id:run.id,user_id:run.user_id,level,event_type:type,message,details});
 }
 async function bybit(path:string,params:Record<string,string>){
  const u=new URL(`https://api.bybit.com${path}`);u.search=new URLSearchParams(params).toString();
