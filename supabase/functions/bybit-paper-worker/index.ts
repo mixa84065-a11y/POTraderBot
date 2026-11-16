@@ -49,6 +49,44 @@ function atr(rows:number[][],period=14){
  }
  return count?total/count:0;
 }
+function macdHistogram(values:number[]){
+ if(values.length<35)return 0;
+ const line:number[]=[];
+ for(let i=25;i<values.length;i++){
+  const slice=values.slice(0,i+1);
+  line.push(ema(slice,12)-ema(slice,26));
+ }
+ if(line.length<10)return 0;
+ return line.at(-1)!-ema(line,9);
+}
+function adx(rows:number[][],period=14){
+ const dx:number[]=[];
+ for(let i=Math.max(period+1,rows.length-period*2);i<rows.length;i++){
+  let tr=0,plus=0,minus=0;
+  for(let j=i-period+1;j<=i;j++){
+   const up=rows[j][2]-rows[j-1][2];
+   const down=rows[j-1][3]-rows[j][3];
+   plus+=up>down&&up>0?up:0;
+   minus+=down>up&&down>0?down:0;
+   tr+=Math.max(rows[j][2]-rows[j][3],Math.abs(rows[j][2]-rows[j-1][4]),Math.abs(rows[j][3]-rows[j-1][4]));
+  }
+  if(tr<=0)continue;
+  const pdi=100*plus/tr,mdi=100*minus/tr,den=pdi+mdi;
+  if(den>0)dx.push(100*Math.abs(pdi-mdi)/den);
+ }
+ return dx.length?dx.slice(-period).reduce((a,b)=>a+b,0)/Math.min(period,dx.length):0;
+}
+function relativeVolume(rows:number[][],period=20){
+ if(rows.length<period+1)return 0;
+ const prior=rows.slice(-(period+1),-1).map(x=>x[5]).filter(x=>x>0);
+ const avg=prior.reduce((a,b)=>a+b,0)/prior.length;
+ return avg>0?rows.at(-1)![5]/avg:0;
+}
+function rollingVwap(rows:number[][],period=24){
+ const recent=rows.slice(-period);let pv=0,vol=0;
+ for(const r of recent){const v=r[5];if(v>0){pv+=((r[2]+r[3]+r[4])/3)*v;vol+=v;}}
+ return vol>0?pv/vol:0;
+}
 async function signal(category:string,symbol:string){
  const [tk,kl,ml,ht]=await Promise.all([
   bybit("/v5/market/tickers",{category,symbol}),
@@ -88,14 +126,23 @@ async function signal(category:string,symbol:string){
  if(!Number.isFinite(volatility)||volatility<=0)throw new Error("Не удалось рассчитать ATR");
  const distance=Math.abs(price-slow)/volatility;
  if(distance>1.25)throw new Error("Цена слишком далеко от EMA21: вход после импульса запрещён");
- const longOk=trend5==="UP"&&trend15==="UP"&&trend1h==="UP"&&strength>=52&&strength<=65&&momentum>=0.08&&bullish&&price>=fast;
- const shortOk=trend5==="DOWN"&&trend15==="DOWN"&&trend1h==="DOWN"&&strength>=35&&strength<=48&&momentum<=-0.08&&bearish&&price<=fast;
- const score=(trend5===trend15?1:0)+(trend15===trend1h?1:0)+(bullish||bearish?1:0)+((strength>=52&&strength<=65)||(strength>=35&&strength<=48)?1:0)+(Math.abs(momentum)>=0.08?1:0)+(distance<=1.25?1:0);
+ const macd=macdHistogram(closed);
+ const trendStrength=adx(bars,14);
+ const volRatio=relativeVolume(bars,20);
+ const vwap=rollingVwap(bars,24);
+ const macdUp=macd>0,macdDown=macd<0;
+ const volumeOk=volRatio>=0.75;
+ const adxOk=trendStrength>=16;
+ const vwapUp=vwap>0&&price>=vwap;
+ const vwapDown=vwap>0&&price<=vwap;
+ const longOk=trend5==="UP"&&trend15==="UP"&&trend1h==="UP"&&strength>=52&&strength<=65&&momentum>=0.08&&bullish&&price>=fast&&macdUp&&adxOk&&volumeOk&&vwapUp;
+ const shortOk=trend5==="DOWN"&&trend15==="DOWN"&&trend1h==="DOWN"&&strength>=35&&strength<=48&&momentum<=-0.08&&bearish&&price<=fast&&macdDown&&adxOk&&volumeOk&&vwapDown;
+ const score=(trend5===trend15?1:0)+(trend15===trend1h?1:0)+(bullish||bearish?1:0)+((strength>=52&&strength<=65)||(strength>=35&&strength<=48)?1:0)+(Math.abs(momentum)>=0.08?1:0)+(distance<=1.25?1:0)+(macdUp||macdDown?1:0)+(adxOk?1:0)+(volumeOk?1:0)+((vwapUp||vwapDown)?1:0);
  const direction=longOk?"UP":shortOk?"DOWN":"NEUTRAL";
  const stopPct=Math.max(0.006,Math.min(0.012,(volatility/price)*1.5));
  const targetPct=stopPct*2.2;
  return {t,price,bid,ask,score,direction,stopPct,targetPct,
-  reason:`EMA 5m/15m/1h: ${trend5}/${trend15}/${trend1h}; RSI ${strength.toFixed(1)}; импульс ${momentum.toFixed(3)}%; свеча ${bullish?"бычья":bearish?"медвежья":"без подтверждения"}; расстояние до EMA21 ${distance.toFixed(2)} ATR`};
+  reason:`EMA 5m/15m/1h: ${trend5}/${trend15}/${trend1h}; RSI ${strength.toFixed(1)}; MACD ${macd.toPrecision(4)}; ADX ${trendStrength.toFixed(1)}; объём ${volRatio.toFixed(2)}x; VWAP ${vwapUp?"выше":vwapDown?"ниже":"нет данных"}; импульс ${momentum.toFixed(3)}%; ATR-дистанция ${distance.toFixed(2)}`};
 }
 async function tickers(category:string):Promise<Ticker[]>{
  const r=await bybit("/v5/market/tickers",{category});return (r.list??[]) as Ticker[];
