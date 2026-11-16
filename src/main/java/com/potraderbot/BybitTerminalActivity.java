@@ -46,7 +46,7 @@ public class BybitTerminalActivity extends Activity {
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
-    private String accessToken="";
+    private String accessToken="", refreshToken="";
     private TextView serverReportText, connectionStatusText, paperAutoReportText, paperStatsHeader, paperStatsText;
     private Button paperStartButton, paperStopButton;
     private String activePaperRunId="";
@@ -73,6 +73,8 @@ public class BybitTerminalActivity extends Activity {
         applyImmersiveMode();
         accessToken=getIntent().getStringExtra("access_token");
         if(accessToken==null)accessToken="";
+        refreshToken=getIntent().getStringExtra("refresh_token");
+        if(refreshToken==null)refreshToken="";
         prefs=getSharedPreferences("bybit_paper_ledger",MODE_PRIVATE);
         if(!prefs.contains("cash"))prefs.edit().putFloat("cash",(float)START_BALANCE).apply();
         String today=new SimpleDateFormat("yyyyMMdd",Locale.US).format(new Date());
@@ -317,12 +319,49 @@ public class BybitTerminalActivity extends Activity {
             }).show();
     }
 
+    private boolean isExpiredJwt(Exception error){
+        String message=error==null?"":String.valueOf(error.getMessage()).toLowerCase(Locale.US);
+        return message.contains("jwt expired")||message.contains("token expired")||message.contains("invalid jwt")||message.contains("pgrst301");
+    }
+
+    private synchronized String refreshExpiredSession(String failedToken) throws Exception {
+        if(!accessToken.isEmpty()&&!accessToken.equals(failedToken))return accessToken;
+        if(refreshToken.isEmpty())throw new Exception("Сессия истекла. Войдите в аккаунт заново.");
+        JSONObject refreshed=SupabaseApi.refresh(refreshToken);
+        String newAccess=refreshed.optString("access_token","");
+        String newRefresh=refreshed.optString("refresh_token",refreshToken);
+        if(newAccess.isEmpty())throw new Exception("Не удалось обновить сессию. Войдите в аккаунт заново.");
+        SessionStore.save(this,newAccess,newRefresh);
+        accessToken=newAccess;refreshToken=newRefresh;
+        return accessToken;
+    }
+
+    private JSONObject getMultiMarketReportWithRefresh() throws Exception {
+        String token=accessToken;
+        try{return SupabaseApi.getMultiMarketPaperReport(token);}
+        catch(Exception first){
+            if(!isExpiredJwt(first))throw first;
+            token=refreshExpiredSession(token);
+            return SupabaseApi.getMultiMarketPaperReport(token);
+        }
+    }
+
+    private JSONObject getBybitReportWithRefresh() throws Exception {
+        String token=accessToken;
+        try{return SupabaseApi.getBybitDemoReport(token);}
+        catch(Exception first){
+            if(!isExpiredJwt(first))throw first;
+            token=refreshExpiredSession(token);
+            return SupabaseApi.getBybitDemoReport(token);
+        }
+    }
+
     private void refreshPaperAutoReport(){
         if(accessToken.isEmpty()||paperReportLoading||paperAutoReportText==null)return;
         paperReportLoading=true;
         io.execute(()->{
             JSONObject report=null;String error=null;
-            try{report=SupabaseApi.getMultiMarketPaperReport(accessToken);}catch(Exception e){error=e.getMessage();}
+            try{report=getMultiMarketReportWithRefresh();}catch(Exception e){error=e.getMessage();}
             final JSONObject data=report;final String problem=error;
             runOnUiThread(()->{
                 paperReportLoading=false;if(isFinishing()||paperAutoReportText==null)return;
@@ -579,7 +618,7 @@ public class BybitTerminalActivity extends Activity {
         serverReportText.setText("Загружаем данные сервера…");
         io.execute(()->{
             JSONObject report=null;String error=null;
-            try{report=SupabaseApi.getBybitDemoReport(accessToken);}catch(Exception e){error=e.getMessage();}
+            try{report=getBybitReportWithRefresh();}catch(Exception e){error=e.getMessage();}
             final JSONObject result=report;final String problem=error;
             runOnUiThread(()->{
                 if(isFinishing())return;                if(serverRefreshButton!=null)serverRefreshButton.setEnabled(true);
