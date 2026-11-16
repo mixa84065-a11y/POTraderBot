@@ -5,7 +5,7 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ALLOWED = ["spot","linear","inverse","option","stock","ETF","forex","commodity"];
 
 type Run = {
- id:string; user_id:string; status:string; market_categories:string[]; starting_balance_usdt:number;
+ id:string; user_id:string; status:string; market_categories:string[]; starting_balance_usdt:number; started_at?:string;
  cash_usdt:number; realized_pnl_usdt:number; max_daily_loss_usdt:number; max_positions:number; peak_equity_usdt:number; max_drawdown_pct:number;
  lease_token?:string|null; lease_until?:string|null;
 };
@@ -134,6 +134,11 @@ async function processRun(run:Run){
  if(!claimed)return {run_id:run.id,status:"SKIPPED_LOCKED"};
  let error:string|null=null;
  try{
+  if(run.status==="RUNNING"&&run.started_at&&Date.now()-Date.parse(run.started_at)>=48*60*60*1000){
+   run.status="STOPPING";
+   await db(`paper_runs?id=eq.${run.id}`,"PATCH",{status:"STOPPING",stopped_at:new Date().toISOString(),last_error:"TEST_COMPLETE: завершён 48-часовой тест."});
+   await log(run,"INFO","PAPER_TEST_48H_COMPLETE","48-часовой тест завершён. Новые входы запрещены; открытые позиции закрываются.");
+  }
   const positions=(await db(`paper_positions?run_id=eq.${run.id}&status=eq.OPEN&select=*`)) as Position[];
   const quoteCache=new Map<string,number>();
   for(const p of positions){
