@@ -20,8 +20,8 @@ android {
         applicationId 'com.potraderbot.godoftrading2standalone'
         minSdk 23
         targetSdk 35
-        versionCode 28
-        versionName '2.0.0-alpha07'
+        versionCode 29
+        versionName '2.0.0-alpha08'
         buildConfigField 'String', 'SUPABASE_URL', '"https://srzemjqjgceoebvimmct.supabase.co"'
         buildConfigField 'String', 'SUPABASE_PUBLISHABLE_KEY', '"sb_publishable_YAOzHx7szuwIStV4XOq0Ng_dNr1j5ia"'
     }

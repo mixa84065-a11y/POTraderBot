@@ -29,6 +29,8 @@ public final class HistoricalSpotReplay {
     public static final class Report {
         public int eligibleWindows, skippedGaps;
         public final Metrics strategy=new Metrics(), baseline=new Metrics();
+        public final Metrics matchedOriginal=new Metrics(), filtered=new Metrics();
+        public int comparisonWindows, filterFlat, filterConflict, filterUnavailable;
     }
     private static boolean positive(double v){return Double.isFinite(v)&&v>0;}
     private static boolean validBps(double v){return Double.isFinite(v)&&v>=0&&v<=100;}
@@ -64,7 +66,22 @@ public final class HistoricalSpotReplay {
                 signal.close*(1+half),signal.turnover24h,Double.NaN,Double.NaN,0,true);
             double factor=netFactor(bars.get(entry).open,bars.get(exit).open,spreadBps,feeBps,slippageBps);
             report.baseline.record(factor);
-            if("ВВЕРХ".equals(decision.direction))report.strategy.record(factor);
+            boolean longSignal="ВВЕРХ".equals(decision.direction);
+            if(longSignal)report.strategy.record(factor);
+            // Only compare on windows where both versions had enough usable history.
+            ResearchTrendFilter.Decision confirmation=ResearchTrendFilter.evaluate(bars,start,i);
+            if(confirmation==ResearchTrendFilter.Decision.INSUFFICIENT_HISTORY||
+               confirmation==ResearchTrendFilter.Decision.INVALID_HISTORY){
+                report.filterUnavailable++;
+                continue;
+            }
+            report.comparisonWindows++;
+            if(longSignal){
+                report.matchedOriginal.record(factor);
+                if(confirmation==ResearchTrendFilter.Decision.CONFIRMED)report.filtered.record(factor);
+                else if(confirmation==ResearchTrendFilter.Decision.FLAT)report.filterFlat++;
+                else if(confirmation==ResearchTrendFilter.Decision.CONFLICT)report.filterConflict++;
+            }
         }
         return report;
     }
@@ -87,6 +104,10 @@ public final class HistoricalSpotReplay {
         Report r=replay(bars,Integer.parseInt(args[1]),Integer.parseInt(args[2]),Double.parseDouble(args[3]),Double.parseDouble(args[4]),Double.parseDouble(args[5]));
         System.out.println("Offline research; not server worker performance. Eligible="+r.eligibleWindows+" gaps="+r.skippedGaps);
         print("Android spot signal",r.strategy);print("Long baseline",r.baseline);
+        System.out.println("Matched windows="+r.comparisonWindows+" unavailable="+r.filterUnavailable+
+                " rejected flat="+r.filterFlat+" rejected conflict="+r.filterConflict);
+        if(r.comparisonWindows>0){print("Original on matched windows",r.matchedOriginal);print("Experimental 5m/15m",r.filtered);}
+        else System.out.println("No valid comparison windows; use lookback >= 240.");
     }
     private static void print(String label,Metrics m){
         System.out.printf(java.util.Locale.US,"%s: trades=%d wins=%d losses=%d ties=%d return=%.6f%% closed-equity drawdown=%.6f%%%n",
