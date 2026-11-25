@@ -16,14 +16,25 @@ public final class MarketAnalyzer {
         }
         Analysis(Signal signal, double ema9, double ema21, double rsi14, int strength, String explanation) {
             this.signal=signal; this.ema9=ema9; this.ema21=ema21; this.rsi14=rsi14;
-            this.strength=Math.max(0, Math.min(100, strength)); this.explanation=explanation;
+            this.strength=signal == Signal.WAIT ? 0 : Math.max(0, Math.min(100, strength)); this.explanation=explanation;
         }
     }
 
     public Analysis analyze(List<Candle> candles) {
         if(candles==null || candles.size()<30) return new Analysis(Signal.WAIT,0,0,0,"Недостаточно закрытых свечей (нужно минимум 30).");
-        for(int i=1;i<candles.size();i++) if(candles.get(i).time<=candles.get(i-1).time)
-            return new Analysis(Signal.WAIT,0,0,0,"Свечи пришли не в хронологическом порядке.");
+        for(int i=0;i<candles.size();i++) {
+            if(candles.get(i)==null)
+                return new Analysis(Signal.WAIT,0,0,0,"В истории есть отсутствующая свеча.");
+            if(i>0 && candles.get(i).time<=candles.get(i-1).time)
+                return new Analysis(Signal.WAIT,0,0,0,"Свечи пришли не в хронологическом порядке.");
+        }
+        // Do not bridge market closures or data holes in indicators.
+        int contiguousStart=candles.size()-1;
+        while(contiguousStart>0 && candles.get(contiguousStart).time-candles.get(contiguousStart-1).time==60_000L)
+            contiguousStart--;
+        candles=candles.subList(contiguousStart,candles.size());
+        if(candles.size()<30)
+            return new Analysis(Signal.WAIT,0,0,0,"Недостаточно непрерывных минутных свечей после разрыва данных (нужно 30).");
         double e9=ema(candles,9), e21=ema(candles,21), rsi=rsiWilder(candles,14);
         Candle last=candles.get(candles.size()-1), prev=candles.get(candles.size()-2);
         boolean trendUp=e9>e21, trendDown=e9<e21;
@@ -62,8 +73,7 @@ public final class MarketAnalyzer {
                 .append(" • EMA 21: ").append(String.format(java.util.Locale.US,"%.5f",e21))
                 .append(" • RSI 14: ").append(String.format(java.util.Locale.US,"%.2f",rsi))
                 .append("\nВероятность не заявляется: для неё нужна проверенная статистика тестирования стратегии.");
-        int alignedFactors = (trendUp || trendDown ? 1 : 0) + (rsiUp || rsiDown ? 1 : 0) + (candleUp || candleDown ? 1 : 0);
-        int strength = alignedFactors * 100 / 3;
+        int strength = signal == Signal.WAIT ? 0 : 100; // Agreement of three rules, NOT win probability.
         return new Analysis(signal,e9,e21,rsi,strength,why.toString());
     }
 
