@@ -48,7 +48,10 @@ public class BybitTerminalActivity extends Activity {
     private SharedPreferences prefs;
     private String accessToken="", refreshToken="";
     private TextView serverReportText, connectionStatusText, paperAutoReportText, paperStatsHeader, paperStatsText;
-    private Button paperStartButton, paperStopButton;
+    private Button paperStartButton, paperStopButton, paperPrepareButton, bybitPrepareButton;
+    private boolean preparePaperRequested=false, prepareBybitRequested=false;
+    // A preparation is only a display draft; never mutate/delete server history.
+    private String paperDraftPreviousId=null, bybitDraftPreviousId=null;
     private String activePaperRunId="";
     private boolean paperReportLoading=false, serverReportLoading=false;
     private boolean paperStarting=false, serverStarting=false;
@@ -238,6 +241,11 @@ public class BybitTerminalActivity extends Activity {
         startDemoRunButton=button("ЗАПУСТИТЬ ДЕМО НА 48 ЧАСОВ",GOLD,BG);
         LinearLayout.LayoutParams startParams=new LinearLayout.LayoutParams(-1,dp(52));startParams.topMargin=dp(8);root.addView(startDemoRunButton,startParams);
         startDemoRunButton.setOnClickListener(v->confirmStartBybitDemoRun());
+        startDemoRunButton.setEnabled(false);
+        bybitPrepareButton=button("ОБНУЛИТЬ СТАТИСТИКУ / НОВЫЙ ТЕСТ",PANEL,WHITE);
+        root.addView(bybitPrepareButton,new LinearLayout.LayoutParams(-1,dp(48)));
+        bybitPrepareButton.setEnabled(false);
+        bybitPrepareButton.setOnClickListener(v->confirmPrepareDemo(false));
         serverRefreshButton=button("ОБНОВИТЬ ПОЛНЫЙ ОТЧЁТ",GOLD,BG);
         LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(46));rp.topMargin=dp(6);root.addView(serverRefreshButton,rp);
         serverRefreshButton.setOnClickListener(v->refreshServerReport());
@@ -260,9 +268,15 @@ public class BybitTerminalActivity extends Activity {
         paperStartButton=button("ЗАПУСТИТЬ АВТОТОРГОВЛЮ ПО ВСЕМ РЫНКАМ",GOLD,BG);
         root.addView(paperStartButton,new LinearLayout.LayoutParams(-1,dp(50)));
         paperStartButton.setOnClickListener(v->confirmStartMultiMarketPaperRun());
+        paperStartButton.setEnabled(false);
+        paperPrepareButton=button("ОБНУЛИТЬ СТАТИСТИКУ / НОВЫЙ ТЕСТ",PANEL,WHITE);
+        root.addView(paperPrepareButton,new LinearLayout.LayoutParams(-1,dp(48)));
+        paperPrepareButton.setEnabled(false);
+        paperPrepareButton.setOnClickListener(v->confirmPrepareDemo(true));
         paperStopButton=button("ОСТАНОВИТЬ АВТОТОРГОВЛЮ",PANEL,WHITE);
         LinearLayout.LayoutParams stopLp=new LinearLayout.LayoutParams(-1,dp(46));stopLp.topMargin=dp(6);root.addView(paperStopButton,stopLp);
         paperStopButton.setOnClickListener(v->stopMultiMarketPaperRun());
+        paperStopButton.setEnabled(false);
         Button refresh=button("ОБНОВИТЬ ОТЧЁТ МУЛЬТИРЫНКА",PANEL,WHITE);
         LinearLayout.LayoutParams refreshLp=new LinearLayout.LayoutParams(-1,dp(44));refreshLp.topMargin=dp(6);root.addView(refresh,refreshLp);
         refresh.setOnClickListener(v->refreshPaperAutoReport());
@@ -282,6 +296,33 @@ public class BybitTerminalActivity extends Activity {
         refreshPaperAutoReport();
     }
 
+    private void confirmPrepareDemo(boolean paper){
+        if(accessToken.isEmpty())return;
+        if(paper ? paperStarting : serverStarting)return;
+        if(paper ? paperDraftPreviousId!=null : bybitDraftPreviousId!=null){
+            if(paper){paperDraftPreviousId=null;preparePaperRequested=false;paperReportGeneration++;refreshPaperAutoReport();}
+            else{bybitDraftPreviousId=null;prepareBybitRequested=false;serverReportGeneration++;refreshServerReport();}
+            return;
+        }
+        new AlertDialog.Builder(this).setTitle("Подготовить новый демотест?")
+            .setMessage("Проверим сервер. Если прежний тест завершён и открытых позиций нет, покажем нулевую статистику будущего теста. История не удаляется, счёт Bybit не меняется. Новый тест не запускается до отдельного подтверждения.")
+            .setNegativeButton("ОТМЕНА",null).setPositiveButton("ПОДГОТОВИТЬ",(d,w)->{
+                if(paper){preparePaperRequested=true;paperReportGeneration++;refreshPaperAutoReport();}
+                else{prepareBybitRequested=true;serverReportGeneration++;refreshServerReport();}
+            }).show();
+    }
+
+    private void renderPaperDraft(){
+        paperPrepareButton.setText("ПОКАЗАТЬ ПРЕДЫДУЩИЙ ОТЧЁТ");
+        paperStatsText.setText(DemoReportPreparation.zeroStatistics());
+        paperAutoReportText.setText("НОВЫЙ МУЛЬТИРЫНОЧНЫЙ ТЕСТ • НЕ ЗАПУЩЕН\nВиртуальный старт после запуска: 200 USDT\nПредыдущий отчёт сохранён на сервере.\nДля запуска нажмите кнопку запуска и подтвердите действие.");
+    }
+
+    private void renderBybitDraft(){
+        bybitPrepareButton.setText("ПОКАЗАТЬ ПРЕДЫДУЩИЙ ОТЧЁТ");
+        serverReportText.setText("НОВЫЙ BYBIT DEMO ТЕСТ • НЕ ЗАПУЩЕН\n"+DemoReportPreparation.zeroStatistics()+"\nДемо-баланс Bybit не обнуляется. Предыдущий отчёт сохранён на сервере.\nДля запуска нажмите кнопку запуска и подтвердите действие.");
+    }
+
     private void confirmStartMultiMarketPaperRun(){
         if(accessToken.isEmpty()){Toast.makeText(this,"Сначала войдите в GOD OF TRADING.",Toast.LENGTH_LONG).show();return;}
         new AlertDialog.Builder(this).setTitle("Запуск автономного автодемо")
@@ -291,7 +332,8 @@ public class BybitTerminalActivity extends Activity {
 
     private void startMultiMarketPaperRun(){
         if(paperStarting)return;
-        paperStarting=true;paperReportGeneration++;
+        paperStarting=true;preparePaperRequested=false;paperReportGeneration++;
+        paperPrepareButton.setEnabled(false);
         if(paperStartButton!=null)paperStartButton.setEnabled(false);
         if(paperStopButton!=null)paperStopButton.setEnabled(false);
         if(paperStatsText!=null)paperStatsText.setText("Ожидаем подтверждение нового запуска…");
@@ -304,6 +346,7 @@ public class BybitTerminalActivity extends Activity {
                 if(isFinishing())return;
                 paperStarting=false;
                 if(started!=null&&!started.optString("run_id","").isEmpty()){
+                    paperDraftPreviousId=null;
                     expectedPaperRunId=started.optString("run_id");activePaperRunId=expectedPaperRunId;
                     Toast.makeText(this,"Новый серверный тест подтверждён",Toast.LENGTH_LONG).show();
                 }else{
@@ -371,6 +414,8 @@ public class BybitTerminalActivity extends Activity {
     private void refreshPaperAutoReport(){
         if(accessToken.isEmpty()||paperReportLoading||paperStarting||paperAutoReportText==null)return;
         paperReportLoading=true;
+        paperPrepareButton.setEnabled(false);
+        paperStartButton.setEnabled(false);
         final int generation=paperReportGeneration;
         final String expectedId=expectedPaperRunId;
         io.execute(()->{
@@ -380,10 +425,16 @@ public class BybitTerminalActivity extends Activity {
             runOnUiThread(()->{
                 paperReportLoading=false;if(isFinishing()||paperAutoReportText==null)return;
                 if(generation!=paperReportGeneration){refreshPaperAutoReport();return;}
-                if(data==null){paperAutoReportText.setText("Не удалось получить актуальный отчёт: "+problem);paperStatsText.setText("Статистика недоступна: нет подтверждения сервера.");return;}
+                if(data==null){preparePaperRequested=false;paperAutoReportText.setText("Не удалось получить актуальный отчёт: "+problem);paperStatsText.setText("Статистика недоступна: нет подтверждения сервера.");return;}
                 if(!data.optBoolean("has_run",false)){
                     if(!expectedId.isEmpty()){paperStatsText.setText("Сервер ещё не вернул новый тест: "+expectedId);paperAutoReportText.setText("Ожидаем отчёт нового запуска.");return;}
-                    activePaperRunId="";paperAutoReportText.setText("Автодемо ещё не запускалось. После запуска сервер начнёт собирать сделки и статистику.");paperStatsText.setText("Нет серверного теста.");paperStartButton.setEnabled(true);paperStopButton.setEnabled(false);return;
+                    activePaperRunId="";
+                    paperStartButton.setEnabled(true);paperStopButton.setEnabled(false);paperPrepareButton.setEnabled(true);
+                    if(preparePaperRequested)paperDraftPreviousId="";
+                    preparePaperRequested=false;
+                    if(DemoReportPreparation.keepDraft(paperDraftPreviousId,"",true)){renderPaperDraft();return;}
+                    paperDraftPreviousId=null;paperPrepareButton.setText("ОБНУЛИТЬ СТАТИСТИКУ / НОВЫЙ ТЕСТ");
+                    paperAutoReportText.setText("Автодемо ещё не запускалось. После запуска сервер начнёт собирать сделки и статистику.");paperStatsText.setText("Нет серверного теста.");return;
                 }
                 JSONObject run=data.optJSONObject("run");
                 if(run==null||run.optString("id","").isEmpty()||(!expectedId.isEmpty()&&!expectedId.equals(run.optString("id")))){
@@ -391,9 +442,19 @@ public class BybitTerminalActivity extends Activity {
                 }
                 expectedPaperRunId="";activePaperRunId=run.optString("id");
                 String status=run.optString("status","UNKNOWN");
-                paperStartButton.setEnabled(!"RUNNING".equals(status)&&!"STOPPING".equals(status)&&!"PAUSED".equals(status));
+                JSONArray serverPositions=data.optJSONArray("positions");
+                boolean canPrepare=DemoReportPreparation.canPrepare(status,serverPositions==null?-1:serverPositions.length());
+                paperStartButton.setEnabled(canPrepare);
+                paperPrepareButton.setEnabled(canPrepare);
                 paperStopButton.setEnabled("RUNNING".equals(status));
                 paperStopButton.setText("STOPPING".equals(status)?"ЗАКРЫВАЕМ ОТКРЫТЫЕ ПОЗИЦИИ…":"ОСТАНОВИТЬ АВТОТОРГОВЛЮ");
+                if(preparePaperRequested){
+                    if(canPrepare)paperDraftPreviousId=activePaperRunId;
+                    else Toast.makeText(this,"Сначала завершите прежний серверный тест.",Toast.LENGTH_LONG).show();
+                }
+                preparePaperRequested=false;
+                if(DemoReportPreparation.keepDraft(paperDraftPreviousId,activePaperRunId,canPrepare)){renderPaperDraft();return;}
+                paperDraftPreviousId=null;paperPrepareButton.setText("ОБНУЛИТЬ СТАТИСТИКУ / НОВЫЙ ТЕСТ");
                 StringBuilder b=new StringBuilder("МУЛЬТИРЫНОЧНЫЙ СЕРВЕРНЫЙ ТЕСТ\nСОСТОЯНИЕ: ").append(status)
                     .append("\nRun ID: ").append(activePaperRunId)
                     .append("\nСтарт: ").append(run.optString("started_at","—"))
@@ -446,7 +507,8 @@ public class BybitTerminalActivity extends Activity {
 
     private void startBybitDemoRun(){
         if(serverStarting)return;
-        serverStarting=true;serverReportGeneration++;
+        serverStarting=true;prepareBybitRequested=false;serverReportGeneration++;
+        bybitPrepareButton.setEnabled(false);
         if(startDemoRunButton!=null)startDemoRunButton.setEnabled(false);
         if(serverReportText!=null)serverReportText.setText("Ожидаем подтверждение нового теста…");
         if(connectionStatusText!=null)connectionStatusText.setText("Проверяем Bybit Demo API перед запуском…");
@@ -464,7 +526,7 @@ public class BybitTerminalActivity extends Activity {
                 if(isFinishing())return;
                 serverStarting=false;
                 if(run!=null&&!run.optString("run_id","").isEmpty()){
-                    String id=run.optString("run_id");expectedBybitRunId=id;
+                    String id=run.optString("run_id");bybitDraftPreviousId=null;expectedBybitRunId=id;
                     connectionStatusText.setText("48-ЧАСОВЫЙ BYBIT DEMO ТЕСТ ЗАПУЩЕН\nRun ID: "+id+
                         "\nСтарт: "+run.optString("started_at","—")+"\nОкончание: "+run.optString("ends_at","—")+
                         "\nИнструменты: BTCUSDT, ETHUSDT, SOLUSDT\nБаланс при проверке: "+                        (verified==null?"—":verified.optString("wallet_balance_usdt","—"))+" USDT");
@@ -641,6 +703,8 @@ public class BybitTerminalActivity extends Activity {
         if(serverReportText==null||serverReportLoading||serverStarting)return;
         if(accessToken.isEmpty()){serverReportText.setText("Нет активной сессии. Войдите в аккаунт, чтобы открыть серверный отчёт.");return;}
         serverReportLoading=true;
+        bybitPrepareButton.setEnabled(false);
+        startDemoRunButton.setEnabled(false);
         final int generation=serverReportGeneration;
         final String expectedId=expectedBybitRunId;
         if(serverRefreshButton!=null)serverRefreshButton.setEnabled(false);
@@ -654,14 +718,28 @@ public class BybitTerminalActivity extends Activity {
                 if(isFinishing())return;
                 if(serverRefreshButton!=null)serverRefreshButton.setEnabled(true);
                 if(generation!=serverReportGeneration){refreshServerReport();return;}
-                if(result==null){serverReportText.setText("Актуальный отчёт недоступен: "+problem);return;}
+                if(result==null){prepareBybitRequested=false;serverReportText.setText("Актуальный отчёт недоступен: "+problem);return;}
                 JSONObject reported=result.optJSONObject("run");
                 if(!expectedId.isEmpty()&&(reported==null||!expectedId.equals(reported.optString("id","")))){
                     serverReportText.setText("Ожидаем отчёт именно нового теста: "+expectedId);return;
                 }
                 expectedBybitRunId="";
                 String state=reported==null?"":reported.optString("status","");
-                if(startDemoRunButton!=null)startDemoRunButton.setEnabled(!"RUNNING".equals(state)&&!"READY".equals(state)&&!"STOPPING".equals(state));
+                String previousId=reported==null?"":reported.optString("id","");
+                JSONObject serverSummary=result.optJSONObject("summary");
+                JSONArray serverPositions=result.optJSONArray("positions");
+                boolean canPrepare=result.has("run") && (reported==null ? result.isNull("run") :
+                    !previousId.isEmpty() && serverSummary!=null && serverSummary.has("open") && serverSummary.optInt("open",-1)==0 &&
+                    DemoReportPreparation.canPrepare(state,serverPositions==null?-1:serverPositions.length()));
+                startDemoRunButton.setEnabled(canPrepare);
+                bybitPrepareButton.setEnabled(canPrepare);
+                if(prepareBybitRequested){
+                    if(canPrepare)bybitDraftPreviousId=previousId;
+                    else Toast.makeText(this,"Прежний тест ещё не завершён.",Toast.LENGTH_LONG).show();
+                }
+                prepareBybitRequested=false;
+                if(DemoReportPreparation.keepDraft(bybitDraftPreviousId,previousId,canPrepare)){renderBybitDraft();return;}
+                bybitDraftPreviousId=null;bybitPrepareButton.setText("ОБНУЛИТЬ СТАТИСТИКУ / НОВЫЙ ТЕСТ");
                 serverReportText.setText(formatServerReport(result));
             });
         });
