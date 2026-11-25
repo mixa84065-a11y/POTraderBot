@@ -806,7 +806,32 @@ public class BybitTerminalActivity extends Activity {
         b.append("\n\nСТАТУС: ").append(run.optString("status","—"));
         b.append("\nRun ID: ").append(run.optString("id","—"));
         b.append("\nОтчёт получен: ").append(new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z",Locale.US).format(new java.util.Date()));
-        if("STOPPING".equals(run.optString("status")))b.append("\nПредыдущий тест ещё завершает работу. Это не новый запуск.");
+        if("STOPPING".equals(run.optString("status"))){
+            b.append("\nПредыдущий тест ещё завершает работу. Это не новый запуск.");
+            JSONArray journal=report.optJSONArray("events");
+            if(journal!=null)for(int i=0;i<journal.length();i++){
+                JSONObject event=journal.optJSONObject(i);
+                if(event==null||!"STOPPING_WAITING_FOR_RECONCILIATION".equals(event.optString("event_type")))continue;
+                JSONObject details=event.optJSONObject("details");
+                if(details!=null)b.append("\nПоследняя серверная сверка: открытых позиций ")
+                    .append(details.optString("open_positions","—")).append(", необработанных заявок ")
+                    .append(details.optString("pending_orders","—"));
+                b.append("\nВремя сверки: ").append(event.optString("created_at","—"));
+                break;
+            }
+            if(journal!=null)for(int i=0;i<journal.length();i++){
+                JSONObject event=journal.optJSONObject(i);
+                if(event==null||!"ORDER_RECONCILIATION_ERROR".equals(event.optString("event_type")))continue;
+                JSONObject details=event.optJSONObject("details");
+                b.append("\nПоследняя зарегистрированная ошибка сверки: ").append(event.optString("message","—"));
+                if(details!=null)b.append("\nИнструмент: ").append(details.optString("symbol","—"))
+                    .append(" • статус заявки: ").append(details.optString("status","—"))
+                    .append("\nID заявки: ").append(details.optString("order_id","—"));
+                b.append("\nВремя ошибки: ").append(event.optString("created_at","—"));
+                break;
+            }
+            b.append("\nСброс заблокирован до подтверждения сервером. Не повторяйте неподтверждённую заявку вручную.");
+        }
         b.append("\nИнструменты: ").append(run.optString("symbols","—"));
         b.append("\nСтарт: ").append(run.optString("started_at","—"));
         b.append("\nПлановое завершение: ").append(run.optString("ends_at","—"));
