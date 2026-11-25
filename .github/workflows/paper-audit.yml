@@ -1,0 +1,29 @@
+name: Paper analyzer audit
+on:
+  push:
+    branches:
+      - feature/paper-audit-tests
+  pull_request:
+    paths:
+      - 'app/src/main/java/com/potraderbot/MarketAnalyzer.java'
+      - 'app/src/main/java/com/potraderbot/Candle.java'
+      - 'tests/**'
+      - '.github/workflows/paper-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Compile and run pure Java regression tests
+        run: |
+          mkdir -p build/paper-audit
+          javac -encoding UTF-8 -d build/paper-audit app/src/main/java/com/potraderbot/Candle.java app/src/main/java/com/potraderbot/MarketAnalyzer.java tests/MarketAnalyzerAudit.java
+          java -cp build/paper-audit com.potraderbot.MarketAnalyzerAudit
