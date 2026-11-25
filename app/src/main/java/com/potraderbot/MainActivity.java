@@ -73,6 +73,7 @@ public final class MainActivity extends Activity {
     private TextView paperTradeStatusView;
     private Spinner chartTimeframeInput;
     private List<Candle> latestCandles = java.util.Collections.emptyList();
+    private String latestCandlesSymbol = "";
     private boolean manualTradeRefresh = false;
     private final Runnable tradeCountdownRunnable = new Runnable() {
         @Override public void run() {
@@ -338,7 +339,7 @@ public final class MainActivity extends Activity {
         strengthTextParams.leftMargin = dp(8);
         strengthRow.addView(signalStrengthView, strengthTextParams);
         page.addView(strengthRow);
-        TextView strengthNote = label("Совпадение факторов анализа, не вероятность выигрыша", 9, 0xFFB9C5D5, false);
+        TextView strengthNote = label("0 — нет сигнала; 100 — совпали 3 правила. Не вероятность выигрыша", 9, 0xFFB9C5D5, false);
         page.addView(strengthNote);
         signalDisplayView = label("ЖДАТЬ  ◷", 20, 0xFFFFC857, true);
         signalDisplayView.setGravity(android.view.Gravity.CENTER);
@@ -1286,13 +1287,24 @@ public final class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     requestInProgress = false;
                     analyzeButton.setEnabled(true);
+                    paperTrading.update(candles, symbol);
+                    if (!symbol.equalsIgnoreCase(symbolInput.getText().toString().trim())) {
+                        latestCandles = java.util.Collections.emptyList();
+                        latestCandlesSymbol = "";
+                        displayedSignal = MarketAnalyzer.Signal.WAIT;
+                        updateSignalStrength(0);
+                        renderVirtualBalance();
+                        renderPaperTradeStatus();
+                        status.setText("АКТИВ ИЗМЕНЁН: ОБНОВИТЕ КОТИРОВКИ");
+                        return;
+                    }
                     displayedSignal = shown.signal;
                     renderNewsCalendar();
-                    latestCandles = candles;
+                    latestCandles = staleData ? java.util.Collections.emptyList() : candles;
+                    latestCandlesSymbol = staleData ? "" : symbol;
                     List<Candle> chartCandles = aggregateCandles(candles, getChartTimeframeMinutes());
                     Candle chartLast = chartCandles.isEmpty() ? last : chartCandles.get(chartCandles.size() - 1);
                     if (chartView != null) chartView.setMarketData(chartCandles, shown.signal, chartLast.close, staleData);
-                    paperTrading.update(candles, symbol);
                     renderVirtualBalance();
                     renderPaperTradeStatus();
                     if (!paperTrading.hasActiveTrade() && manualTradeRefresh) {
@@ -1335,6 +1347,8 @@ public final class MainActivity extends Activity {
                     requestInProgress = false;
                     analyzeButton.setEnabled(true);
                     displayedSignal = MarketAnalyzer.Signal.WAIT;
+                    latestCandles = java.util.Collections.emptyList();
+                    latestCandlesSymbol = "";
                     updateInlineRisk();
                     updateSignalStrength(0);
                     if (signalDisplayView != null) { signalDisplayView.setText("ЖДАТЬ  ◷"); signalDisplayView.setTextColor(0xFFFFC857); }
@@ -1426,7 +1440,8 @@ public final class MainActivity extends Activity {
                     .setPositiveButton("Понятно", null).show();
             return;
         }
-        if (latestCandles == null || latestCandles.isEmpty()) {
+        if (latestCandles == null || latestCandles.isEmpty()
+                || !latestCandlesSymbol.equalsIgnoreCase(symbolInput.getText().toString().trim())) {
             status.setText("СНАЧАЛА ПОЛУЧИТЕ СВЕЖИЕ КОТИРОВКИ");
             status.setTextColor(0xFFFFC857);
             return;
