@@ -50,7 +50,10 @@ public class BybitTerminalActivity extends Activity {
     private TextView serverReportText, connectionStatusText, paperAutoReportText, paperStatsHeader, paperStatsText;
     private Button paperStartButton, paperStopButton;
     private String activePaperRunId="";
-    private boolean paperReportLoading=false;
+    private boolean paperReportLoading=false, serverReportLoading=false;
+    private boolean paperStarting=false, serverStarting=false;
+    private int paperReportGeneration=0, serverReportGeneration=0;
+    private String expectedPaperRunId="", expectedBybitRunId="";
     private Button serverRefreshButton, connectionCheckButton, startDemoRunButton;
     private Spinner symbolPicker, scanCategoryPicker;
     private TextView multiScanText;
@@ -65,7 +68,7 @@ public class BybitTerminalActivity extends Activity {
     private JSONArray candles=new JSONArray();
     private double lastPrice=0;
     private final Runnable poll=new Runnable(){@Override public void run(){loadMarket();handler.postDelayed(this,15000);}};
-    private final Runnable paperStatusPoll=new Runnable(){@Override public void run(){refreshPaperAutoReport();handler.postDelayed(this,60000);}};
+    private final Runnable paperStatusPoll=new Runnable(){@Override public void run(){refreshPaperAutoReport();refreshServerReport();handler.postDelayed(this,60000);}};
 
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
@@ -287,7 +290,11 @@ public class BybitTerminalActivity extends Activity {
     }
 
     private void startMultiMarketPaperRun(){
+        if(paperStarting)return;
+        paperStarting=true;paperReportGeneration++;
         if(paperStartButton!=null)paperStartButton.setEnabled(false);
+        if(paperStopButton!=null)paperStopButton.setEnabled(false);
+        if(paperStatsText!=null)paperStatsText.setText("Ожидаем подтверждение нового запуска…");
         if(paperAutoReportText!=null)paperAutoReportText.setText("Создаём автономный виртуальный портфель…");
         io.execute(()->{
             JSONObject result=null;String error=null;
@@ -295,9 +302,14 @@ public class BybitTerminalActivity extends Activity {
             final JSONObject started=result;final String problem=error;
             runOnUiThread(()->{
                 if(isFinishing())return;
-                if(paperStartButton!=null)paperStartButton.setEnabled(true);
-                if(started!=null){activePaperRunId=started.optString("run_id","");Toast.makeText(this,"Автодемо по рынкам запущено на сервере",Toast.LENGTH_LONG).show();}
-                else Toast.makeText(this,"Не удалось запустить: "+problem,Toast.LENGTH_LONG).show();
+                paperStarting=false;
+                if(started!=null&&!started.optString("run_id","").isEmpty()){
+                    expectedPaperRunId=started.optString("run_id");activePaperRunId=expectedPaperRunId;
+                    Toast.makeText(this,"Новый серверный тест подтверждён",Toast.LENGTH_LONG).show();
+                }else{
+                    if(paperStatsText!=null)paperStatsText.setText("Новый тест не подтверждён. Старые данные не являются результатом нового теста.");
+                    Toast.makeText(this,"Не удалось запустить: "+problem,Toast.LENGTH_LONG).show();
+                }
                 refreshPaperAutoReport();
             });
         });
@@ -336,58 +348,68 @@ public class BybitTerminalActivity extends Activity {
         return accessToken;
     }
 
-    private JSONObject getMultiMarketReportWithRefresh() throws Exception {
+    private JSONObject getMultiMarketReportWithRefresh(String expectedId) throws Exception {
         String token=accessToken;
-        try{return SupabaseApi.getMultiMarketPaperReport(token);}
+        try{return SupabaseApi.getMultiMarketPaperReport(token, expectedId);}
         catch(Exception first){
             if(!isExpiredJwt(first))throw first;
             token=refreshExpiredSession(token);
-            return SupabaseApi.getMultiMarketPaperReport(token);
+            return SupabaseApi.getMultiMarketPaperReport(token, expectedId);
         }
     }
 
-    private JSONObject getBybitReportWithRefresh() throws Exception {
+    private JSONObject getBybitReportWithRefresh(String expectedId) throws Exception {
         String token=accessToken;
-        try{return SupabaseApi.getBybitDemoReport(token);}
+        try{return SupabaseApi.getBybitDemoReport(token, expectedId);}
         catch(Exception first){
             if(!isExpiredJwt(first))throw first;
             token=refreshExpiredSession(token);
-            return SupabaseApi.getBybitDemoReport(token);
+            return SupabaseApi.getBybitDemoReport(token, expectedId);
         }
     }
 
     private void refreshPaperAutoReport(){
-        if(accessToken.isEmpty()||paperReportLoading||paperAutoReportText==null)return;
+        if(accessToken.isEmpty()||paperReportLoading||paperStarting||paperAutoReportText==null)return;
         paperReportLoading=true;
+        final int generation=paperReportGeneration;
+        final String expectedId=expectedPaperRunId;
         io.execute(()->{
             JSONObject report=null;String error=null;
-            try{report=getMultiMarketReportWithRefresh();}catch(Exception e){error=e.getMessage();}
+            try{report=getMultiMarketReportWithRefresh(expectedId);}catch(Exception e){error=e.getMessage();}
             final JSONObject data=report;final String problem=error;
             runOnUiThread(()->{
                 paperReportLoading=false;if(isFinishing()||paperAutoReportText==null)return;
-                if(data==null){paperAutoReportText.setText("Не удалось получить отчёт: "+problem);return;}
+                if(generation!=paperReportGeneration){refreshPaperAutoReport();return;}
+                if(data==null){paperAutoReportText.setText("Не удалось получить актуальный отчёт: "+problem);paperStatsText.setText("Статистика недоступна: нет подтверждения сервера.");return;}
                 if(!data.optBoolean("has_run",false)){
-                    activePaperRunId="";paperAutoReportText.setText("Автодемо ещё не запускалось. После запуска сервер начнёт собирать сделки и статистику.");paperStartButton.setEnabled(true);paperStopButton.setEnabled(false);return;
+                    if(!expectedId.isEmpty()){paperStatsText.setText("Сервер ещё не вернул новый тест: "+expectedId);paperAutoReportText.setText("Ожидаем отчёт нового запуска.");return;}
+                    activePaperRunId="";paperAutoReportText.setText("Автодемо ещё не запускалось. После запуска сервер начнёт собирать сделки и статистику.");paperStatsText.setText("Нет серверного теста.");paperStartButton.setEnabled(true);paperStopButton.setEnabled(false);return;
                 }
-                JSONObject run=data.optJSONObject("run");if(run==null)return;
-                activePaperRunId=run.optString("id","");
+                JSONObject run=data.optJSONObject("run");
+                if(run==null||run.optString("id","").isEmpty()||(!expectedId.isEmpty()&&!expectedId.equals(run.optString("id")))){
+                    paperStatsText.setText("Отчёт не соответствует запрошенному запуску.");paperAutoReportText.setText("Ожидаем подтверждённый отчёт сервера.");return;
+                }
+                expectedPaperRunId="";activePaperRunId=run.optString("id");
                 String status=run.optString("status","UNKNOWN");
-                paperStartButton.setEnabled(!"RUNNING".equals(status)&&!"STOPPING".equals(status));
+                paperStartButton.setEnabled(!"RUNNING".equals(status)&&!"STOPPING".equals(status)&&!"PAUSED".equals(status));
                 paperStopButton.setEnabled("RUNNING".equals(status));
                 paperStopButton.setText("STOPPING".equals(status)?"ЗАКРЫВАЕМ ОТКРЫТЫЕ ПОЗИЦИИ…":"ОСТАНОВИТЬ АВТОТОРГОВЛЮ");
-                StringBuilder b=new StringBuilder("СОСТОЯНИЕ: ").append(status)
+                StringBuilder b=new StringBuilder("МУЛЬТИРЫНОЧНЫЙ СЕРВЕРНЫЙ ТЕСТ\nСОСТОЯНИЕ: ").append(status)
+                    .append("\nRun ID: ").append(activePaperRunId)
+                    .append("\nСтарт: ").append(run.optString("started_at","—"))
+                    .append("\nОтчёт получен: ").append(new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z",Locale.US).format(new java.util.Date()))
                     .append("\nВиртуальный старт: ").append(run.optString("starting_balance_usdt","—")).append(" USDT")
                     .append("\nРеализованный P/L: ").append(run.optString("realized_pnl_usdt","0")).append(" USDT")
                     .append("\nСвободные средства: ").append(run.optString("cash_usdt","—")).append(" USDT")
                     .append("\nПоследний серверный цикл: ").append(run.optString("last_cycle_at","ещё не выполнялся"));
                 JSONObject summary=data.optJSONObject("summary");
                 if(summary!=null&&paperStatsText!=null){
-                    paperStatsText.setText("Всего сделок: "+summary.optInt("trades_total")
+                    paperStatsText.setText("Тест: "+activePaperRunId+"\nСтатус: "+status+"\nЗакрыто сделок: "+summary.optInt("trades_total")
                         +"\nПлюсовых: "+summary.optInt("wins")+" • минусовых: "+summary.optInt("losses")
-                        +"\nWin rate: "+summary.optString("win_rate_pct","0")+"%"
+                        +"\nБезубыточных: "+summary.optInt("breakeven")+"\nWin rate: "+summary.optString("win_rate_pct","0")+"%"
                         +"\nЧистый P/L: "+summary.optString("net_pnl_usdt","0")+" USDT"
                         +"\nКомиссии: "+summary.optString("fees_usdt","0")+" USDT");
-                }
+                }else if(paperStatsText!=null)paperStatsText.setText("Сервер не вернул статистику этого теста.");
                 if(!run.optString("last_error","").isEmpty())b.append("\nПримечание: ").append(run.optString("last_error"));
                 JSONArray positions=data.optJSONArray("positions");
                 b.append("\n\nОТКРЫТЫЕ ПОЗИЦИИ: ").append(positions==null?0:positions.length());
@@ -398,7 +420,7 @@ public class BybitTerminalActivity extends Activity {
                      .append(" • сейчас ").append(p.optString("mark_price")).append(" • P/L ").append(p.optString("unrealized_pnl_usdt"));
                 }
                 JSONArray trades=data.optJSONArray("trades");
-                b.append("\n\nЗАКРЫТЫЕ СДЕЛКИ: ").append(trades==null?0:trades.length());
+                b.append("\n\nПОСЛЕДНИЕ ЗАКРЫТЫЕ СДЕЛКИ (показано ").append(trades==null?0:trades.length()).append(" из ").append(summary==null?"—":summary.optString("trades_total","—")).append(")");
                 if(trades!=null)for(int i=0;i<trades.length();i++){
                     JSONObject t=trades.optJSONObject(i);if(t==null)continue;
                     b.append("\n").append(t.optString("market_category")).append(" • ").append(t.optString("symbol"))
@@ -423,7 +445,10 @@ public class BybitTerminalActivity extends Activity {
     }
 
     private void startBybitDemoRun(){
+        if(serverStarting)return;
+        serverStarting=true;serverReportGeneration++;
         if(startDemoRunButton!=null)startDemoRunButton.setEnabled(false);
+        if(serverReportText!=null)serverReportText.setText("Ожидаем подтверждение нового теста…");
         if(connectionStatusText!=null)connectionStatusText.setText("Проверяем Bybit Demo API перед запуском…");
         io.execute(()->{
             JSONObject check=null,started=null;String error=null;
@@ -437,9 +462,9 @@ public class BybitTerminalActivity extends Activity {
             final JSONObject verified=check,run=started;final String problem=error;
             runOnUiThread(()->{
                 if(isFinishing())return;
-                if(startDemoRunButton!=null)startDemoRunButton.setEnabled(true);
-                if(run!=null){
-                    String id=run.optString("run_id","—");
+                serverStarting=false;
+                if(run!=null&&!run.optString("run_id","").isEmpty()){
+                    String id=run.optString("run_id");expectedBybitRunId=id;
                     connectionStatusText.setText("48-ЧАСОВЫЙ BYBIT DEMO ТЕСТ ЗАПУЩЕН\nRun ID: "+id+
                         "\nСтарт: "+run.optString("started_at","—")+"\nОкончание: "+run.optString("ends_at","—")+
                         "\nИнструменты: BTCUSDT, ETHUSDT, SOLUSDT\nБаланс при проверке: "+                        (verified==null?"—":verified.optString("wallet_balance_usdt","—"))+" USDT");
@@ -449,6 +474,7 @@ public class BybitTerminalActivity extends Activity {
                 }else{
                     connectionStatusText.setText("ЗАПУСК НЕ ВЫПОЛНЕН\n"+(problem==null?"Неизвестная ошибка":problem));
                     connectionStatusText.setTextColor(RED);
+                    refreshServerReport();
                 }
             });
         });
@@ -612,17 +638,31 @@ public class BybitTerminalActivity extends Activity {
     }
 
     private void refreshServerReport(){
-        if(serverReportText==null)return;
+        if(serverReportText==null||serverReportLoading||serverStarting)return;
         if(accessToken.isEmpty()){serverReportText.setText("Нет активной сессии. Войдите в аккаунт, чтобы открыть серверный отчёт.");return;}
+        serverReportLoading=true;
+        final int generation=serverReportGeneration;
+        final String expectedId=expectedBybitRunId;
         if(serverRefreshButton!=null)serverRefreshButton.setEnabled(false);
         serverReportText.setText("Загружаем данные сервера…");
         io.execute(()->{
             JSONObject report=null;String error=null;
-            try{report=getBybitReportWithRefresh();}catch(Exception e){error=e.getMessage();}
+            try{report=getBybitReportWithRefresh(expectedId);}catch(Exception e){error=e.getMessage();}
             final JSONObject result=report;final String problem=error;
             runOnUiThread(()->{
-                if(isFinishing())return;                if(serverRefreshButton!=null)serverRefreshButton.setEnabled(true);
-                serverReportText.setText(result==null?"Отчёт недоступен: "+problem:formatServerReport(result));
+                serverReportLoading=false;
+                if(isFinishing())return;
+                if(serverRefreshButton!=null)serverRefreshButton.setEnabled(true);
+                if(generation!=serverReportGeneration){refreshServerReport();return;}
+                if(result==null){serverReportText.setText("Актуальный отчёт недоступен: "+problem);return;}
+                JSONObject reported=result.optJSONObject("run");
+                if(!expectedId.isEmpty()&&(reported==null||!expectedId.equals(reported.optString("id","")))){
+                    serverReportText.setText("Ожидаем отчёт именно нового теста: "+expectedId);return;
+                }
+                expectedBybitRunId="";
+                String state=reported==null?"":reported.optString("status","");
+                if(startDemoRunButton!=null)startDemoRunButton.setEnabled(!"RUNNING".equals(state)&&!"READY".equals(state)&&!"STOPPING".equals(state));
+                serverReportText.setText(formatServerReport(result));
             });
         });
     }
@@ -633,6 +673,9 @@ public class BybitTerminalActivity extends Activity {
         JSONObject run=report.optJSONObject("run");
         if(run==null){b.append("\n\n48-ЧАСОВЫЙ ТЕСТ ЕЩЁ НЕ ЗАПУСКАЛСЯ.");return b.toString();}
         b.append("\n\nСТАТУС: ").append(run.optString("status","—"));
+        b.append("\nRun ID: ").append(run.optString("id","—"));
+        b.append("\nОтчёт получен: ").append(new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z",Locale.US).format(new java.util.Date()));
+        if("STOPPING".equals(run.optString("status")))b.append("\nПредыдущий тест ещё завершает работу. Это не новый запуск.");
         b.append("\nИнструменты: ").append(run.optString("symbols","—"));
         b.append("\nСтарт: ").append(run.optString("started_at","—"));
         b.append("\nПлановое завершение: ").append(run.optString("ends_at","—"));

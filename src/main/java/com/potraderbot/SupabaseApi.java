@@ -16,6 +16,8 @@ public final class SupabaseApi {
     private static Object request(String method, String path, JSONObject body, String accessToken) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(BuildConfig.SUPABASE_URL + path).openConnection();
         c.setRequestMethod(method);
+        c.setUseCaches(false);
+        c.setRequestProperty("Cache-Control", "no-cache, no-store");
         c.setConnectTimeout(12000);
         c.setReadTimeout(15000);
         c.setRequestProperty("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY);
@@ -145,8 +147,12 @@ public final class SupabaseApi {
     }
 
     public static JSONObject getBybitDemoReport(String token) throws Exception {
+        return getBybitDemoReport(token, "");
+    }
+
+    public static JSONObject getBybitDemoReport(String token, String runId) throws Exception {
         JSONObject b = new JSONObject();
-        b.put("p_run_id", JSONObject.NULL);
+        b.put("p_run_id", runId == null || runId.isEmpty() ? JSONObject.NULL : java.util.UUID.fromString(runId).toString());
         return (JSONObject) request("POST", "/rest/v1/rpc/bybit_demo_get_report", b, token);
     }
     public static JSONObject startMultiMarketPaperRun(String token) throws Exception {
@@ -165,8 +171,13 @@ public final class SupabaseApi {
     }
 
     public static JSONObject getMultiMarketPaperReport(String token) throws Exception {
+        return getMultiMarketPaperReport(token, "");
+    }
+
+    public static JSONObject getMultiMarketPaperReport(String token, String runId) throws Exception {
+        String runFilter = runId == null || runId.isEmpty() ? "" : "&id=eq." + java.util.UUID.fromString(runId).toString();
         JSONArray runs = (JSONArray) request("GET",
-            "/rest/v1/paper_runs?select=id,status,market_categories,starting_balance_usdt,cash_usdt,realized_pnl_usdt,max_drawdown_pct,last_cycle_at,last_error,started_at,stopped_at&order=created_at.desc&limit=1",
+            "/rest/v1/paper_runs?select=id,status,market_categories,starting_balance_usdt,cash_usdt,realized_pnl_usdt,max_drawdown_pct,last_cycle_at,last_error,started_at,stopped_at&order=created_at.desc,id.desc&limit=1" + runFilter,
             null, token);
         JSONObject report = new JSONObject();
         if (runs.length() == 0) { report.put("has_run", false); return report; }
@@ -175,23 +186,27 @@ public final class SupabaseApi {
         JSONArray positions = (JSONArray) request("GET",
             "/rest/v1/paper_positions?select=market_category,symbol,side,qty,entry_price,mark_price,unrealized_pnl_usdt,signal_score,opened_at&run_id=eq."
                 + java.net.URLEncoder.encode(id, "UTF-8") + "&status=eq.OPEN&order=opened_at.desc&limit=30", null, token);
-        JSONArray allTrades = (JSONArray) request("GET",
-            "/rest/v1/paper_trades?select=market_category,symbol,side,entry_price,exit_price,gross_pnl_usdt,fees_usdt,net_pnl_usdt,exit_reason,closed_at&run_id=eq."
-                + java.net.URLEncoder.encode(id, "UTF-8") + "&order=closed_at.desc&limit=1000", null, token);
-        int wins=0, losses=0;
-        double netPnl=0, fees=0;
-        JSONArray trades = new JSONArray();
-        for(int i=0;i<allTrades.length();i++){
-            JSONObject trade=allTrades.optJSONObject(i); if(trade==null)continue;
-            double net=trade.optDouble("net_pnl_usdt",0);
-            netPnl+=net; fees+=trade.optDouble("fees_usdt",0);
-            if(net>0)wins++; else if(net<0)losses++;
-            if(i<20)trades.put(trade);
+        String tradePath = "/rest/v1/paper_trades?select=id,market_category,symbol,side,entry_price,exit_price,gross_pnl_usdt,fees_usdt,net_pnl_usdt,exit_reason,closed_at&run_id=eq." + java.net.URLEncoder.encode(id, "UTF-8");
+        // Keyset pagination avoids silently capping totals at the first 1000 rows.
+        PaperReportStats stats = new PaperReportStats();
+        String cursor = "";
+        while (true) {
+            JSONArray page = (JSONArray) request("GET", tradePath + "&order=id.asc&limit=200"
+                    + (cursor.isEmpty() ? "" : "&id=gt." + cursor), null, token);
+            if (page.length()==0) break;
+            for (int i=0;i<page.length();i++) stats.add(page.getJSONObject(i));
+            String next = java.util.UUID.fromString(page.getJSONObject(page.length()-1).getString("id")).toString();
+            if (next.equals(cursor)) throw new Exception("Сервер повторил страницу сделок");
+            cursor=next;
         }
-        JSONObject summary=new JSONObject();
-        summary.put("trades_total",allTrades.length()); summary.put("wins",wins); summary.put("losses",losses);
-        summary.put("win_rate_pct",allTrades.length()==0?0:Math.round(wins*10000.0/allTrades.length())/100.0);
-        summary.put("net_pnl_usdt",netPnl); summary.put("fees_usdt",fees);
+        JSONArray trades = (JSONArray) request("GET", tradePath + "&order=closed_at.desc,id.desc&limit=20", null, token);
+        JSONObject summary=stats.toJson();
+        // During a server update multiple REST requests may observe different commits.
+        // Do not present a mixed snapshot as confirmed statistics.
+        java.math.BigDecimal ledger = new java.math.BigDecimal(summary.getString("net_pnl_usdt"));
+        java.math.BigDecimal recorded = new java.math.BigDecimal(run.getString("realized_pnl_usdt"));
+        if (ledger.subtract(recorded).abs().compareTo(new java.math.BigDecimal("0.000001")) > 0)
+            throw new Exception("Сервер обновляет сделки или итог P/L расходится с журналом. Повторите обновление.");
         JSONArray events = (JSONArray) request("GET",
             "/rest/v1/paper_events?select=event_type,message,created_at&run_id=eq."
                 + java.net.URLEncoder.encode(id, "UTF-8") + "&order=created_at.desc&limit=8", null, token);
