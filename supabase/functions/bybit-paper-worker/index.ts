@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {structureRoom} from "./market_structure.ts";
 import {marketRegime} from "./research_strategy.ts";
 import {rotatingWatchlist,rankQuality} from "./scan_selection.ts";
+import {expiredRun} from "./run_duration.ts";
 import {assessEntry, ScanDiagnostics, rejectionKind, failedSignalChecks, paperPositionSize, PAPER_MIN_NOTIONAL_PCT, PAPER_MAX_NOTIONAL_PCT, PAPER_DEFAULT_NOTIONAL_PCT} from "./entry_quality.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -11,7 +12,7 @@ const ALLOWED = ["spot","linear","inverse","option","stock","ETF","forex","commo
 type Run = {
  id:string; user_id:string; status:string; market_categories:string[]; starting_balance_usdt:number; started_at?:string;
  cash_usdt:number; realized_pnl_usdt:number; max_daily_loss_usdt:number; max_positions:number; peak_equity_usdt:number; max_drawdown_pct:number;
- lease_token?:string|null; lease_until?:string|null; last_error?:string|null;
+ lease_token?:string|null; lease_until?:string|null; last_error?:string|null; duration_minutes?:number;
 };
 type Position = {
  id:string; run_id:string; user_id:string; market_category:string; symbol:string; side:string; qty:number;
@@ -205,15 +206,18 @@ async function candidates(run:Run,diagnostics:ScanDiagnostics):Promise<Candidate
  if(cats.includes("option"))diagnostics.add("option","MANUAL_ONLY");
  return rankQuality(out);
 }
+function testExpired(run:Run){
+ return expiredRun(run.started_at,run.duration_minutes,Date.now());
+}
 async function processRun(run:Run){
  const lease=crypto.randomUUID();const claimed=await rpc<boolean>("paper_worker_claim_run",{p_run_id:run.id,p_lease_token:lease});
  if(!claimed)return {run_id:run.id,status:"SKIPPED_LOCKED"};
  let error:string|null=null;
  try{
-  if(run.status==="RUNNING"&&run.started_at&&Date.now()-Date.parse(run.started_at)>=48*60*60*1000){
+  if(run.status==="RUNNING"&&testExpired(run)){
    run.status="STOPPING";
-   await db(`paper_runs?id=eq.${run.id}`,"PATCH",{status:"STOPPING",stopped_at:new Date().toISOString(),last_error:"TEST_COMPLETE: завершён 48-часовой тест."});
-   await log(run,"INFO","PAPER_TEST_48H_COMPLETE","48-часовой тест завершён. Новые входы запрещены; открытые позиции закрываются.");
+   await db(`paper_runs?id=eq.${run.id}`,"PATCH",{status:"STOPPING",stopped_at:new Date().toISOString(),last_error:"TEST_COMPLETE: истекла заданная длительность виртуального теста."});
+   await log(run,"INFO","PAPER_TEST_DURATION_COMPLETE","Время теста истекло. Новые входы запрещены; открытые позиции закрываются.",{duration_minutes:run.duration_minutes??2880});
   }
   const positions=(await db(`paper_positions?run_id=eq.${run.id}&status=eq.OPEN&select=*`)) as Position[];
   const quoteCache=new Map<string,number>();
@@ -261,7 +265,7 @@ async function processRun(run:Run){
   }
   const room=Math.max(0,current.max_positions-stillOpen.length);
   let opened=0;
-  if(room>0&&current.status==="RUNNING"){
+  if(room>0&&current.status==="RUNNING"&&!testExpired(current)){
    const diagnostics=new ScanDiagnostics();
    const picks=await candidates(current,diagnostics);
    await log(run,"INFO","PAPER_SCAN_CYCLE","Мультисканер завершил цикл анализа.",{candidates:picks.slice(0,30).map(x=>({category:x.category,symbol:x.symbol,side:x.side,score:x.score,price:x.price,turnover:x.turnover})),open_positions:stillOpen.length,available_slots:room});
@@ -277,7 +281,7 @@ async function processRun(run:Run){
      {cooldown_minutes:45,recent_stop_losses:recentStops.length});
    }
    for(const c of picks){
-    if(opened>=Math.min(room,1))break;
+    if(opened>=Math.min(room,1)||testExpired(current))break;
     if(recentStops.length>0)break;
     if(blockedAssets.has(assetKey(c.symbol))){diagnostics.add(c.category,"ASSET_BLOCKED");continue;}
     if(cryptoCategories.has(c.category)&&cryptoExposureOpen){diagnostics.add(c.category,"CRYPTO_EXPOSURE");continue;}
@@ -296,6 +300,7 @@ async function processRun(run:Run){
     const qty=c.category==="option"?1:notional/price;
     const entryFee=qty*price*0.0006;
     try{
+     if(testExpired(current))break;
      await rpc("paper_worker_open_position",{p_run_id:run.id,p_symbol:c.symbol,p_market_category:c.category,p_side:c.side,p_qty:qty,p_price:price,p_stop:stop,p_target:target,p_score:c.score,p_reason:c.reason,p_fee:entryFee});
      opened++;blockedAssets.add(assetKey(c.symbol));diagnostics.add(c.category,"OPENED");
      await log(run,"INFO","PAPER_POSITION_OPENED",`Открыта виртуальная ${c.side} позиция ${c.symbol}.`,{category:c.category,price,qty,score:c.score,stop,target,notional_usdt:qty*price,notional_pct_equity:100*notional/equity});
