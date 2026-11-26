@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {structureRoom} from "./market_structure.ts";
 import {marketRegime} from "./research_strategy.ts";
+import {rotatingWatchlist,rankQuality} from "./scan_selection.ts";
 import {assessEntry, ScanDiagnostics, rejectionKind, failedSignalChecks, paperPositionSize, PAPER_MIN_NOTIONAL_PCT, PAPER_MAX_NOTIONAL_PCT, PAPER_DEFAULT_NOTIONAL_PCT} from "./entry_quality.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -20,7 +21,7 @@ type Position = {
 type Ticker = { symbol:string; lastPrice?:string; bid1Price?:string; ask1Price?:string; turnover24h?:string;
  markPrice?:string; delta?:string; gamma?:string; vega?:string; theta?:string; markIv?:string; }
 type Candidate = { category:string; symbol:string; price:number; bid:number; ask:number; turnover:number; score:number;
- side:"LONG"|"SHORT"|"CALL"|"PUT"; reason:string; expiry?:number; stopPct?:number; targetPct?:number; };
+ side:"LONG"|"SHORT"|"CALL"|"PUT"; reason:string; expiry?:number; stopPct?:number; targetPct?:number; structureStatus?:string; };
 
 function response(data:unknown,status=200){return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json","cache-control":"no-store"}});}
 async function rpc<T>(name:string,args:Record<string,unknown>={}):Promise<T>{
@@ -168,19 +169,19 @@ async function tickers(category:string):Promise<Ticker[]>{
  const r=await bybit("/v5/market/tickers",{category});return (r.list??[]) as Ticker[];
 }
 async function candidates(run:Run,diagnostics:ScanDiagnostics):Promise<Candidate[]>{
- const out:Candidate[]=[];const cats=run.market_categories.filter(x=>ALLOWED.includes(x));
+ const out:Candidate[]=[];const cats=run.market_categories.filter(x=>ALLOWED.includes(x));const scanTime=Date.now();
  for(const category of ["spot","linear","inverse"]){
   if(!cats.includes(category))continue;
   try{
    const all=await tickers(category);
    const filtered=all.filter(t=>(category==="spot"?t.symbol.endsWith("USDT"):category==="linear"?t.symbol.endsWith("USDT"):t.symbol.endsWith("USD"))&&!(category==="spot"&&/^(USDC|USDE|FDUSD|TUSD|DAI|USDP)USDT$/.test(t.symbol)));
-   const top=filtered.sort((a,b)=>num(b.turnover24h)-num(a.turnover24h)).slice(0,category==="spot"?3:2);
+   const top=rotatingWatchlist(filtered,{budget:category==="spot"?3:2,poolSize:category==="spot"?15:12,now:scanTime});
    diagnostics.add(category,"SELECTED_FOR_SCAN",top.length);
    for(const t of top){try{const s=await signal(category,t.symbol);diagnostics.add(category,"SHADOW_REGIME_"+s.regime.regime);diagnostics.add(category,"SHADOW_REVERSAL_"+s.regime.reversal);if(s.direction==="NEUTRAL"){diagnostics.add(category,"NEUTRAL");for(const reason of s.signalFailures)diagnostics.add(category,"CHECK_"+reason);continue;}
     if(category==="spot"&&s.direction!=="UP"){diagnostics.add(category,"SPOT_NO_SHORT");continue;}
     diagnostics.add(category,"SIGNAL");
     if(s.structure)diagnostics.add(category,"SHADOW_STRUCTURE_"+s.structure.status);
-    out.push({category,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:s.reason,stopPct:s.stopPct,targetPct:s.targetPct});
+    out.push({category,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:s.reason,stopPct:s.stopPct,targetPct:s.targetPct,structureStatus:s.structure?.status});
    }catch(e){diagnostics.add(category,rejectionKind(e));}}
   }catch(_){diagnostics.add(category,"CATEGORY_DATA_ERROR");}
  }
@@ -189,20 +190,20 @@ async function candidates(run:Run,diagnostics:ScanDiagnostics):Promise<Candidate
   try{
    const catalog=await bybit("/v5/market/instrument-summary",{category:"linear",symbolType:type,limit:"1000"});
    const list=(catalog.list??[]) as Array<{symbol:string;status?:string;deliveryTime?:string}>;
-   const active=list.filter(x=>x.symbol&&(!x.status||x.status==="Trading")).slice(0,8);
+   const active=list.filter(x=>x.symbol&&(!x.status||x.status==="Trading"));
    const linear=await tickers("linear");const map=new Map(linear.map(x=>[x.symbol,x]));
-   const top=active.map(x=>map.get(x.symbol)).filter((x):x is Ticker=>!!x).sort((a,b)=>num(b.turnover24h)-num(a.turnover24h)).slice(0,2);
+   const top=rotatingWatchlist(active.map(x=>map.get(x.symbol)).filter((x):x is Ticker=>!!x),{budget:2,poolSize:12,now:scanTime});
    diagnostics.add(type,"SELECTED_FOR_SCAN",top.length);
    for(const t of top){try{const s=await signal("linear",t.symbol);diagnostics.add(type,"SHADOW_REGIME_"+s.regime.regime);diagnostics.add(type,"SHADOW_REVERSAL_"+s.regime.reversal);if(s.direction==="NEUTRAL"){diagnostics.add(type,"NEUTRAL");for(const reason of s.signalFailures)diagnostics.add(type,"CHECK_"+reason);continue;}
     diagnostics.add(type,"SIGNAL");
     if(s.structure)diagnostics.add(type,"SHADOW_STRUCTURE_"+s.structure.status);
-    out.push({category:type,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:`TradFi ${type}: ${s.reason}`,stopPct:s.stopPct,targetPct:s.targetPct});
+    out.push({category:type,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:`TradFi ${type}: ${s.reason}`,stopPct:s.stopPct,targetPct:s.targetPct,structureStatus:s.structure?.status});
    }catch(e){diagnostics.add(type,rejectionKind(e));}}
   }catch(_){diagnostics.add(type,"CATEGORY_DATA_ERROR");}
  }
  // Options remain catalogued for manual analysis only: auto-paper is disabled until expiry settlement and Greeks-based exits are implemented.
  if(cats.includes("option"))diagnostics.add("option","MANUAL_ONLY");
- return out.sort((a,b)=>Math.abs(b.score)-Math.abs(a.score));
+ return rankQuality(out);
 }
 async function processRun(run:Run){
  const lease=crypto.randomUUID();const claimed=await rpc<boolean>("paper_worker_claim_run",{p_run_id:run.id,p_lease_token:lease});
@@ -302,7 +303,8 @@ async function processRun(run:Run){
    }
    await log(run,"INFO","PAPER_SCAN_DIAGNOSTICS","Причины отбора и отказа от виртуальных входов.",{
      categories:diagnostics.counts,global_cooldown:recentStops.length>0,entry_limit_per_cycle:Math.min(room,1),opened,
-     note:"CHECK_* counters overlap; each neutral symbol may fail multiple predicates. SHADOW_STRUCTURE_* is diagnostic only; it does not reject trades.",
+     note:"CHECK_* counters overlap; each neutral symbol may fail multiple predicates. Structure influences candidate ordering only, not eligibility.",
+     watchlist:{spot_pool_max:15,other_pool_max:12,rotation_minutes:5,spot_budget:3,other_budget:2},
      cost_model:{fee_per_side:0.0006,exit_slippage_bps:2,min_net_reward_risk:1.5},
      sizing:{min_notional_pct:PAPER_MIN_NOTIONAL_PCT,max_notional_pct:PAPER_MAX_NOTIONAL_PCT,default_notional_pct:PAPER_DEFAULT_NOTIONAL_PCT}
    });
