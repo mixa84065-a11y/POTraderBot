@@ -1,4 +1,4 @@
-import {assessEntry,ScanDiagnostics,rejectionKind} from "./entry_quality.ts";
+import {assessEntry,ScanDiagnostics,rejectionKind,failedSignalChecks} from "./entry_quality.ts";
 const base={side:"LONG" as const,entry:100,bid:99.95,ask:100,stop:99,target:102.5,feeRate:0.0006,exitSlippageBps:2,minNetRewardRisk:1.5};
 function assert(v:unknown){if(!v)throw new Error("Assertion failed");}
 Deno.test("net long target and stop include both fees without double spread",()=>{
@@ -25,4 +25,14 @@ Deno.test("diagnostic categories are independent",()=>{
  assert(rejectionKind(new Error("5m история устарела"))==="STALE_HISTORY");
  assert(rejectionKind(new Error("Цена/спред не проходят фильтр"))==="INVALID_QUOTE_OR_SPREAD");
  assert(rejectionKind(new Error("network"))==="DATA_OR_API_ERROR");
+});
+
+Deno.test("neutral signal diagnostics report all failed checks independently",()=>{
+ const reasons=failedSignalChecks({trend_agreement:false,rsi:true,momentum:false,relative_volume:false});
+ assert(reasons.join(",")==="TREND_AGREEMENT,MOMENTUM,RELATIVE_VOLUME");
+ assert(failedSignalChecks({trend_agreement:true,rsi:true}).length===0);
+ const d=new ScanDiagnostics();
+ d.add("spot","NEUTRAL");
+ for(const reason of reasons)d.add("spot","CHECK_"+reason);
+ assert(d.counts.spot.NEUTRAL===1&&d.counts.spot.CHECK_MOMENTUM===1&&d.counts.spot.CHECK_RSI===undefined);
 });

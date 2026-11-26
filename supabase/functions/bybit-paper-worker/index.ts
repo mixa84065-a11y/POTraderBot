@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import {assessEntry, ScanDiagnostics, rejectionKind} from "./entry_quality.ts";
+import {assessEntry, ScanDiagnostics, rejectionKind, failedSignalChecks} from "./entry_quality.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -8,7 +8,7 @@ const ALLOWED = ["spot","linear","inverse","option","stock","ETF","forex","commo
 type Run = {
  id:string; user_id:string; status:string; market_categories:string[]; starting_balance_usdt:number; started_at?:string;
  cash_usdt:number; realized_pnl_usdt:number; max_daily_loss_usdt:number; max_positions:number; peak_equity_usdt:number; max_drawdown_pct:number;
- lease_token?:string|null; lease_until?:string|null;
+ lease_token?:string|null; lease_until?:string|null; last_error?:string|null;
 };
 type Position = {
  id:string; run_id:string; user_id:string; market_category:string; symbol:string; side:string; qty:number;
@@ -140,9 +140,20 @@ async function signal(category:string,symbol:string){
  const shortOk=trend5==="DOWN"&&trend15==="DOWN"&&trend1h==="DOWN"&&strength>=35&&strength<=48&&momentum<=-0.08&&bearish&&price<=fast&&macdDown&&adxOk&&volumeOk&&vwapDown;
  const score=(trend5===trend15?1:0)+(trend15===trend1h?1:0)+(bullish||bearish?1:0)+((strength>=52&&strength<=65)||(strength>=35&&strength<=48)?1:0)+(Math.abs(momentum)>=0.08?1:0)+(distance<=1.25?1:0)+(macdUp||macdDown?1:0)+(adxOk?1:0)+(volumeOk?1:0)+((vwapUp||vwapDown)?1:0);
  const direction=longOk?"UP":shortOk?"DOWN":"NEUTRAL";
+ // Report the individual failed predicates for the direction matching M5.
+ // These counters are diagnostic only: several checks may fail on one symbol.
+ const signalFailures=failedSignalChecks({
+  trend_agreement:trend5===trend15&&trend15===trend1h,
+  rsi:trend5==="UP"?strength>=52&&strength<=65:strength>=35&&strength<=48,
+  momentum:trend5==="UP"?momentum>=0.08:momentum<=-0.08,
+  candle_confirmation:trend5==="UP"?bullish:bearish,
+  ema_price:trend5==="UP"?price>=fast:price<=fast,
+  macd:trend5==="UP"?macdUp:macdDown,
+  adx:adxOk,relative_volume:volumeOk,vwap:trend5==="UP"?vwapUp:vwapDown
+ });
  const stopPct=Math.max(0.006,Math.min(0.012,(volatility/price)*1.5));
  const targetPct=stopPct*2.2;
- return {t,price,bid,ask,score,direction,stopPct,targetPct,
+ return {t,price,bid,ask,score,direction,stopPct,targetPct,signalFailures,
   reason:`EMA 5m/15m/1h: ${trend5}/${trend15}/${trend1h}; RSI ${strength.toFixed(1)}; MACD ${macd.toPrecision(4)}; ADX ${trendStrength.toFixed(1)}; объём ${volRatio.toFixed(2)}x; VWAP ${vwapUp?"выше":vwapDown?"ниже":"нет данных"}; импульс ${momentum.toFixed(3)}%; ATR-дистанция ${distance.toFixed(2)}`};
 }
 async function tickers(category:string):Promise<Ticker[]>{
@@ -157,7 +168,7 @@ async function candidates(run:Run,diagnostics:ScanDiagnostics):Promise<Candidate
    const filtered=all.filter(t=>(category==="spot"?t.symbol.endsWith("USDT"):category==="linear"?t.symbol.endsWith("USDT"):t.symbol.endsWith("USD"))&&!(category==="spot"&&/^(USDC|USDE|FDUSD|TUSD|DAI|USDP)USDT$/.test(t.symbol)));
    const top=filtered.sort((a,b)=>num(b.turnover24h)-num(a.turnover24h)).slice(0,category==="spot"?3:2);
    diagnostics.add(category,"SELECTED_FOR_SCAN",top.length);
-   for(const t of top){try{const s=await signal(category,t.symbol);if(s.direction==="NEUTRAL"){diagnostics.add(category,"NEUTRAL");continue;}
+   for(const t of top){try{const s=await signal(category,t.symbol);if(s.direction==="NEUTRAL"){diagnostics.add(category,"NEUTRAL");for(const reason of s.signalFailures)diagnostics.add(category,"CHECK_"+reason);continue;}
     if(category==="spot"&&s.direction!=="UP"){diagnostics.add(category,"SPOT_NO_SHORT");continue;}
     diagnostics.add(category,"SIGNAL");
     out.push({category,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:s.reason,stopPct:s.stopPct,targetPct:s.targetPct});
@@ -173,7 +184,7 @@ async function candidates(run:Run,diagnostics:ScanDiagnostics):Promise<Candidate
    const linear=await tickers("linear");const map=new Map(linear.map(x=>[x.symbol,x]));
    const top=active.map(x=>map.get(x.symbol)).filter((x):x is Ticker=>!!x).sort((a,b)=>num(b.turnover24h)-num(a.turnover24h)).slice(0,2);
    diagnostics.add(type,"SELECTED_FOR_SCAN",top.length);
-   for(const t of top){try{const s=await signal("linear",t.symbol);if(s.direction==="NEUTRAL"){diagnostics.add(type,"NEUTRAL");continue;}
+   for(const t of top){try{const s=await signal("linear",t.symbol);if(s.direction==="NEUTRAL"){diagnostics.add(type,"NEUTRAL");for(const reason of s.signalFailures)diagnostics.add(type,"CHECK_"+reason);continue;}
     diagnostics.add(type,"SIGNAL");
     out.push({category:type,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:`TradFi ${type}: ${s.reason}`,stopPct:s.stopPct,targetPct:s.targetPct});
    }catch(e){diagnostics.add(type,rejectionKind(e));}}
@@ -280,6 +291,7 @@ async function processRun(run:Run){
    }
    await log(run,"INFO","PAPER_SCAN_DIAGNOSTICS","Причины отбора и отказа от виртуальных входов.",{
      categories:diagnostics.counts,global_cooldown:recentStops.length>0,entry_limit_per_cycle:Math.min(room,1),opened,
+     note:"CHECK_* counters overlap; each neutral symbol may fail multiple predicates.",
      cost_model:{fee_per_side:0.0006,exit_slippage_bps:2,min_net_reward_risk:1.5}
    });
   }

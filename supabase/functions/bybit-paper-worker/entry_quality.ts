@@ -39,3 +39,8 @@ export class ScanDiagnostics {
   group[reason]=(group[reason]??0)+n;
  }
 }
+
+/** Returns only failed predicates, without modifying the signal decision. */
+export function failedSignalChecks(checks:Readonly<Record<string,boolean>>):string[]{
+ return Object.keys(checks).filter(key=>checks[key]===false).map(key=>key.toUpperCase());
+}
