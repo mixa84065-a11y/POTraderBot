@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import {assessEntry, ScanDiagnostics, rejectionKind} from "./entry_quality.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -147,7 +148,7 @@ async function signal(category:string,symbol:string){
 async function tickers(category:string):Promise<Ticker[]>{
  const r=await bybit("/v5/market/tickers",{category});return (r.list??[]) as Ticker[];
 }
-async function candidates(run:Run):Promise<Candidate[]>{
+async function candidates(run:Run,diagnostics:ScanDiagnostics):Promise<Candidate[]>{
  const out:Candidate[]=[];const cats=run.market_categories.filter(x=>ALLOWED.includes(x));
  for(const category of ["spot","linear","inverse"]){
   if(!cats.includes(category))continue;
@@ -155,10 +156,13 @@ async function candidates(run:Run):Promise<Candidate[]>{
    const all=await tickers(category);
    const filtered=all.filter(t=>(category==="spot"?t.symbol.endsWith("USDT"):category==="linear"?t.symbol.endsWith("USDT"):t.symbol.endsWith("USD"))&&!(category==="spot"&&/^(USDC|USDE|FDUSD|TUSD|DAI|USDP)USDT$/.test(t.symbol)));
    const top=filtered.sort((a,b)=>num(b.turnover24h)-num(a.turnover24h)).slice(0,category==="spot"?3:2);
-   for(const t of top){try{const s=await signal(category,t.symbol);if(s.direction==="NEUTRAL"||(category==="spot"&&s.direction!=="UP"))continue;
+   diagnostics.add(category,"SELECTED_FOR_SCAN",top.length);
+   for(const t of top){try{const s=await signal(category,t.symbol);if(s.direction==="NEUTRAL"){diagnostics.add(category,"NEUTRAL");continue;}
+    if(category==="spot"&&s.direction!=="UP"){diagnostics.add(category,"SPOT_NO_SHORT");continue;}
+    diagnostics.add(category,"SIGNAL");
     out.push({category,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:s.reason,stopPct:s.stopPct,targetPct:s.targetPct});
-   }catch(_){/* Fail closed per symbol. */}}
-  }catch(_){/* Category can be temporarily unavailable. */}
+   }catch(e){diagnostics.add(category,rejectionKind(e));}}
+  }catch(_){diagnostics.add(category,"CATEGORY_DATA_ERROR");}
  }
  for(const type of ["stock","ETF","forex","commodity"]){
   if(!cats.includes(type))continue;
@@ -168,12 +172,15 @@ async function candidates(run:Run):Promise<Candidate[]>{
    const active=list.filter(x=>x.symbol&&(!x.status||x.status==="Trading")).slice(0,8);
    const linear=await tickers("linear");const map=new Map(linear.map(x=>[x.symbol,x]));
    const top=active.map(x=>map.get(x.symbol)).filter((x):x is Ticker=>!!x).sort((a,b)=>num(b.turnover24h)-num(a.turnover24h)).slice(0,2);
-   for(const t of top){try{const s=await signal("linear",t.symbol);if(s.direction==="NEUTRAL")continue;
+   diagnostics.add(type,"SELECTED_FOR_SCAN",top.length);
+   for(const t of top){try{const s=await signal("linear",t.symbol);if(s.direction==="NEUTRAL"){diagnostics.add(type,"NEUTRAL");continue;}
+    diagnostics.add(type,"SIGNAL");
     out.push({category:type,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:`TradFi ${type}: ${s.reason}`,stopPct:s.stopPct,targetPct:s.targetPct});
-   }catch(_){/* Market closed, stale or illiquid. */}}
-  }catch(_){/* Missing category data is not traded. */}
+   }catch(e){diagnostics.add(type,rejectionKind(e));}}
+  }catch(_){diagnostics.add(type,"CATEGORY_DATA_ERROR");}
  }
  // Options remain catalogued for manual analysis only: auto-paper is disabled until expiry settlement and Greeks-based exits are implemented.
+ if(cats.includes("option"))diagnostics.add("option","MANUAL_ONLY");
  return out.sort((a,b)=>Math.abs(b.score)-Math.abs(a.score));
 }
 async function processRun(run:Run){
@@ -233,7 +240,8 @@ async function processRun(run:Run){
   const room=Math.max(0,current.max_positions-stillOpen.length);
   let opened=0;
   if(room>0&&current.status==="RUNNING"){
-   const picks=await candidates(current);
+   const diagnostics=new ScanDiagnostics();
+   const picks=await candidates(current,diagnostics);
    await log(run,"INFO","PAPER_SCAN_CYCLE","Мультисканер завершил цикл анализа.",{candidates:picks.slice(0,30).map(x=>({category:x.category,symbol:x.symbol,side:x.side,score:x.score,price:x.price,turnover:x.turnover})),open_positions:stillOpen.length,available_slots:room});
    const openAssets=((await db(`paper_positions?run_id=eq.${run.id}&status=eq.OPEN&select=symbol`)) as Array<{symbol:string}>).map(x=>assetKey(x.symbol));
    const cooldownSince=new Date(Date.now()-45*60*1000).toISOString();
@@ -249,22 +257,31 @@ async function processRun(run:Run){
    for(const c of picks){
     if(opened>=Math.min(room,1))break;
     if(recentStops.length>0)break;
-    if(blockedAssets.has(assetKey(c.symbol)))continue;
-    if(cryptoCategories.has(c.category)&&cryptoExposureOpen)continue;
-    const spread=(c.ask-c.bid)/c.price*100;if(!Number.isFinite(spread)||spread>0.08)continue;
+    if(blockedAssets.has(assetKey(c.symbol))){diagnostics.add(c.category,"ASSET_BLOCKED");continue;}
+    if(cryptoCategories.has(c.category)&&cryptoExposureOpen){diagnostics.add(c.category,"CRYPTO_EXPOSURE");continue;}
+    const spread=(c.ask-c.bid)/c.price*100;if(!Number.isFinite(spread)||spread>0.08){diagnostics.add(c.category,"SPREAD");continue;}
     const price=c.price;const stopPct=c.stopPct??0.008;const targetPct=c.targetPct??(stopPct*2.2);
     const stop=c.side==="SHORT"?price*(1+stopPct):price*(1-stopPct);
     const target=c.side==="SHORT"?price*(1-targetPct):price*(1+targetPct);
+    if(c.side!=="LONG"&&c.side!=="SHORT"){diagnostics.add(c.category,"UNSUPPORTED_SIDE");continue;}
+    // Experimental thresholds fixed before evaluation; no claim of calibrated expected return.
+    const quality=assessEntry({side:c.side,entry:price,bid:c.bid,ask:c.ask,stop,target,
+      feeRate:0.0006,exitSlippageBps:2,minNetRewardRisk:1.5});
+    if(!quality.ok){diagnostics.add(c.category,quality.reason);continue;}
     const notional=Math.min(100,equity*0.02);
     if(c.category==="option"&&price>notional)continue;
     const qty=c.category==="option"?1:notional/price;
     const entryFee=qty*price*0.0006;
     try{
      await rpc("paper_worker_open_position",{p_run_id:run.id,p_symbol:c.symbol,p_market_category:c.category,p_side:c.side,p_qty:qty,p_price:price,p_stop:stop,p_target:target,p_score:c.score,p_reason:c.reason,p_fee:entryFee});
-     opened++;blockedAssets.add(assetKey(c.symbol));
+     opened++;blockedAssets.add(assetKey(c.symbol));diagnostics.add(c.category,"OPENED");
      await log(run,"INFO","PAPER_POSITION_OPENED",`Открыта виртуальная ${c.side} позиция ${c.symbol}.`,{category:c.category,price,qty,score:c.score,stop,target,notional_usdt:qty*price});
-    }catch(e){await log(run,"WARN","PAPER_ENTRY_SKIPPED",String(e),{category:c.category,symbol:c.symbol,score:c.score});}
+    }catch(e){diagnostics.add(c.category,"ORDER_RPC_REJECTED");await log(run,"WARN","PAPER_ENTRY_SKIPPED",String(e),{category:c.category,symbol:c.symbol,score:c.score});}
    }
+   await log(run,"INFO","PAPER_SCAN_DIAGNOSTICS","Причины отбора и отказа от виртуальных входов.",{
+     categories:diagnostics.counts,global_cooldown:recentStops.length>0,entry_limit_per_cycle:Math.min(room,1),opened,
+     cost_model:{fee_per_side:0.0006,exit_slippage_bps:2,min_net_reward_risk:1.5}
+   });
   }
   await db(`paper_runs?id=eq.${run.id}`,"PATCH",{last_cycle_at:new Date().toISOString(),...(current.status==="RUNNING"?{last_error:null}:{})});
   return {run_id:run.id,status:"OK",open_positions:stillOpen.length,opened};
