@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {structureRoom} from "./market_structure.ts";
+import {marketRegime} from "./research_strategy.ts";
 import {assessEntry, ScanDiagnostics, rejectionKind, failedSignalChecks, paperPositionSize, PAPER_MIN_NOTIONAL_PCT, PAPER_MAX_NOTIONAL_PCT, PAPER_DEFAULT_NOTIONAL_PCT} from "./entry_quality.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -159,7 +160,8 @@ async function signal(category:string,symbol:string){
   bars:bars.map(x=>({time:x[0],high:x[2],low:x[3],close:x[4]})),intervalMs:300000,asOf:now,
   entry,target:entry*(direction==="UP"?1+targetPct:1-targetPct),atr:volatility,side:direction==="UP"?"LONG":"SHORT"
  });
- return {t,price,bid,ask,score,direction,stopPct,targetPct,signalFailures,structure,
+ const regime=marketRegime(bars.map(x=>({time:x[0],open:x[1],high:x[2],low:x[3],close:x[4]})),300000,now);
+ return {t,price,bid,ask,score,direction,stopPct,targetPct,signalFailures,structure,regime,
   reason:`EMA 5m/15m/1h: ${trend5}/${trend15}/${trend1h}; RSI ${strength.toFixed(1)}; MACD ${macd.toPrecision(4)}; ADX ${trendStrength.toFixed(1)}; объём ${volRatio.toFixed(2)}x; VWAP ${vwapUp?"выше":vwapDown?"ниже":"нет данных"}; импульс ${momentum.toFixed(3)}%; ATR-дистанция ${distance.toFixed(2)}`};
 }
 async function tickers(category:string):Promise<Ticker[]>{
@@ -174,7 +176,7 @@ async function candidates(run:Run,diagnostics:ScanDiagnostics):Promise<Candidate
    const filtered=all.filter(t=>(category==="spot"?t.symbol.endsWith("USDT"):category==="linear"?t.symbol.endsWith("USDT"):t.symbol.endsWith("USD"))&&!(category==="spot"&&/^(USDC|USDE|FDUSD|TUSD|DAI|USDP)USDT$/.test(t.symbol)));
    const top=filtered.sort((a,b)=>num(b.turnover24h)-num(a.turnover24h)).slice(0,category==="spot"?3:2);
    diagnostics.add(category,"SELECTED_FOR_SCAN",top.length);
-   for(const t of top){try{const s=await signal(category,t.symbol);if(s.direction==="NEUTRAL"){diagnostics.add(category,"NEUTRAL");for(const reason of s.signalFailures)diagnostics.add(category,"CHECK_"+reason);continue;}
+   for(const t of top){try{const s=await signal(category,t.symbol);diagnostics.add(category,"SHADOW_REGIME_"+s.regime.regime);diagnostics.add(category,"SHADOW_REVERSAL_"+s.regime.reversal);if(s.direction==="NEUTRAL"){diagnostics.add(category,"NEUTRAL");for(const reason of s.signalFailures)diagnostics.add(category,"CHECK_"+reason);continue;}
     if(category==="spot"&&s.direction!=="UP"){diagnostics.add(category,"SPOT_NO_SHORT");continue;}
     diagnostics.add(category,"SIGNAL");
     if(s.structure)diagnostics.add(category,"SHADOW_STRUCTURE_"+s.structure.status);
@@ -191,7 +193,7 @@ async function candidates(run:Run,diagnostics:ScanDiagnostics):Promise<Candidate
    const linear=await tickers("linear");const map=new Map(linear.map(x=>[x.symbol,x]));
    const top=active.map(x=>map.get(x.symbol)).filter((x):x is Ticker=>!!x).sort((a,b)=>num(b.turnover24h)-num(a.turnover24h)).slice(0,2);
    diagnostics.add(type,"SELECTED_FOR_SCAN",top.length);
-   for(const t of top){try{const s=await signal("linear",t.symbol);if(s.direction==="NEUTRAL"){diagnostics.add(type,"NEUTRAL");for(const reason of s.signalFailures)diagnostics.add(type,"CHECK_"+reason);continue;}
+   for(const t of top){try{const s=await signal("linear",t.symbol);diagnostics.add(type,"SHADOW_REGIME_"+s.regime.regime);diagnostics.add(type,"SHADOW_REVERSAL_"+s.regime.reversal);if(s.direction==="NEUTRAL"){diagnostics.add(type,"NEUTRAL");for(const reason of s.signalFailures)diagnostics.add(type,"CHECK_"+reason);continue;}
     diagnostics.add(type,"SIGNAL");
     if(s.structure)diagnostics.add(type,"SHADOW_STRUCTURE_"+s.structure.status);
     out.push({category:type,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:`TradFi ${type}: ${s.reason}`,stopPct:s.stopPct,targetPct:s.targetPct});
