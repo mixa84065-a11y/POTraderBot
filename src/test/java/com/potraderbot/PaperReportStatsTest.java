@@ -26,6 +26,17 @@ public class PaperReportStatsTest {
         assertEquals("0.002002",r.getString("fees_usdt"));
         assertEquals("99.80",r.getString("win_rate_pct"));
     }
+    @Test public void separatesMarketsAndKeepsExactTotals() throws Exception {
+        PaperReportStats stats=new PaperReportStats();
+        stats.add(trade("0.067235","0.004843").put("market_category","spot"));
+        stats.add(trade("-0.032639","0.004785").put("market_category","commodity"));
+        JSONObject result=stats.toJson(), groups=result.getJSONObject("markets");
+        assertEquals("0.034596",result.getString("net_pnl_usdt"));
+        assertEquals("0.009628",result.getString("fees_usdt"));
+        assertEquals("50.00",result.getString("win_rate_pct"));
+        assertEquals(1,groups.getJSONObject("spot").getInt("wins"));
+        assertEquals(1,groups.getJSONObject("commodity").getInt("losses"));
+    }
     @Test(expected=Exception.class) public void missingPnlIsNotZero() throws Exception {
         new PaperReportStats().add(new JSONObject().put("fees_usdt","0"));
     }

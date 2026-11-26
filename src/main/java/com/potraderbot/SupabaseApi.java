@@ -177,14 +177,14 @@ public final class SupabaseApi {
     public static JSONObject getMultiMarketPaperReport(String token, String runId) throws Exception {
         String runFilter = runId == null || runId.isEmpty() ? "" : "&id=eq." + java.util.UUID.fromString(runId).toString();
         JSONArray runs = (JSONArray) request("GET",
-            "/rest/v1/paper_runs?select=id,status,market_categories,starting_balance_usdt,cash_usdt,realized_pnl_usdt,max_drawdown_pct,last_cycle_at,last_error,started_at,stopped_at&order=created_at.desc,id.desc&limit=1" + runFilter,
+            "/rest/v1/paper_runs?select=id,status,market_categories,starting_balance_usdt,cash_usdt,realized_pnl_usdt,max_drawdown_pct,max_daily_loss_usdt,last_cycle_at,last_error,started_at,stopped_at&order=created_at.desc,id.desc&limit=1" + runFilter,
             null, token);
         JSONObject report = new JSONObject();
         if (runs.length() == 0) { report.put("has_run", false); return report; }
         JSONObject run = runs.getJSONObject(0);
         String id = run.getString("id");
         JSONArray positions = (JSONArray) request("GET",
-            "/rest/v1/paper_positions?select=market_category,symbol,side,qty,entry_price,mark_price,unrealized_pnl_usdt,signal_score,opened_at&run_id=eq."
+            "/rest/v1/paper_positions?select=market_category,symbol,side,qty,entry_price,mark_price,unrealized_pnl_usdt,notional_usdt,stop_price,target_price,signal_score,opened_at&run_id=eq."
                 + java.net.URLEncoder.encode(id, "UTF-8") + "&status=eq.OPEN&order=opened_at.desc&limit=30", null, token);
         String tradePath = "/rest/v1/paper_trades?select=id,market_category,symbol,side,entry_price,exit_price,gross_pnl_usdt,fees_usdt,net_pnl_usdt,exit_reason,closed_at&run_id=eq." + java.net.URLEncoder.encode(id, "UTF-8");
         // Keyset pagination avoids silently capping totals at the first 1000 rows.
@@ -201,6 +201,10 @@ public final class SupabaseApi {
         }
         JSONArray trades = (JSONArray) request("GET", tradePath + "&order=closed_at.desc,id.desc&limit=20", null, token);
         JSONObject summary=stats.toJson();
+        java.math.BigDecimal unrealized=java.math.BigDecimal.ZERO;
+        for(int i=0;i<positions.length();i++)unrealized=unrealized.add(new java.math.BigDecimal(positions.getJSONObject(i).getString("unrealized_pnl_usdt")));
+        summary.put("open_count",positions.length());
+        summary.put("unrealized_pnl_usdt",unrealized.toPlainString());
         // During a server update multiple REST requests may observe different commits.
         // Do not present a mixed snapshot as confirmed statistics.
         java.math.BigDecimal ledger = new java.math.BigDecimal(summary.getString("net_pnl_usdt"));

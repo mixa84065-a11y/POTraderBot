@@ -282,16 +282,12 @@ public class BybitTerminalActivity extends Activity {
         Button refresh=button("ОБНОВИТЬ ОТЧЁТ МУЛЬТИРЫНКА",PANEL,WHITE);
         LinearLayout.LayoutParams refreshLp=new LinearLayout.LayoutParams(-1,dp(44));refreshLp.topMargin=dp(6);root.addView(refresh,refreshLp);
         refresh.setOnClickListener(v->refreshPaperAutoReport());
-        paperStatsHeader=text("СТАТИСТИКА ТОРГОВЛИ  ▾",11,GOLD,true);
+        paperStatsHeader=text("СТАТИСТИКА МУЛЬТИТОРГОВЛИ",13,GOLD,true);
         paperStatsHeader.setPadding(dp(4),dp(14),0,dp(5));root.addView(paperStatsHeader);
         paperStatsText=text("Статистика появится после первых закрытых сделок.",11,WHITE,false);
         styleCard(paperStatsText,12);
         root.addView(paperStatsText,new LinearLayout.LayoutParams(-1,-2));
-        paperStatsHeader.setOnClickListener(v->{
-            boolean expanded=paperStatsText.getVisibility()==View.VISIBLE;
-            paperStatsText.setVisibility(expanded?View.GONE:View.VISIBLE);
-            paperStatsHeader.setText(expanded?"СТАТИСТИКА ТОРГОВЛИ  ▸":"СТАТИСТИКА ТОРГОВЛИ  ▾");
-        });
+        paperStatsText.setVisibility(View.VISIBLE);
         paperAutoReportText=text("Проверяем состояние автономного автодемо…",11,WHITE,false);
         styleCard(paperAutoReportText,12);
         LinearLayout.LayoutParams reportLp=new LinearLayout.LayoutParams(-1,-2);reportLp.topMargin=dp(8);root.addView(paperAutoReportText,reportLp);
@@ -508,20 +504,42 @@ public class BybitTerminalActivity extends Activity {
                     .append("\nПоследний серверный цикл: ").append(run.optString("last_cycle_at","ещё не выполнялся"));
                 JSONObject summary=data.optJSONObject("summary");
                 if(summary!=null&&paperStatsText!=null){
-                    paperStatsText.setText("Тест: "+activePaperRunId+"\nСтатус: "+status+"\nЗакрыто сделок: "+summary.optInt("trades_total")
-                        +"\nПлюсовых: "+summary.optInt("wins")+" • минусовых: "+summary.optInt("losses")
-                        +"\nБезубыточных: "+summary.optInt("breakeven")+"\nWin rate: "+summary.optString("win_rate_pct","0")+"%"
-                        +"\nЧистый P/L: "+summary.optString("net_pnl_usdt","0")+" USDT"
-                        +"\nКомиссии: "+summary.optString("fees_usdt","0")+" USDT");
+                    StringBuilder overview=new StringBuilder("СОСТОЯНИЕ: ").append(status)
+                        .append("\nСтартовый капитал: ").append(run.optString("starting_balance_usdt","—")).append(" USDT")
+                        .append("\nСвободные средства: ").append(run.optString("cash_usdt","—")).append(" USDT")
+                        .append("\nОткрыто: ").append(summary.optInt("open_count")).append(" • Закрыто: ").append(summary.optInt("trades_total"))
+                        .append("\nПлюсовых: ").append(summary.optInt("wins")).append(" • Минусовых: ").append(summary.optInt("losses"))
+                        .append("\nБезубыточных: ").append(summary.optInt("breakeven"))
+                        .append("\nДоля прибыльных: ").append(summary.optInt("trades_total")==0?"—":summary.optString("win_rate_pct")+"%")
+                        .append("\nЧистый P/L закрытых: ").append(summary.optString("net_pnl_usdt","—")).append(" USDT")
+                        .append("\nТекущий P/L открытых: ").append(summary.optString("unrealized_pnl_usdt","—")).append(" USDT")
+                        .append("\nКомиссии закрытых: ").append(summary.optString("fees_usdt","—")).append(" USDT")
+                        .append("\nМакс. просадка: ").append(run.optString("max_drawdown_pct","—")).append("%")
+                        .append("\nДневной лимит убытка: ").append(run.optString("max_daily_loss_usdt","—")).append(" USDT (0 — отключён)")
+                        .append("\nПоследний цикл: ").append(run.optString("last_cycle_at","—"));
+                    JSONObject grouped=summary.optJSONObject("markets");
+                    JSONArray categories=run.optJSONArray("market_categories");
+                    overview.append("\n\nРЕЗУЛЬТАТЫ ПО РЫНКАМ • закрытые сделки");
+                    if(categories!=null)for(int j=0;j<categories.length();j++){
+                        String market=categories.optString(j);
+                        JSONObject group=grouped==null?null:grouped.optJSONObject(market);
+                        overview.append("\n").append(market).append(": ");
+                        if(group==null)overview.append("0 закрытых");
+                        else overview.append(group.optInt("trades_total")).append(" • +").append(group.optInt("wins"))
+                            .append(" / −").append(group.optInt("losses")).append(" • P/L ").append(group.optString("net_pnl_usdt","—")).append(" USDT");
+                    }
+                    paperStatsText.setText(overview.toString());
                 }else if(paperStatsText!=null)paperStatsText.setText("Сервер не вернул статистику этого теста.");
-                if(!run.optString("last_error","").isEmpty())b.append("\nПримечание: ").append(run.optString("last_error"));
+                if(!run.isNull("last_error")&&!run.optString("last_error","").isEmpty())b.append("\nПримечание: ").append(run.optString("last_error"));
                 JSONArray positions=data.optJSONArray("positions");
                 b.append("\n\nОТКРЫТЫЕ ПОЗИЦИИ: ").append(positions==null?0:positions.length());
                 if(positions!=null)for(int i=0;i<positions.length();i++){
                     JSONObject p=positions.optJSONObject(i);if(p==null)continue;
                     b.append("\n").append(p.optString("market_category")).append(" • ").append(p.optString("symbol"))
                      .append(" • ").append(p.optString("side")).append(" • вход ").append(p.optString("entry_price"))
-                     .append(" • сейчас ").append(p.optString("mark_price")).append(" • P/L ").append(p.optString("unrealized_pnl_usdt"));
+                     .append(" • сейчас ").append(p.optString("mark_price")).append(" • P/L ").append(p.optString("unrealized_pnl_usdt"))
+                      .append("\n  SL ").append(p.optString("stop_price","—")).append(" • TP ").append(p.optString("target_price","—"))
+                      .append(" • объём ").append(p.optString("notional_usdt","—")).append(" USDT");
                 }
                 JSONArray trades=data.optJSONArray("trades");
                 b.append("\n\nПОСЛЕДНИЕ ЗАКРЫТЫЕ СДЕЛКИ (показано ").append(trades==null?0:trades.length()).append(" из ").append(summary==null?"—":summary.optString("trades_total","—")).append(")");

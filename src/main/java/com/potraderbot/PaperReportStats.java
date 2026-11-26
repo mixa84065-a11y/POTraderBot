@@ -8,7 +8,15 @@ import org.json.JSONException;
 final class PaperReportStats {
     private int total, wins, losses, breakeven;
     private BigDecimal net = BigDecimal.ZERO, fees = BigDecimal.ZERO;
+    private final java.util.Map<String,PaperReportStats> markets=new java.util.TreeMap<>();
     void add(JSONObject row) throws JSONException {
+        addAmounts(row);
+        String category=row.optString("market_category", "unknown");
+        PaperReportStats group=markets.get(category);
+        if(group==null){group=new PaperReportStats();markets.put(category,group);}
+        group.addAmounts(row);
+    }
+    private void addAmounts(JSONObject row) throws JSONException {
         BigDecimal value = new BigDecimal(row.getString("net_pnl_usdt"));
         BigDecimal fee = new BigDecimal(row.getString("fees_usdt"));
         total++; net=net.add(value); fees=fees.add(fee);
@@ -19,6 +27,9 @@ final class PaperReportStats {
         out.put("trades_total",total);out.put("wins",wins);out.put("losses",losses);out.put("breakeven",breakeven);
         out.put("net_pnl_usdt",net.toPlainString());out.put("fees_usdt",fees.toPlainString());
         out.put("win_rate_pct",total==0?"0.00":BigDecimal.valueOf(wins).multiply(BigDecimal.valueOf(100)).divide(BigDecimal.valueOf(total),2,RoundingMode.HALF_UP).toPlainString());
+        JSONObject grouped=new JSONObject();
+        for(java.util.Map.Entry<String,PaperReportStats> entry:markets.entrySet())grouped.put(entry.getKey(),entry.getValue().toJson());
+        out.put("markets",grouped);
         return out;
     }
 }
