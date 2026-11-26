@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import {structureRoom} from "./market_structure.ts";
 import {assessEntry, ScanDiagnostics, rejectionKind, failedSignalChecks, paperPositionSize, PAPER_MIN_NOTIONAL_PCT, PAPER_MAX_NOTIONAL_PCT, PAPER_DEFAULT_NOTIONAL_PCT} from "./entry_quality.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -153,7 +154,12 @@ async function signal(category:string,symbol:string){
  });
  const stopPct=Math.max(0.006,Math.min(0.012,(volatility/price)*1.5));
  const targetPct=stopPct*2.2;
- return {t,price,bid,ask,score,direction,stopPct,targetPct,signalFailures,
+ const entry=direction==="UP"?ask:bid;
+ const structure=direction==="NEUTRAL"?null:structureRoom({
+  bars:bars.map(x=>({time:x[0],high:x[2],low:x[3],close:x[4]})),intervalMs:300000,asOf:now,
+  entry,target:entry*(direction==="UP"?1+targetPct:1-targetPct),atr:volatility,side:direction==="UP"?"LONG":"SHORT"
+ });
+ return {t,price,bid,ask,score,direction,stopPct,targetPct,signalFailures,structure,
   reason:`EMA 5m/15m/1h: ${trend5}/${trend15}/${trend1h}; RSI ${strength.toFixed(1)}; MACD ${macd.toPrecision(4)}; ADX ${trendStrength.toFixed(1)}; объём ${volRatio.toFixed(2)}x; VWAP ${vwapUp?"выше":vwapDown?"ниже":"нет данных"}; импульс ${momentum.toFixed(3)}%; ATR-дистанция ${distance.toFixed(2)}`};
 }
 async function tickers(category:string):Promise<Ticker[]>{
@@ -171,6 +177,7 @@ async function candidates(run:Run,diagnostics:ScanDiagnostics):Promise<Candidate
    for(const t of top){try{const s=await signal(category,t.symbol);if(s.direction==="NEUTRAL"){diagnostics.add(category,"NEUTRAL");for(const reason of s.signalFailures)diagnostics.add(category,"CHECK_"+reason);continue;}
     if(category==="spot"&&s.direction!=="UP"){diagnostics.add(category,"SPOT_NO_SHORT");continue;}
     diagnostics.add(category,"SIGNAL");
+    if(s.structure)diagnostics.add(category,"SHADOW_STRUCTURE_"+s.structure.status);
     out.push({category,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:s.reason,stopPct:s.stopPct,targetPct:s.targetPct});
    }catch(e){diagnostics.add(category,rejectionKind(e));}}
   }catch(_){diagnostics.add(category,"CATEGORY_DATA_ERROR");}
@@ -186,6 +193,7 @@ async function candidates(run:Run,diagnostics:ScanDiagnostics):Promise<Candidate
    diagnostics.add(type,"SELECTED_FOR_SCAN",top.length);
    for(const t of top){try{const s=await signal("linear",t.symbol);if(s.direction==="NEUTRAL"){diagnostics.add(type,"NEUTRAL");for(const reason of s.signalFailures)diagnostics.add(type,"CHECK_"+reason);continue;}
     diagnostics.add(type,"SIGNAL");
+    if(s.structure)diagnostics.add(type,"SHADOW_STRUCTURE_"+s.structure.status);
     out.push({category:type,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:`TradFi ${type}: ${s.reason}`,stopPct:s.stopPct,targetPct:s.targetPct});
    }catch(e){diagnostics.add(type,rejectionKind(e));}}
   }catch(_){diagnostics.add(type,"CATEGORY_DATA_ERROR");}
@@ -292,7 +300,7 @@ async function processRun(run:Run){
    }
    await log(run,"INFO","PAPER_SCAN_DIAGNOSTICS","Причины отбора и отказа от виртуальных входов.",{
      categories:diagnostics.counts,global_cooldown:recentStops.length>0,entry_limit_per_cycle:Math.min(room,1),opened,
-     note:"CHECK_* counters overlap; each neutral symbol may fail multiple predicates.",
+     note:"CHECK_* counters overlap; each neutral symbol may fail multiple predicates. SHADOW_STRUCTURE_* is diagnostic only; it does not reject trades.",
      cost_model:{fee_per_side:0.0006,exit_slippage_bps:2,min_net_reward_risk:1.5},
      sizing:{min_notional_pct:PAPER_MIN_NOTIONAL_PCT,max_notional_pct:PAPER_MAX_NOTIONAL_PCT,default_notional_pct:PAPER_DEFAULT_NOTIONAL_PCT}
    });
