@@ -160,7 +160,7 @@ public final class SupabaseApi {
         JSONArray markets = new JSONArray();
         for (String market : new String[]{"spot","linear","inverse","option","stock","ETF","forex","commodity"}) markets.put(market);
         body.put("p_market_categories", markets);
-        body.put("p_starting_balance_usdt", 200.0);
+        body.put("p_starting_balance_usdt", 150.0);
         return (JSONObject) request("POST", "/rest/v1/rpc/paper_start_run", body, token);
     }
 

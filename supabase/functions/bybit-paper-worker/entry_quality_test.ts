@@ -37,18 +37,20 @@ Deno.test("neutral signal diagnostics report all failed checks independently",()
  assert(d.counts.spot.NEUTRAL===1&&d.counts.spot.CHECK_MOMENTUM===1&&d.counts.spot.CHECK_RSI===undefined);
 });
 
-Deno.test("virtual size defaults to 3% and supports an explicit 5% setting",()=>{
- const p={equity:200,startingBalance:200,cash:200};
+Deno.test("150 USDT paper portfolio defaults to 4%, supports 5-7%",()=>{
+ const p={equity:150,startingBalance:150,cash:150};
  assert(paperPositionSize(p)===6);
- assert(paperPositionSize({...p,requestedPct:4})===8);
- assert(paperPositionSize({...p,requestedPct:5})===10);
- assert(paperPositionSize({...p,requestedPct:2})===0);
- assert(paperPositionSize({...p,requestedPct:6})===0);
+ assert(paperPositionSize({...p,requestedPct:5})===7.5);
+ assert(paperPositionSize({...p,requestedPct:6})===9);
+ assert(paperPositionSize({...p,requestedPct:7})===10.5);
+ assert(paperPositionSize({...p,requestedPct:3})===0);
+ assert(paperPositionSize({...p,requestedPct:8})===0);
 });
 Deno.test("paper sizing respects caps and refuses insufficient minimum",()=>{
- assert(paperPositionSize({equity:200,startingBalance:200,cash:0.5})===0);
- assert(paperPositionSize({equity:200,startingBalance:200,cash:0.8,requestedPct:5})===8);
- assert(paperPositionSize({equity:200,startingBalance:40,cash:200})===0);
+ const p={equity:150,startingBalance:150,cash:150};
+ assert(paperPositionSize({...p,cash:0.5})===0);
+ assert(paperPositionSize({...p,cash:0.8,requestedPct:7})===8);
+ assert(paperPositionSize({...p,startingBalance:40})===0);
  assert(paperPositionSize({equity:4000,startingBalance:4000,cash:4000})===0);
- assert(paperPositionSize({equity:NaN,startingBalance:200,cash:200})===0);
+ assert(paperPositionSize({...p,equity:NaN})===0);
 });

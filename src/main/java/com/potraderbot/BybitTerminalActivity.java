@@ -265,7 +265,7 @@ public class BybitTerminalActivity extends Activity {
     private void buildMultiMarketPaperSection(LinearLayout root){
         TextView heading=text("АВТОНОМНОЕ МУЛЬТИРЫНОЧНОЕ ДЕМО",13,GOLD,true);
         heading.setPadding(dp(4),dp(20),0,dp(8));root.addView(heading);
-        TextView note=text("Отдельный серверный бумажный портфель: 200 USDT виртуально. Spot, USDT Futures, Inverse, Options, акции, ETF, Forex и сырьё Bybit TradFi. Цикл каждую минуту, работает при закрытом приложении. Только виртуальные сделки — ключи Bybit не используются.",10,MUTED,false);
+        TextView note=text("Отдельный серверный бумажный портфель: 150 USDT виртуально. Spot, USDT Futures, Inverse, Options, акции, ETF, Forex и сырьё Bybit TradFi. Цикл каждую минуту, работает при закрытом приложении. Только виртуальные сделки — ключи Bybit не используются.",10,MUTED,false);
         note.setPadding(dp(4),0,dp(4),dp(8));root.addView(note);
         paperStartButton=button("ЗАПУСТИТЬ АВТОТОРГОВЛЮ ПО ВСЕМ РЫНКАМ",GOLD,BG);
         root.addView(paperStartButton,new LinearLayout.LayoutParams(-1,dp(50)));
@@ -343,7 +343,7 @@ public class BybitTerminalActivity extends Activity {
     private void renderPaperDraft(){
         paperPrepareButton.setText("ПОКАЗАТЬ ПРЕДЫДУЩИЙ ОТЧЁТ");
         paperStatsText.setText(DemoReportPreparation.zeroStatistics());
-        paperAutoReportText.setText("НОВЫЙ МУЛЬТИРЫНОЧНЫЙ ТЕСТ • НЕ ЗАПУЩЕН\nВиртуальный старт после запуска: 200 USDT\nПредыдущий отчёт сохранён на сервере.\nДля запуска нажмите кнопку запуска и подтвердите действие.");
+        paperAutoReportText.setText("НОВЫЙ МУЛЬТИРЫНОЧНЫЙ ТЕСТ • НЕ ЗАПУЩЕН\nВиртуальный старт после запуска: 150 USDT\nПредыдущий отчёт сохранён на сервере.\nДля запуска нажмите кнопку запуска и подтвердите действие.");
     }
 
     private void renderBybitDraft(){
@@ -354,7 +354,7 @@ public class BybitTerminalActivity extends Activity {
     private void confirmStartMultiMarketPaperRun(){
         if(accessToken.isEmpty()){Toast.makeText(this,"Сначала войдите в GOD OF TRADING.",Toast.LENGTH_LONG).show();return;}
         new AlertDialog.Builder(this).setTitle("Запуск автономного автодемо")
-            .setMessage("Запустится отдельный виртуальный портфель 200 USDT. Сервер будет анализировать все поддерживаемые рынки Bybit каждую минуту, открывать несколько виртуальных позиций и закрывать их по стопу/цели. Реальные ордера и средства не используются. Продолжить?")
+            .setMessage("Запустится отдельный виртуальный портфель 150 USDT. Сервер будет анализировать все поддерживаемые рынки Bybit каждую минуту, открывать несколько виртуальных позиций и закрывать их по стопу/цели. Реальные ордера и средства не используются. Продолжить?")
             .setNegativeButton("ОТМЕНА",null).setPositiveButton("ЗАПУСТИТЬ",(d,w)->startMultiMarketPaperRun()).show();
     }
 

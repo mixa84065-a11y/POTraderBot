@@ -46,13 +46,13 @@ export function failedSignalChecks(checks:Readonly<Record<string,boolean>>):stri
 }
 
 /** Virtual position notional, not the amount at risk. Conservative default;
- * raising the research setting to 5% requires a separate deliberate change.
+ * raising the research setting to 7% requires a separate deliberate change.
  * Retain existing $100 notional cap and database's 10% starting-capital cap.
- * If caps or available virtual margin prevent the 3% minimum, skip the entry.
+ * If caps or available virtual margin prevent the 4% minimum, skip the entry.
  */
-export const PAPER_MIN_NOTIONAL_PCT=3;
-export const PAPER_MAX_NOTIONAL_PCT=5;
-export const PAPER_DEFAULT_NOTIONAL_PCT=3;
+export const PAPER_MIN_NOTIONAL_PCT=4;
+export const PAPER_MAX_NOTIONAL_PCT=7;
+export const PAPER_DEFAULT_NOTIONAL_PCT=4;
 export function paperPositionSize(input:{equity:number;startingBalance:number;cash:number;requestedPct?:number}):number{
  const {equity,startingBalance,cash,requestedPct=PAPER_DEFAULT_NOTIONAL_PCT}=input;
  if(![equity,startingBalance,cash,requestedPct].every(Number.isFinite)||
