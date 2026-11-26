@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import {assessEntry, ScanDiagnostics, rejectionKind, failedSignalChecks} from "./entry_quality.ts";
+import {assessEntry, ScanDiagnostics, rejectionKind, failedSignalChecks, paperPositionSize, PAPER_MIN_NOTIONAL_PCT, PAPER_MAX_NOTIONAL_PCT, PAPER_DEFAULT_NOTIONAL_PCT} from "./entry_quality.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -279,20 +279,22 @@ async function processRun(run:Run){
     const quality=assessEntry({side:c.side,entry:price,bid:c.bid,ask:c.ask,stop,target,
       feeRate:0.0006,exitSlippageBps:2,minNetRewardRisk:1.5});
     if(!quality.ok){diagnostics.add(c.category,quality.reason);continue;}
-    const notional=Math.min(100,equity*0.02);
+    const notional=paperPositionSize({equity,startingBalance:num(current.starting_balance_usdt),cash:num(current.cash_usdt)});
+    if(notional<=0){diagnostics.add(c.category,"MIN_POSITION_UNAVAILABLE");continue;}
     if(c.category==="option"&&price>notional)continue;
     const qty=c.category==="option"?1:notional/price;
     const entryFee=qty*price*0.0006;
     try{
      await rpc("paper_worker_open_position",{p_run_id:run.id,p_symbol:c.symbol,p_market_category:c.category,p_side:c.side,p_qty:qty,p_price:price,p_stop:stop,p_target:target,p_score:c.score,p_reason:c.reason,p_fee:entryFee});
      opened++;blockedAssets.add(assetKey(c.symbol));diagnostics.add(c.category,"OPENED");
-     await log(run,"INFO","PAPER_POSITION_OPENED",`Открыта виртуальная ${c.side} позиция ${c.symbol}.`,{category:c.category,price,qty,score:c.score,stop,target,notional_usdt:qty*price});
+     await log(run,"INFO","PAPER_POSITION_OPENED",`Открыта виртуальная ${c.side} позиция ${c.symbol}.`,{category:c.category,price,qty,score:c.score,stop,target,notional_usdt:qty*price,notional_pct_equity:100*notional/equity});
     }catch(e){diagnostics.add(c.category,"ORDER_RPC_REJECTED");await log(run,"WARN","PAPER_ENTRY_SKIPPED",String(e),{category:c.category,symbol:c.symbol,score:c.score});}
    }
    await log(run,"INFO","PAPER_SCAN_DIAGNOSTICS","Причины отбора и отказа от виртуальных входов.",{
      categories:diagnostics.counts,global_cooldown:recentStops.length>0,entry_limit_per_cycle:Math.min(room,1),opened,
      note:"CHECK_* counters overlap; each neutral symbol may fail multiple predicates.",
-     cost_model:{fee_per_side:0.0006,exit_slippage_bps:2,min_net_reward_risk:1.5}
+     cost_model:{fee_per_side:0.0006,exit_slippage_bps:2,min_net_reward_risk:1.5},
+     sizing:{min_notional_pct:PAPER_MIN_NOTIONAL_PCT,max_notional_pct:PAPER_MAX_NOTIONAL_PCT,default_notional_pct:PAPER_DEFAULT_NOTIONAL_PCT}
    });
   }
   await db(`paper_runs?id=eq.${run.id}`,"PATCH",{last_cycle_at:new Date().toISOString(),...(current.status==="RUNNING"?{last_error:null}:{})});

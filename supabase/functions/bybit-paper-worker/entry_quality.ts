@@ -44,3 +44,22 @@ export class ScanDiagnostics {
 export function failedSignalChecks(checks:Readonly<Record<string,boolean>>):string[]{
  return Object.keys(checks).filter(key=>checks[key]===false).map(key=>key.toUpperCase());
 }
+
+/** Virtual position notional, not the amount at risk. Conservative default;
+ * raising the research setting to 5% requires a separate deliberate change.
+ * Retain existing $100 notional cap and database's 10% starting-capital cap.
+ * If caps or available virtual margin prevent the 3% minimum, skip the entry.
+ */
+export const PAPER_MIN_NOTIONAL_PCT=3;
+export const PAPER_MAX_NOTIONAL_PCT=5;
+export const PAPER_DEFAULT_NOTIONAL_PCT=3;
+export function paperPositionSize(input:{equity:number;startingBalance:number;cash:number;requestedPct?:number}):number{
+ const {equity,startingBalance,cash,requestedPct=PAPER_DEFAULT_NOTIONAL_PCT}=input;
+ if(![equity,startingBalance,cash,requestedPct].every(Number.isFinite)||
+  equity<=0||startingBalance<=0||cash<=0||
+  requestedPct<PAPER_MIN_NOTIONAL_PCT||requestedPct>PAPER_MAX_NOTIONAL_PCT)return 0;
+ const minimum=equity*PAPER_MIN_NOTIONAL_PCT/100;
+ // Existing paper ledger reserves 10% of notional; this does not represent real exchange margin.
+ const capped=Math.min(equity*requestedPct/100,100,startingBalance*0.10,cash/0.10);
+ return capped>=minimum?capped:0;
+}

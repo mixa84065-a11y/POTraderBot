@@ -1,4 +1,4 @@
-import {assessEntry,ScanDiagnostics,rejectionKind,failedSignalChecks} from "./entry_quality.ts";
+import {assessEntry,ScanDiagnostics,rejectionKind,failedSignalChecks,paperPositionSize} from "./entry_quality.ts";
 const base={side:"LONG" as const,entry:100,bid:99.95,ask:100,stop:99,target:102.5,feeRate:0.0006,exitSlippageBps:2,minNetRewardRisk:1.5};
 function assert(v:unknown){if(!v)throw new Error("Assertion failed");}
 Deno.test("net long target and stop include both fees without double spread",()=>{
@@ -35,4 +35,20 @@ Deno.test("neutral signal diagnostics report all failed checks independently",()
  d.add("spot","NEUTRAL");
  for(const reason of reasons)d.add("spot","CHECK_"+reason);
  assert(d.counts.spot.NEUTRAL===1&&d.counts.spot.CHECK_MOMENTUM===1&&d.counts.spot.CHECK_RSI===undefined);
+});
+
+Deno.test("virtual size defaults to 3% and supports an explicit 5% setting",()=>{
+ const p={equity:200,startingBalance:200,cash:200};
+ assert(paperPositionSize(p)===6);
+ assert(paperPositionSize({...p,requestedPct:4})===8);
+ assert(paperPositionSize({...p,requestedPct:5})===10);
+ assert(paperPositionSize({...p,requestedPct:2})===0);
+ assert(paperPositionSize({...p,requestedPct:6})===0);
+});
+Deno.test("paper sizing respects caps and refuses insufficient minimum",()=>{
+ assert(paperPositionSize({equity:200,startingBalance:200,cash:0.5})===0);
+ assert(paperPositionSize({equity:200,startingBalance:200,cash:0.8,requestedPct:5})===8);
+ assert(paperPositionSize({equity:200,startingBalance:40,cash:200})===0);
+ assert(paperPositionSize({equity:4000,startingBalance:4000,cash:4000})===0);
+ assert(paperPositionSize({equity:NaN,startingBalance:200,cash:200})===0);
 });
