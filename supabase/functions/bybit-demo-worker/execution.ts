@@ -1,6 +1,7 @@
 import {
   DemoSpotOrderPayload,
   findDemoSpotOrderByLinkId,
+  isConfirmedCreateBalanceRejection,
   getDemoSpotExecutions,
   getDemoSpotOrder,
   normalizeDemoOrderStatus,
@@ -109,18 +110,32 @@ export async function submitOrReconcileDemoOrder(input: {
       await rpc("bybit_demo_worker_set_order_state", {
         p_order_id: order.order_id, p_exchange_order_id: null, p_status: "UNKNOWN",
       });
+      let accepted: Awaited<ReturnType<typeof placeDemoSpotMarketOrder>>;
       try {
-        const accepted = await placeDemoSpotMarketOrder(apiKey, apiSecret, payload);
-        exchangeOrderId = accepted.orderId;
-        await rpc("bybit_demo_worker_set_order_state", {
-          p_order_id: order.order_id, p_exchange_order_id: exchangeOrderId, p_status: "SUBMITTED",
-        });
+        accepted = await placeDemoSpotMarketOrder(apiKey, apiSecret, payload);
       } catch (error) {
+        // Only a documented explicit rejection from the create request is definitive.
+        // A DB failure after acceptance must never be classified as exchange rejection.
+        if (isConfirmedCreateBalanceRejection(error)) {
+          await rpc("bybit_demo_worker_set_order_state", {
+            p_order_id: order.order_id, p_exchange_order_id: null, p_status: "REJECTED",
+          });
+          await rpc("bybit_demo_worker_mark_executions_complete", { p_order_id: order.order_id });
+          return {
+            orderId: null, orderLinkId: order.order_link_id, status: "REJECTED" as const,
+            filledQty: 0, filledValueUsdt: 0, averageFillPrice: 0, feeUsdt: 0,
+            feeConversionComplete: true, executionCount: 0,
+          };
+        }
         throw new Error(
           "Результат отправки заявки неоднозначен; повторная отправка заблокирована. " +
           (error instanceof Error ? error.message : "Unknown exchange error"),
         );
       }
+      exchangeOrderId = accepted.orderId;
+      await rpc("bybit_demo_worker_set_order_state", {
+        p_order_id: order.order_id, p_exchange_order_id: exchangeOrderId, p_status: "SUBMITTED",
+      });
     }
   } else if (!exchangeOrderId) {
     const found = await findDemoSpotOrderByLinkId(apiKey, apiSecret, order.symbol, order.order_link_id);

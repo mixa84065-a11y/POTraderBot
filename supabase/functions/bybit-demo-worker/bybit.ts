@@ -22,6 +22,17 @@ function canonicalQuery(params: Record<string, string | number>): string {
     .join("&");
 }
 
+/** Structured exchange rejection; HTTP and transport failures remain ambiguous. */
+export class DemoApiError extends Error {
+  constructor(public readonly code: number, public readonly httpStatus: number, message: string) {
+    super(message);
+    this.name = "DemoApiError";
+  }
+}
+export function isConfirmedCreateBalanceRejection(error: unknown): boolean {
+  return error instanceof DemoApiError && error.httpStatus === 200 && error.code === 170131;
+}
+
 async function parseResponse<T>(response: Response): Promise<BybitResult<T>> {
   const raw = await response.text();
   let data: BybitResult<T>;
@@ -31,7 +42,7 @@ async function parseResponse<T>(response: Response): Promise<BybitResult<T>> {
     throw new Error(`Bybit Demo API вернул некорректный JSON (HTTP ${response.status}).`);
   }
   if (!response.ok || data.retCode !== 0) {
-    throw new Error(`Bybit Demo API error ${data.retCode ?? response.status}: ${String(data.retMsg ?? "HTTP error").slice(0, 180)}`);
+    throw new DemoApiError(typeof data.retCode === "number" ? data.retCode : -1, response.status, `Bybit Demo API error ${data.retCode ?? response.status}: ${String(data.retMsg ?? "HTTP error").slice(0, 180)}`);
   }
   return data;
 }

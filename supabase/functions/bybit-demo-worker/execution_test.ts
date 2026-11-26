@@ -304,3 +304,32 @@ Deno.test("terminal order is not marked reconciled while exchange execution quan
     Object.defineProperty(globalThis, "fetch", { configurable: true, writable: true, value: originalFetch });
   }
 });
+
+Deno.test("explicit create balance rejection is terminal, timeout remains UNKNOWN", async () => {
+  const originalFetch=globalThis.fetch;
+  try {
+    for (const code of [170131, 170007, 170141]) {
+      const calls: Array<{name:string;args:Record<string,unknown>}>=[];
+      let creates=0;
+      globalThis.fetch=async(input:RequestInfo|URL)=>{
+        const url=new URL(typeof input==="string"||input instanceof URL?input.toString():input.url);
+        if(url.pathname==="/v5/order/realtime"||url.pathname==="/v5/order/history")return json({retCode:0,result:{list:[]}});
+        if(url.pathname==="/v5/order/create"){creates++;return json({retCode:code,retMsg:"test exchange response",result:{}});}
+        throw new Error("Unexpected network request");
+      };
+      let result: Awaited<ReturnType<typeof submitOrReconcileDemoOrder>>|undefined;
+      let failed=false;
+      try {
+        result=await submitOrReconcileDemoOrder({apiKey:"test-key",apiSecret:"test-secret",order:baseOrder,
+          payload:buildSpotMarketBuy("BTCUSDT","100",baseOrder.order_link_id),
+          rpc:async(name,args={})=>{calls.push({name,args});return null;}});
+      } catch {failed=true;}
+      const rejected=calls.some(c=>c.args.p_status==="REJECTED");
+      const complete=calls.some(c=>c.name==="bybit_demo_worker_mark_executions_complete");
+      if(creates!==1||!calls.some(c=>c.args.p_status==="UNKNOWN"))throw new Error("Submission safety violated");
+      if(code===170131){
+        if(failed||result?.status!=="REJECTED"||!rejected||!complete)throw new Error("Definitive rejection not recorded");
+      }else if(!failed||rejected||complete)throw new Error("Ambiguous response marked terminal");
+    }
+  } finally {globalThis.fetch=originalFetch;}
+});
