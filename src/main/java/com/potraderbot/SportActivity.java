@@ -214,23 +214,46 @@ public final class SportActivity extends Activity {
         }
     }
     private void openMatch(JSONObject item){
-        JSONObject teams=item.optJSONObject("teams"),fixture=item.optJSONObject("fixture");
+        if(busy)return;
+        JSONObject teams=item.optJSONObject("teams"),fixture=item.optJSONObject("fixture"),league=item.optJSONObject("league");
         if(teams==null||fixture==null)return;
         JSONObject h=teams.optJSONObject("home"),a=teams.optJSONObject("away");
         if(h==null||a==null)return;
-        int home=h.optInt("id",-1),away=a.optInt("id",-1);long cutoff=fixture.optLong("timestamp",0);
-        String title=h.optString("name")+" — "+a.optString("name");
+        int home=h.optInt("id",-1),away=a.optInt("id",-1);long cutoff=fixture.optLong("timestamp",0),fixtureId=fixture.optLong("id",0);
+        String homeName=h.optString("name"),awayName=a.optString("name"),title=homeName+" — "+awayName;
         if(home<=0||away<=0||cutoff<=0){status.setText("Недостаточно данных о матче.");return;}
-        long fixtureId=fixture.optLong("id",0);
-        String[] options={"Анализ из локальной базы (0 запросов)","Анализ и личные встречи (до 3 запросов)","История по датам • Free (до 14 запросов)","Угловые и ЖК (до 8 запросов)","Составы и травмы (до 2 запросов)"};
-        new AlertDialog.Builder(this).setTitle(title+"\n"+fixture.optString("date")).setItems(options,(d,w)->{
-            if(w==0)localAnalysis(title,home,away,cutoff,fixtureId);
-            else if(w==1)loadHistory(title,home,away,cutoff,fixtureId);
-            else if(w==2)archiveHistory(title,home,away,cutoff,fixtureId);
-            else if(w==3)loadDetails(title,home,away,cutoff);
-            else if(fixtureId>0)loadSquads(title,fixtureId);
-            else status.setText("Нет идентификатора матча.");
-        }).setNegativeButton("Закрыть",null).show();
+        String meta=(league==null?"":league.optString("name")+" • ")+fixture.optString("date");
+        busy=true;load.setEnabled(false);settings.setEnabled(false);
+        worker.execute(()->{
+            String summary;
+            try(SportLocalArchive db=new SportLocalArchive(getApplicationContext())){
+                SportHistory.Summary x=SportHistory.summarize(db.history(home,cutoff),home,cutoff),y=SportHistory.summarize(db.history(away,cutoff),away,cutoff);
+                summary="Локальный архив API-SPORTS • 0 запросов\n"+homeName+": "+x.n+" матчей\n"+awayName+": "+y.n+" матчей\n"+(x.n>=5&&y.n>=5?"Данных достаточно для пробного расчёта.":"Для модели нужно минимум 5 матчей каждой команды.");
+            }catch(Exception e){summary="Локальная база недоступна.";}
+            final String availability=summary;
+            runOnUiThread(()->{
+                if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);
+                LinearLayout content=new LinearLayout(this);content.setOrientation(1);content.setPadding(dp(12),dp(8),dp(12),dp(8));
+                content.addView(label(meta,13,GOLD));content.addView(label(availability,14,Color.WHITE));
+                content.addView(label("АНАЛИЗ GoS",16,GOLD));
+                ScrollView scroll=new ScrollView(this);scroll.addView(content);
+                AlertDialog dialog=new AlertDialog.Builder(this).setTitle(title).setView(scroll).setNegativeButton("Закрыть",null).create();
+                addMatchAction(content,dialog,"Локальная история • 0 запросов",()->localAnalysis(title,home,away,cutoff,fixtureId));
+                addMatchAction(content,dialog,"API-SPORTS • до 3 запросов",()->loadHistory(title,home,away,cutoff,fixtureId));
+                addMatchAction(content,dialog,"История по датам • до 14 запросов",()->archiveHistory(title,home,away,cutoff,fixtureId));
+                addMatchAction(content,dialog,"Угловые и ЖК • до 8 запросов",()->loadDetails(title,home,away,cutoff));
+                if(fixtureId>0)addMatchAction(content,dialog,"Составы и травмы • до 2 запросов",()->loadSquads(title,fixtureId));
+                content.addView(label("АЛЬТЕРНАТИВНЫЕ ИСТОЧНИКИ",16,GOLD));
+                content.addView(label("Football-Data: выберите чемпионат и подтвердите обе команды вручную. Названия и ID разных поставщиков не объединяются автоматически.",13,Color.WHITE));
+                addMatchAction(content,dialog,"Football-Data • без API-ключа",()->chooseCsvLeague());
+                content.addView(label("Soccer365 и Flashscore: только просмотр официальных сайтов; статистика не импортируется.",13,Color.WHITE));
+                addMatchAction(content,dialog,"Soccer365 / Flashscore • просмотр",()->chooseExternalSource());
+                dialog.show();
+            });
+        });
+    }
+    private void addMatchAction(LinearLayout content,AlertDialog dialog,String name,Runnable action){
+        Button b=button(name);b.setOnClickListener(v->{dialog.dismiss();action.run();});content.addView(b);
     }
     private JSONObject teamHistory(int team,String token)throws Exception{
         return historicalRequest("history_"+team,"fixtures?team="+team+"&last=20&status=FT",token);
