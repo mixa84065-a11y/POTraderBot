@@ -38,7 +38,7 @@ import java.util.concurrent.Executors;
  * data and a local paper ledger only. No private credentials or real orders exist here.
  */
 public class BybitTerminalActivity extends Activity {
-    private static final int BG=Color.rgb(5,7,11), PANEL=Color.rgb(15,17,22);
+    private static final int BG=0xff090e15, PANEL=0xff17212e;
     private static final int GOLD=Color.rgb(247,190,55), WHITE=Color.rgb(242,242,245);
     private static final int MUTED=Color.rgb(151,154,163), GREEN=Color.rgb(0,190,85), RED=Color.rgb(224,43,43);
     private static final String API="https://api.bybit.com";
@@ -212,24 +212,34 @@ public class BybitTerminalActivity extends Activity {
         terminalScroll=new ScrollView(this);terminalScroll.setFillViewport(true);terminalScroll.setBackgroundColor(BG);terminalScroll.addView(root);
         LinearLayout shell=vertical();shell.setBackgroundColor(BG);
         shell.addView(terminalScroll,new LinearLayout.LayoutParams(-1,0,1));
-        LinearLayout nav=horizontal();nav.setPadding(dp(7),dp(7),dp(7),dp(7));nav.setBackground(surface(PANEL,15,0xFF3B321E));
-        String[] tabs={"Главная","Рынки","Анализ","Автодемо"};
+        LinearLayout nav=horizontal();nav.setPadding(dp(3),dp(2),dp(3),dp(2));nav.setBackground(surface(PANEL,0,0xff303b49));
+        String[] tabs={"Главная","Рынки","Анализ","Автодемо"},icons={"home","crypto","signals","robot"};
         for(int i=0;i<tabs.length;i++){
-            final int tab=i;Button item=button(tabs[i],i==1?GOLD:PANEL,i==1?BG:WHITE);
-            item.setTextSize(10);item.setPadding(dp(2),dp(3),dp(2),dp(3));item.setMinHeight(dp(42));
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(48),1);lp.leftMargin=dp(2);lp.rightMargin=dp(2);nav.addView(item,lp);
+            final int tab=i;int color=i==1?GOLD:MUTED;
+            LinearLayout item=vertical();item.setGravity(Gravity.CENTER);
+            item.addView(new DashboardIcon(this,icons[i],color),new LinearLayout.LayoutParams(dp(23),dp(24)));
+            TextView label=text(tabs[i],10,color,false);label.setGravity(Gravity.CENTER);label.setSingleLine(true);item.addView(label);
+            item.setContentDescription(tabs[i]);item.setFocusable(true);
+            nav.addView(item,new LinearLayout.LayoutParams(0,dp(49),1));
             item.setOnClickListener(v->{
                 if(tab==0)finish();
-                else if(tab==1)terminalScroll.smoothScrollTo(0,Math.max(0,multiScanText.getTop()));
-                else if(tab==2)terminalScroll.smoothScrollTo(0,Math.max(0,signalText.getTop()));
-                else terminalScroll.post(()->terminalScroll.smoothScrollTo(0,Math.max(0,paperStartButton.getTop())));
+                else if(tab==1)scrollToSection(multiScanText);
+                else if(tab==2)scrollToSection(signalText);
+                else if(paperStartButton!=null)scrollToSection(paperStartButton);
             });
         }
-        LinearLayout.LayoutParams navLp=new LinearLayout.LayoutParams(-1,-2);navLp.leftMargin=dp(8);navLp.rightMargin=dp(8);navLp.bottomMargin=dp(8);shell.addView(nav,navLp);
+        shell.addView(nav,new LinearLayout.LayoutParams(-1,-2));
         setContentView(shell);
         renderLedger();
     }
 
+    private void scrollToSection(View target){
+        if(target==null||terminalScroll==null)return;
+        terminalScroll.post(()->{
+            android.graphics.Rect rect=new android.graphics.Rect();target.getDrawingRect(rect);
+            terminalScroll.offsetDescendantRectToMyCoords(target,rect);terminalScroll.smoothScrollTo(0,Math.max(0,rect.top));
+        });
+    }
     private void buildServerReport(LinearLayout root){
         TextView heading=text("СЕРВЕРНЫЙ BYBIT DEMO • ОТЧЁТ 48 ЧАСОВ",12,GOLD,true);
         heading.setPadding(dp(4),dp(18),0,dp(8));root.addView(heading);
@@ -1062,7 +1072,8 @@ public class BybitTerminalActivity extends Activity {
         }
         @Override protected void onDraw(Canvas c){
             super.onDraw(c);float w=getWidth(),h=getHeight();p.setStrokeWidth(1);p.setColor(0xFF202630);
-            for(int i=1;i<4;i++)c.drawLine(0,h*i/4,w,h*i/4,p);
+            for(int i=1;i<5;i++)c.drawLine(0,h*i/5,w,h*i/5,p);
+            for(int i=1;i<8;i++)c.drawLine(w*i/8,0,w*i/8,h,p);
             if(data.length()<2){p.setTextSize(dp(12));p.setColor(MUTED);p.setTextAlign(Paint.Align.CENTER);c.drawText(emptyMessage,w/2,h/2,p);p.setTextAlign(Paint.Align.LEFT);return;}
             double min=Double.MAX_VALUE,max=-Double.MAX_VALUE;
             for(int i=0;i<data.length();i++){try{JSONArray row=data.getJSONArray(i);min=Math.min(min,Double.parseDouble(row.getString(3)));max=Math.max(max,Double.parseDouble(row.getString(2)));}catch(Exception ignored){}}
@@ -1071,7 +1082,9 @@ public class BybitTerminalActivity extends Activity {
             for(double v:ema9){min=Math.min(min,v);max=Math.max(max,v);}
             for(double v:ema21){min=Math.min(min,v);max=Math.max(max,v);}
             double range=Math.max(1e-9,max-min);float top=dp(30),bottom=h-dp(22),plotH=bottom-top;
-            float slot=w/data.length(),bodyW=Math.max(dp(2),slot*0.58f);
+            float plotRight=w-dp(55);float slot=plotRight/data.length(),bodyW=Math.max(1f,slot*0.58f);
+            p.setTextSize(dp(9));p.setColor(MUTED);
+            for(int tick=0;tick<=4;tick++){float y=top+plotH*tick/4f;c.drawText(String.format(Locale.US,"%.6g",max-range*tick/4.0),plotRight+dp(3),y,p);}
             for(int i=0;i<data.length();i++){
                 try{
                     JSONArray row=data.getJSONArray(i);
@@ -1088,21 +1101,22 @@ public class BybitTerminalActivity extends Activity {
                 }catch(Exception ignored){}
             }
             drawEma(c,ema9,GOLD,slot,bottom,plotH,min,range);
-            drawEma(c,ema21,0xFF979AA3,slot,bottom,plotH,min,range);
+            drawEma(c,ema21,0xFF369DFA,slot,bottom,plotH,min,range);
             p.setStyle(Paint.Style.FILL);p.setTextSize(dp(9));p.setFakeBoldText(true);
             p.setColor(GOLD);c.drawText("EMA 9",dp(8),dp(15),p);
-            p.setColor(0xFF979AA3);c.drawText("EMA 21",dp(58),dp(15),p);
+            p.setColor(0xFF369DFA);c.drawText("EMA 21",dp(58),dp(15),p);
             p.setFakeBoldText(false);
             int signalColor=analysisScore>=3?GREEN:analysisScore<=-3?RED:MUTED;
             String analysisTag="АНАЛИЗ: "+analysisLabel+"  •  "+(analysisScore>0?"+":"")+analysisScore;
             p.setTextSize(dp(9));p.setFakeBoldText(true);
+            while(p.measureText(analysisTag)>w-dp(22)&&analysisTag.length()>4)analysisTag=analysisTag.substring(0,analysisTag.length()-1);
             float aw=p.measureText(analysisTag)+dp(14);
             p.setColor(0xFF20242C);c.drawRoundRect(w-aw-dp(6),dp(22),w-dp(6),dp(42),dp(5),dp(5),p);
             p.setColor(signalColor);c.drawText(analysisTag,w-aw,p.getTextSize()+dp(17),p);p.setFakeBoldText(false);
             if(entryPrice>0){
                 float ey=(float)(bottom-(entryPrice-min)/range*plotH);
                 p.setColor(GOLD);p.setStrokeWidth(dp(1));p.setPathEffect(new android.graphics.DashPathEffect(new float[]{dp(5),dp(4)},0));
-                c.drawLine(0,ey,w,ey,p);p.setPathEffect(null);
+                c.drawLine(0,ey,plotRight,ey,p);p.setPathEffect(null);
                 p.setTextSize(dp(10));p.setFakeBoldText(true);
                 String tag="ВХОД  "+String.format(Locale.US,"%.4f",entryPrice);
                 float tw=p.measureText(tag)+dp(14),ty=Math.max(dp(27),Math.min(h-dp(24),ey-dp(5)));
@@ -1110,8 +1124,7 @@ public class BybitTerminalActivity extends Activity {
                 p.setColor(GOLD);c.drawText(tag,dp(13),ty,p);p.setFakeBoldText(false);
             }
             p.setColor(MUTED);p.setTextSize(dp(9));
-            c.drawText(String.format(Locale.US,"H %.4f",max),w-dp(95),dp(15),p);
-            c.drawText(String.format(Locale.US,"L %.4f",min),w-dp(95),h-dp(5),p);
+            c.drawText(symbol+" · M1",dp(8),h-dp(5),p);
         }
     }
 }

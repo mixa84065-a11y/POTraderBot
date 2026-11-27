@@ -60,10 +60,10 @@ final class AnalyticsDashboard {
         LinearLayout p=column();p.setPadding(dp(12),dp(12),dp(12),dp(14));scroll.addView(p);
         LinearLayout top=row();
         View profile=nav("profile","Профиль",WHITE,()->action.open("profile"));
-        top.addView(profile,new LinearLayout.LayoutParams(dp(68),dp(42)));
+        top.addView(profile,new LinearLayout.LayoutParams(dp(74),-2));
         top.addView(new View(a),new LinearLayout.LayoutParams(0,1,1));
         View notifications=nav("bell","Сигналы",WHITE,()->action.open("signals"));
-        top.addView(notifications,new LinearLayout.LayoutParams(dp(68),dp(48)));p.addView(top);
+        top.addView(notifications,new LinearLayout.LayoutParams(dp(74),-2));p.addView(top);
         DashboardIcon crown=new DashboardIcon(a,"crown",GOLD);
         LinearLayout.LayoutParams crownLp=new LinearLayout.LayoutParams(dp(100),dp(53));crownLp.gravity=Gravity.CENTER;
         p.addView(crown,crownLp);
@@ -87,12 +87,12 @@ final class AnalyticsDashboard {
                 tile("learn","Обучение","Трейдинг, инвестиции\nСпортивный анализ",true,()->new LearningCenter(a).show()));
         LinearLayout ai=row();ai.setPadding(dp(10),dp(9),dp(10),dp(9));
         clickable(ai,GOLD,0xff393020,0xff10151e,()->new AnalyticsTools(a).openAssistant());
-        DashboardIcon robot=new DashboardIcon(a,"robot",GOLD);ai.addView(robot,new LinearLayout.LayoutParams(dp(75),dp(76)));
+        DashboardIcon robot=new DashboardIcon(a,"robot",GOLD);ai.addView(robot,new LinearLayout.LayoutParams(dp(80),dp(81)));
         LinearLayout aiCopy=column();aiCopy.addView(text("GoD AI",23,GOLD,true));aiCopy.addView(text("ИИ-помощник",15,GOLD,true));
         TextView ad=text("Анализ · Прогнозы · Автоматизация\nВстроенный чат",11,WHITE,false);ad.setPadding(0,dp(5),0,0);aiCopy.addView(ad);
         ai.addView(aiCopy,new LinearLayout.LayoutParams(0,-2,1));ai.addView(text("›",30,GOLD,true));
         p.addView(ai,new LinearLayout.LayoutParams(-1,-2));
-        centered(p,"Версия "+BuildConfig.VERSION_NAME,9,MUTED,false,5);
+        centered(p,"Версия "+BuildConfig.VERSION_NAME,9,MUTED,false,8);
         space(p,6);
         LinearLayout nav=row();nav.setBackground(gradient(0xff17202a,0xff0a0e15,0xff303b49,0));
         String[] signs={"home","stats","signals","settings"},labels={"Главная","Статистика","Сигналы","Настройки"};
@@ -101,7 +101,7 @@ final class AnalyticsDashboard {
         shell.addView(nav);return shell;
     }
     private View tile(String glyph,String name,String desc,boolean gold,Runnable r){
-        LinearLayout tile=row();tile.setGravity(Gravity.CENTER_VERTICAL);tile.setMinimumHeight(dp(76));tile.setPadding(dp(7),dp(8),dp(6),dp(8));
+        LinearLayout tile=row();tile.setGravity(Gravity.CENTER_VERTICAL);tile.setMinimumHeight(dp(a.getResources().getConfiguration().screenHeightDp>=740?88:76));tile.setPadding(dp(7),dp(8),dp(6),dp(8));
         clickable(tile,gold?0xff8b7139:0xff65738c,gold?0xff302b26:0xff202a3d,0xff0b111a,r);
         DashboardIcon icon=new DashboardIcon(a,glyph,GOLD);
         LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(dp(38),dp(46));ip.rightMargin=dp(4);tile.addView(icon,ip);

@@ -258,7 +258,7 @@ public class MainActivity extends Activity {
         pairSelector.setBackground(surface(PANEL,9,0xff445569));pairSelector.setPadding(dp(6),0,dp(4),0);
         quoteRow.addView(pairSelector,new LinearLayout.LayoutParams(0,dp(38),1));
         accountPanel=vertical();accountPanel.setGravity(Gravity.RIGHT);accountPanel.setPadding(dp(5),0,0,0);
-        TextView accountLabel=label("Демо-баланс",10,MUTED,false);accountPanel.addView(accountLabel);
+        TextView accountLabel=label("Демо-баланс",10,MUTED,false);accountLabel.setGravity(Gravity.RIGHT);accountPanel.addView(accountLabel);
         balanceText=label("Загрузка…",14,TEXT,true);balanceText.setGravity(Gravity.RIGHT);balanceText.setMaxLines(2);
         accountPanel.addView(balanceText);quoteRow.addView(accountPanel,new LinearLayout.LayoutParams(0,-2,1.2f));
         content.addView(quoteRow,new LinearLayout.LayoutParams(-1,-2));
@@ -269,10 +269,11 @@ public class MainActivity extends Activity {
         Button expand=button("⛶",PANEL,TEXT);expand.setTextSize(15);expand.setPadding(0,0,0,0);
         android.widget.FrameLayout.LayoutParams ep=new android.widget.FrameLayout.LayoutParams(dp(38),dp(34),Gravity.TOP|Gravity.RIGHT);
         ep.setMargins(0,dp(3),dp(3),0);chartFrame.addView(expand,ep);
-        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(178));cp.topMargin=dp(6);content.addView(chartFrame,cp);
+        final int normalChartHeight=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?178:Math.max(178,Math.min(275,getResources().getConfiguration().screenHeightDp-490));
+        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(normalChartHeight));cp.topMargin=dp(6);content.addView(chartFrame,cp);
         expand.setOnClickListener(v->{
             analysisMode=!analysisMode;chart.setExpanded(analysisMode);
-            chartFrame.getLayoutParams().height=dp(analysisMode?380:178);chartFrame.requestLayout();
+            chartFrame.getLayoutParams().height=dp(analysisMode?Math.max(380,normalChartHeight):normalChartHeight);chartFrame.requestLayout();
         });
         LinearLayout chartInfo=horizontal();
         instrumentText=label("M1 · Закрытые свечи",10,GOLD,true);chartInfo.addView(instrumentText,new LinearLayout.LayoutParams(0,-2,1));

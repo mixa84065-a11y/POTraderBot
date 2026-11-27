@@ -156,7 +156,7 @@ public class ChartView extends View {
             }
         }
         p.setColor(fresh?0xFF00BE55:0xFF979AA3); p.setTextSize(10f);
-        c.drawText(message,8,h-5,p);
+        if(!candles.isEmpty())c.drawText(message,8,h-5,p);
         c.restore();
     }
 }
