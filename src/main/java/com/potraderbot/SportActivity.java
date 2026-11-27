@@ -39,6 +39,8 @@ public final class SportActivity extends Activity {
     private Button load,settings;
     private boolean busy;
     private int remaining=-1;
+    private JSONObject shownFixtures;
+    private EditText search;
     private int dp(int x){return Math.round(x*getResources().getDisplayMetrics().density);}
     private TextView label(String value,int size,int color){TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(color);t.setPadding(dp(8),dp(8),dp(8),dp(8));return t;}
     private Button button(String value){Button b=new Button(this);b.setText(value);b.setTextColor(GOLD);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(PANEL));return b;}
@@ -54,7 +56,13 @@ public final class SportActivity extends Activity {
         settings=button("НАСТРОЙКИ API-SPORTS");settings.setOnClickListener(v->settings());page.addView(settings);
         load=button("МАТЧИ НА СЕГОДНЯ");load.setOnClickListener(v->loadFixtures());page.addView(load);
         status=label("Лимит тарифа: 100 запросов в сутки. Запросы только по нажатию.",13,GOLD);page.addView(status);
+        search=new EditText(this);search.setSingleLine(true);search.setHint("Поиск команды или чемпионата");search.setTextColor(Color.WHITE);search.setHintTextColor(GOLD);page.addView(search);
         results=new LinearLayout(this);results.setOrientation(1);page.addView(results);
+        search.addTextChangedListener(new android.text.TextWatcher(){
+            public void beforeTextChanged(CharSequence t,int start,int count,int after){}
+            public void onTextChanged(CharSequence t,int start,int before,int count){if(shownFixtures!=null)render(shownFixtures);}
+            public void afterTextChanged(android.text.Editable e){}
+        });
         String cached=prefs.getString("fixtures_cache","");
         if(!cached.isEmpty())try{render(new JSONObject(cached));status.setText("Сохранённые данные: "+prefs.getString("cache_date","")+"; не обновлены.");}catch(Exception ignored){}
     }
@@ -99,8 +107,9 @@ public final class SportActivity extends Activity {
         Cipher c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.ENCRYPT_MODE,key());
         String iv=Base64.encodeToString(c.getIV(),Base64.NO_WRAP),enc=Base64.encodeToString(c.doFinal(token.getBytes(StandardCharsets.UTF_8)),Base64.NO_WRAP);
         if(!prefs.edit().putString("iv",iv).putString("cipher",enc).remove("fixtures_cache").remove("cache_date").commit())throw new Exception();
-        remaining=-1;
+        remaining=-1;clearHistoryCache();shownFixtures=null;
     }
+    private void clearHistoryCache(){SharedPreferences.Editor e=prefs.edit();for(String k:prefs.getAll().keySet())if(k.startsWith("history_")&&!k.startsWith("history_budget_"))e.remove(k);e.apply();}
     private String readKey()throws Exception{
         String enc=prefs.getString("cipher","");if(enc.isEmpty())return "";
         Cipher c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.DECRYPT_MODE,key(),new GCMParameterSpec(128,Base64.decode(prefs.getString("iv",""),Base64.NO_WRAP)));
@@ -110,7 +119,7 @@ public final class SportActivity extends Activity {
         EditText field=new EditText(this);field.setSingleLine(true);field.setHint("API-SPORTS key");field.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
         new AlertDialog.Builder(this).setTitle("API-SPORTS").setMessage("Ключ хранится на этом телефоне в зашифрованном виде. Не отправляется на сервер GoT.").setView(field)
         .setPositiveButton("Сохранить",(d,w)->{String token=field.getText().toString().trim();if(!token.matches("[A-Za-z0-9_-]{16,128}")){status.setText("Проверьте формат ключа.");return;}try{saveKey(token);results.removeAllViews();status.setText("Ключ сохранён. Нажмите «Матчи на сегодня» для проверки.");}catch(Exception e){status.setText("Не удалось сохранить ключ.");}})
-        .setNeutralButton("Удалить",(d,w)->{prefs.edit().remove("iv").remove("cipher").remove("fixtures_cache").remove("cache_date").apply();remaining=-1;results.removeAllViews();status.setText("Ключ удалён.");})
+        .setNeutralButton("Удалить",(d,w)->{prefs.edit().remove("iv").remove("cipher").remove("fixtures_cache").remove("cache_date").apply();remaining=-1;clearHistoryCache();shownFixtures=null;results.removeAllViews();status.setText("Ключ удалён.");})
         .setNegativeButton("Отмена",null).show();
     }
     private String today(){SimpleDateFormat f=new SimpleDateFormat("yyyy-MM-dd",Locale.US);f.setTimeZone(TimeZone.getTimeZone("UTC"));return f.format(new Date());}
@@ -148,18 +157,74 @@ public final class SportActivity extends Activity {
         });
     }
     private void render(JSONObject data){
-        results.removeAllViews();JSONArray list=data.optJSONArray("response");if(list==null)return;
-        results.addView(label("Матчей в ответе: "+list.length()+" • показано до 200",14,GOLD));
-        for(int i=0;i<Math.min(200,list.length());i++){
+        shownFixtures=data;results.removeAllViews();JSONArray list=data.optJSONArray("response");if(list==null)return;
+        results.addView(label("Матчей в ответе: "+list.length()+" • поиск по всему списку",14,GOLD));
+        String query=search.getText().toString().trim().toLowerCase(Locale.ROOT);int shown=0;
+        for(int i=0;i<list.length()&&shown<200;i++){
             JSONObject item=list.optJSONObject(i);if(item==null)continue;
             JSONObject teams=item.optJSONObject("teams"),fixture=item.optJSONObject("fixture"),league=item.optJSONObject("league"),goals=item.optJSONObject("goals");
             if(teams==null||fixture==null)continue;
             JSONObject h=teams.optJSONObject("home"),a=teams.optJSONObject("away");if(h==null||a==null)continue;
+            String title=h.optString("name")+" — "+a.optString("name");
+            String leagueName=league==null?"":league.optString("name");
+            if(!(title+" "+leagueName).toLowerCase(Locale.ROOT).contains(query))continue;
+            shown++;
             JSONObject st=fixture.optJSONObject("status");
             String score=goals!=null&&!goals.isNull("home")&&!goals.isNull("away")?" • "+goals.optString("home")+" : "+goals.optString("away"):"";
             TextView row=label(h.optString("name")+" — "+a.optString("name")+score+"\n"+(league==null?"":league.optString("name"))+" • "+fixture.optString("date")+" • "+(st==null?"":st.optString("short")),14,Color.WHITE);
             row.setBackgroundColor(PANEL);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(6);results.addView(row,lp);
+            row.setOnClickListener(v->openMatch(item));
         }
+    }
+    private void openMatch(JSONObject item){
+        JSONObject teams=item.optJSONObject("teams"),fixture=item.optJSONObject("fixture");
+        if(teams==null||fixture==null)return;
+        JSONObject h=teams.optJSONObject("home"),a=teams.optJSONObject("away");
+        if(h==null||a==null)return;
+        int home=h.optInt("id",-1),away=a.optInt("id",-1);long cutoff=fixture.optLong("timestamp",0);
+        String title=h.optString("name")+" — "+a.optString("name");
+        if(home<=0||away<=0||cutoff<=0){status.setText("Недостаточно данных о матче.");return;}
+        new AlertDialog.Builder(this).setTitle(title).setMessage("Дата: "+fixture.optString("date")+"\nЗагрузить историю команд? До двух запросов API, кэш на 6 часов.").setNegativeButton("Закрыть",null).setPositiveButton("Статистика",(d,w)->loadHistory(title,home,away,cutoff)).show();
+    }
+    private JSONObject teamHistory(int team,String token)throws Exception{
+        String cache="history_"+team;long now=System.currentTimeMillis(),age=now-prefs.getLong(cache+"_time",0);
+        if(age>=0&&age<21600000){String saved=prefs.getString(cache,"");if(!saved.isEmpty())return new JSONObject(saved);}
+        String day=today();
+        if(!day.equals(prefs.getString("history_budget_day","")))prefs.edit().putString("history_budget_day",day).putInt("history_budget_count",0).commit();
+        int used=prefs.getInt("history_budget_count",0);
+        if(used>=80||remaining==0)throw new IllegalStateException("Лимит запросов истории исчерпан.");
+        if(!prefs.edit().putInt("history_budget_count",used+1).commit())throw new IllegalStateException("Не удалось сохранить счётчик.");
+        HttpsURLConnection conn=(HttpsURLConnection)new URL("https://v3.football.api-sports.io/fixtures?team="+team+"&last=20&status=FT").openConnection();
+        try{
+            conn.setInstanceFollowRedirects(false);conn.setConnectTimeout(12000);conn.setReadTimeout(20000);conn.setRequestProperty("x-apisports-key",token);
+            int code=conn.getResponseCode();try{remaining=Integer.parseInt(conn.getHeaderField("x-ratelimit-requests-remaining"));}catch(Exception ignored){remaining=-1;}
+            if(code!=200)throw new IllegalStateException("API HTTP "+code);
+            JSONObject data;
+            try(InputStream in=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
+                byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){if(out.size()+n>4000000)throw new IllegalStateException("Ответ слишком большой.");out.write(buf,0,n);}
+                data=new JSONObject(new String(out.toByteArray(),StandardCharsets.UTF_8));
+            }
+            Object err=data.opt("errors");
+            if((err instanceof JSONObject&&((JSONObject)err).length()>0)||(err instanceof JSONArray&&((JSONArray)err).length()>0)||data.optJSONArray("response")==null)throw new IllegalStateException("История недоступна на текущем тарифе или API вернул ошибку.");
+            prefs.edit().putString(cache,data.toString()).putLong(cache+"_time",System.currentTimeMillis()).apply();return data;
+        }finally{conn.disconnect();}
+    }
+    private void loadHistory(String title,int home,int away,long cutoff){
+        if(busy)return;busy=true;load.setEnabled(false);settings.setEnabled(false);status.setText("Загрузка истории команд…");
+        worker.execute(()->{
+            String output;
+            try{
+                String token=readKey();if(token.isEmpty())throw new IllegalStateException("Сначала сохраните API-ключ.");
+                SportHistory.Summary h=SportHistory.summarize(teamHistory(home,token).getJSONArray("response"),home,cutoff);
+                SportHistory.Summary a=SportHistory.summarize(teamHistory(away,token).getJSONArray("response"),away,cutoff);
+                output="Историческая статистика до начала матча. Не прогноз.\n\nХозяева\n"+describe(h)+"\n\nГости\n"+describe(a)+"\n\nУгловые и ЖК: нужны отдельные данные статистики матчей.";
+            }catch(IllegalStateException e){output=e.getMessage();}catch(Exception e){output="Не удалось получить историю. Проверьте интернет и тариф.";}
+            final String msg=output;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);status.setText("Осталось запросов по API: "+(remaining<0?"неизвестно":remaining));new AlertDialog.Builder(this).setTitle(title).setMessage(msg).setPositiveButton("ОК",null).show();});
+        });
+    }
+    private String describe(SportHistory.Summary s){
+        if(s.n==0)return "Недостаточно завершённых матчей.";
+        return "Матчей: "+s.n+"\nПобеды / ничьи / поражения: "+s.w+" / "+s.d+" / "+s.l+"\nСредние голы забито / пропущено: "+String.format(Locale.US,"%.2f / %.2f",s.gf/(double)s.n,s.ga/(double)s.n)+"\nОЗ в истории: "+s.both+"/"+s.n+" ("+percent(s.both/(double)s.n)+")\nГол в первом тайме: "+(s.htN==0?"нет данных":s.htGoal+"/"+s.htN+" ("+percent(s.htGoal/(double)s.htN)+")");
     }
     @Override protected void onDestroy(){worker.shutdown();super.onDestroy();}
 }
