@@ -72,8 +72,33 @@ final class AnalyticsTools {
     }
     void replay(){
         LinearLayout p=panel();
-        note(p,"Исторический тест Android-спот-стратегии, без реальных ордеров. Вставьте CSV минутных свечей UTC с заголовком timestamp_ms,open,close,turnover24h. Источник данных выбираете вы. Нужны достоверные исторические значения оборота за 24 часа.");
+        note(p,"Исторический тест Android-спот-стратегии, без реальных ордеров. Загрузите историю Bybit либо вставьте CSV минутных свечей UTC с заголовком timestamp_ms,open,close,turnover24h. Нужны достоверные исторические значения оборота за 24 часа.");
+        EditText market=input(p,"Спот-пара USDT","BTCUSDT",true);market.setSingleLine(true);market.setMinLines(1);
+        EditText minutes=input(p,"Количество свечей (500–5000)","2880",false);
         EditText data=input(p,"CSV минутных свечей (до 5000 строк)","",true);
+        TextView source=note(p,"Источник: ручной CSV или публичная история Bybit. Загрузка требует интернет.");
+        Button download=new Button(a);download.setText("Загрузить историю Bybit");download.setAllCaps(false);
+        download.setTextColor(BG);download.setBackgroundTintList(android.content.res.ColorStateList.valueOf(GOLD));p.addView(download);
+        download.setOnClickListener(v->{
+            final String symbol=market.getText().toString().trim().toUpperCase(Locale.US);
+            final int count;
+            try{count=Integer.parseInt(minutes.getText().toString().trim());
+                if(count<500||count>5000||!symbol.matches("[A-Z0-9]{1,20}USDT"))throw new IllegalArgumentException();
+            }catch(Exception e){source.setText("Введите спот-пару USDT и 500–5000 свечей.");return;}
+            download.setEnabled(false);source.setText("Загружаем завершённые свечи… Старый CSV не изменён.");
+            new Thread(()->{
+                String csv=null,problem=null;
+                try{csv=BybitReplayHistory.download(symbol,count);}
+                catch(Exception e){problem=e instanceof IllegalArgumentException||e instanceof java.io.IOException?e.getMessage():"не удалось получить историю";}
+                final String loaded=csv,error=problem;
+                a.runOnUiThread(()->{
+                    if(a.isFinishing()||a.isDestroyed()||!source.isAttachedToWindow())return;
+                    download.setEnabled(true);
+                    if(loaded!=null){data.setText(loaded);source.setText("Bybit Spot · "+symbol+" · "+count+" завершённых свечей M1. CSV заполнен. Нажмите «Запустить исторический тест».");}
+                    else source.setText("Ошибка: "+error+". Прежний CSV сохранён.");
+                });
+            },"bybit-replay-history").start();
+        });
         EditText lookback=input(p,"История для сигнала, свечей","240",false);
         EditText horizon=input(p,"Удержание, минут","5",false);
         EditText spread=input(p,"Спред, базисные пункты","5",false);
