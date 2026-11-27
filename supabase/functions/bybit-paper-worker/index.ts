@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {structureRoom} from "./market_structure.ts";
 import {marketRegime} from "./research_strategy.ts";
+import {signalQuality} from "./signal_quality.ts";
 import {rotatingWatchlist,rankQuality} from "./scan_selection.ts";
 import {expiredRun} from "./run_duration.ts";
 import {assessEntry, ScanDiagnostics, rejectionKind, failedSignalChecks, paperPositionSize, PAPER_MIN_NOTIONAL_PCT, PAPER_MAX_NOTIONAL_PCT, PAPER_DEFAULT_NOTIONAL_PCT} from "./entry_quality.ts";
@@ -163,7 +164,8 @@ async function signal(category:string,symbol:string){
   entry,target:entry*(direction==="UP"?1+targetPct:1-targetPct),atr:volatility,side:direction==="UP"?"LONG":"SHORT"
  });
  const regime=marketRegime(bars.map(x=>({time:x[0],open:x[1],high:x[2],low:x[3],close:x[4]})),300000,now);
- return {t,price,bid,ask,score,direction,stopPct,targetPct,signalFailures,structure,regime,
+ const shadowQuality=direction==="NEUTRAL"?null:signalQuality({side:direction==="UP"?"LONG":"SHORT",price,atr:volatility,emaFast:fast,emaSlow:slow,ema15Fast:mFast,ema15Slow:mSlow,ema60Fast:hFast,ema60Slow:hSlow,rsi:strength,adx:trendStrength,momentumPct:momentum,volumeRatio:volRatio,distanceATR:distance,spreadBps:(ask-bid)/price*10000,structureStatus:structure?.status,regime:regime.regime});
+ return {t,price,bid,ask,score,direction,stopPct,targetPct,signalFailures,structure,regime,shadowQuality,
   reason:`EMA 5m/15m/1h: ${trend5}/${trend15}/${trend1h}; RSI ${strength.toFixed(1)}; MACD ${macd.toPrecision(4)}; ADX ${trendStrength.toFixed(1)}; объём ${volRatio.toFixed(2)}x; VWAP ${vwapUp?"выше":vwapDown?"ниже":"нет данных"}; импульс ${momentum.toFixed(3)}%; ATR-дистанция ${distance.toFixed(2)}`};
 }
 async function tickers(category:string):Promise<Ticker[]>{
@@ -180,7 +182,7 @@ async function candidates(run:Run,diagnostics:ScanDiagnostics):Promise<Candidate
    diagnostics.add(category,"SELECTED_FOR_SCAN",top.length);
    for(const t of top){try{const s=await signal(category,t.symbol);diagnostics.add(category,"SHADOW_REGIME_"+s.regime.regime);diagnostics.add(category,"SHADOW_REVERSAL_"+s.regime.reversal);if(s.direction==="NEUTRAL"){diagnostics.add(category,"NEUTRAL");for(const reason of s.signalFailures)diagnostics.add(category,"CHECK_"+reason);continue;}
     if(category==="spot"&&s.direction!=="UP"){diagnostics.add(category,"SPOT_NO_SHORT");continue;}
-    diagnostics.add(category,"SIGNAL");
+    diagnostics.add(category,"SIGNAL");if(s.shadowQuality)diagnostics.add(category,"SHADOW_QUALITY_"+(Math.floor(s.shadowQuality.score/10)*10));
     if(s.structure)diagnostics.add(category,"SHADOW_STRUCTURE_"+s.structure.status);
     out.push({category,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:s.reason,stopPct:s.stopPct,targetPct:s.targetPct,structureStatus:s.structure?.status});
    }catch(e){diagnostics.add(category,rejectionKind(e));}}
@@ -196,7 +198,7 @@ async function candidates(run:Run,diagnostics:ScanDiagnostics):Promise<Candidate
    const top=rotatingWatchlist(active.map(x=>map.get(x.symbol)).filter((x):x is Ticker=>!!x),{budget:2,poolSize:12,now:scanTime});
    diagnostics.add(type,"SELECTED_FOR_SCAN",top.length);
    for(const t of top){try{const s=await signal("linear",t.symbol);diagnostics.add(type,"SHADOW_REGIME_"+s.regime.regime);diagnostics.add(type,"SHADOW_REVERSAL_"+s.regime.reversal);if(s.direction==="NEUTRAL"){diagnostics.add(type,"NEUTRAL");for(const reason of s.signalFailures)diagnostics.add(type,"CHECK_"+reason);continue;}
-    diagnostics.add(type,"SIGNAL");
+    diagnostics.add(type,"SIGNAL");if(s.shadowQuality)diagnostics.add(type,"SHADOW_QUALITY_"+(Math.floor(s.shadowQuality.score/10)*10));
     if(s.structure)diagnostics.add(type,"SHADOW_STRUCTURE_"+s.structure.status);
     out.push({category:type,symbol:t.symbol,price:s.direction==="UP"?s.ask:s.bid,bid:s.bid,ask:s.ask,turnover:num(t.turnover24h),score:s.score,side:s.direction==="UP"?"LONG":"SHORT",reason:`TradFi ${type}: ${s.reason}`,stopPct:s.stopPct,targetPct:s.targetPct,structureStatus:s.structure?.status});
    }catch(e){diagnostics.add(type,rejectionKind(e));}}
