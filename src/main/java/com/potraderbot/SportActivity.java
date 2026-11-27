@@ -201,10 +201,11 @@ public final class SportActivity extends Activity {
         String title=h.optString("name")+" — "+a.optString("name");
         if(home<=0||away<=0||cutoff<=0){status.setText("Недостаточно данных о матче.");return;}
         long fixtureId=fixture.optLong("id",0);
-        String[] options={"Анализ и личные встречи (до 3 запросов)","Угловые и ЖК (до 8 запросов)","Составы и травмы (до 2 запросов)"};
+        String[] options={"Анализ и личные встречи (до 3 запросов)","История по датам • Free (до 14 запросов)","Угловые и ЖК (до 8 запросов)","Составы и травмы (до 2 запросов)"};
         new AlertDialog.Builder(this).setTitle(title+"\n"+fixture.optString("date")).setItems(options,(d,w)->{
             if(w==0)loadHistory(title,home,away,cutoff,fixtureId);
-            else if(w==1)loadDetails(title,home,away,cutoff);
+            else if(w==1)archiveHistory(title,home,away,cutoff,fixtureId);
+            else if(w==2)loadDetails(title,home,away,cutoff);
             else if(fixtureId>0)loadSquads(title,fixtureId);
             else status.setText("Нет идентификатора матча.");
         }).setNegativeButton("Закрыть",null).show();
@@ -233,7 +234,8 @@ public final class SportActivity extends Activity {
                 data=new JSONObject(new String(out.toByteArray(),StandardCharsets.UTF_8));
             }
             Object err=data.opt("errors");
-            if((err instanceof JSONObject&&((JSONObject)err).length()>0)||(err instanceof JSONArray&&((JSONArray)err).length()>0)||data.optJSONArray("response")==null)throw new IllegalStateException("История недоступна на текущем тарифе или API вернул ошибку.");
+            if((err instanceof JSONObject&&((JSONObject)err).length()>0)||(err instanceof JSONArray&&((JSONArray)err).length()>0))throw new IllegalStateException(SportArchive.errorCategory(err));
+            if(data.optJSONArray("response")==null)throw new IllegalStateException("API не вернул список данных.");
             prefs.edit().putString(cache,data.toString()).putLong(cache+"_time",System.currentTimeMillis()).apply();return data;
         }finally{conn.disconnect();}
     }
@@ -290,6 +292,38 @@ public final class SportActivity extends Activity {
         return "Угловые: "+(s.cornersN==0?"нет данных":String.format(Locale.US,"%.2f своих / %.2f соперника (%d матчей)",s.cornersFor/(double)s.cornersN,s.cornersAgainst/(double)s.cornersN,s.cornersN))+
         "\nЖК: "+(s.cardsN==0?"нет данных":String.format(Locale.US,"%.2f своих / %.2f соперника (%d матчей)",s.cardsFor/(double)s.cardsN,s.cardsAgainst/(double)s.cardsN,s.cardsN));
     }
+    private void archiveHistory(String title,int home,int away,long cutoff,long fixtureId){
+        if(busy)return;
+        new AlertDialog.Builder(this).setTitle("История по датам — Free").setMessage("Загрузить завершённые матчи за 14 предыдущих дней? До 14 запросов; кэш общий для всех команд. Если данных мало, прогноз не сохраняется. Доступ зависит от тарифа.").setNegativeButton("Отмена",null).setPositiveButton("Загрузить",(d,w)->{
+            if(busy)return;busy=true;load.setEnabled(false);settings.setEnabled(false);status.setText("Загрузка календарей предыдущих дней…");
+            worker.execute(()->{
+                String output;
+                try{
+                    String token=readKey();if(token.isEmpty())throw new IllegalStateException("Сначала сохраните API-ключ.");
+                    JSONArray all=new JSONArray();int days=0;String problem="";
+                    java.util.Calendar cal=java.util.Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+                    cal.setTimeInMillis(Math.min(cutoff*1000,System.currentTimeMillis()));
+                    SimpleDateFormat fmt=new SimpleDateFormat("yyyy-MM-dd",Locale.US);fmt.setTimeZone(TimeZone.getTimeZone("UTC"));
+                    for(int i=0;i<14;i++){
+                        cal.add(java.util.Calendar.DATE,-1);String date=fmt.format(cal.getTime());
+                        try{
+                            JSONArray rows=cachedRequest("history_archive_"+date,"fixtures?date="+date+"&timezone=UTC",token,21600000).getJSONArray("response");
+                            JSONArray pair=SportArchive.forTeams(rows,home,away,cutoff);
+                            for(int k=0;k<pair.length();k++)all.put(pair.getJSONObject(k));
+                            days++;
+                        }catch(IllegalStateException e){problem=e.getMessage();break;}
+                        catch(Exception e){problem="Ошибка соединения или ответа API.";break;}
+                    }
+                    SportHistory.Summary h=SportHistory.summarize(all,home,cutoff),a=SportHistory.summarize(all,away,cutoff);
+                    output="История по календарям UTC: "+days+"/14 дней.\nХозяева\n"+describe(h)+"\n\nГости\n"+describe(a)+"\n\n"+model(h,a)+"\n\nЛичные встречи за этот период\n"+describe(SportHistory.summarize(onlyPair(all,home,away),home,cutoff));
+                    if(!problem.isEmpty())output+="\n\nЗагрузка прервана: "+problem;
+                    if(days==14)output+="\n\n"+recordForecast(fixtureId,title,home,away,cutoff,h,a);
+                    else output+="\n\nПрогноз не сохранён: неполная загрузка архива.";
+                }catch(IllegalStateException e){output=e.getMessage();}catch(Exception e){output="Не удалось получить историю по датам.";}
+                final String msg=output;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);status.setText("Осталось запросов по API: "+(remaining<0?"неизвестно":remaining));new AlertDialog.Builder(this).setTitle(title).setMessage(msg).setPositiveButton("ОК",null).show();});
+            });
+        }).show();
+    }
     private void loadHistory(String title,int home,int away,long cutoff,long fixtureId){
         if(busy)return;busy=true;load.setEnabled(false);settings.setEnabled(false);status.setText("Загрузка истории команд…");
         worker.execute(()->{
@@ -301,7 +335,7 @@ public final class SportActivity extends Activity {
                 output="Историческая статистика до начала матча. Не прогноз.\n\nХозяева\n"+describe(h)+"\n\nГости\n"+describe(a)+"\n\n"+model(h,a)+"\n\nУгловые и ЖК: нужны отдельные данные статистики матчей.";
                 try{output+="\n\n"+recordForecast(fixtureId,title,home,away,cutoff,h,a);}catch(Exception e){output+="\n\nНе удалось сохранить прогноз.";}
                 try{output+="\n\nЛичные встречи (до 10)\n"+describe(SportHistory.summarize(onlyPair(headToHead(home,away,token).getJSONArray("response"),home,away),home,cutoff));}catch(Exception e){output+="\n\nЛичные встречи: данные недоступны."; }
-            }catch(IllegalStateException e){output=e.getMessage();}catch(Exception e){output="Не удалось получить историю. Проверьте интернет и тариф.";}
+            }catch(IllegalStateException e){output=e.getMessage()+"\n\nПопробуйте «История по датам • Free» в карточке матча.";}catch(Exception e){output="Не удалось получить историю. Проверьте интернет и тариф.";}
             final String msg=output;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);status.setText("Осталось запросов по API: "+(remaining<0?"неизвестно":remaining));new AlertDialog.Builder(this).setTitle(title).setMessage(msg).setPositiveButton("ОК",null).show();});
         });
     }
