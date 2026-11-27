@@ -249,16 +249,13 @@ public class MainActivity extends Activity {
         analysisMode=false;
         LinearLayout content=vertical();content.setPadding(dp(16),dp(16),dp(16),dp(24));
         LinearLayout header=horizontal();
-        TextView brand=label("♛  GOD OF TRADING 2.0",19,GOLD,true);header.addView(brand,new LinearLayout.LayoutParams(0,dp(42),1));
+        Button back=button("‹",PANEL,GOLD);header.addView(back,new LinearLayout.LayoutParams(dp(44),dp(42)));back.setOnClickListener(v->showMain());
+        TextView brand=label("Трейдинг",20,TEXT,true);brand.setGravity(Gravity.CENTER_VERTICAL);header.addView(brand,new LinearLayout.LayoutParams(0,dp(42),1));
         Button bybit=button("BYBIT",GOLD,NAVY);header.addView(bybit,new LinearLayout.LayoutParams(dp(82),dp(42)));
         bybit.setOnClickListener(v->openBybitTerminal());
         Button menu=button("⋮",PANEL,TEXT);header.addView(menu,new LinearLayout.LayoutParams(dp(48),dp(42)));
         content.addView(header);
         menu.setOnClickListener(v->showMenu());
-        Button sport=button("GoS  •  SPORT AI",PANEL,GOLD);
-        LinearLayout.LayoutParams sportLp=new LinearLayout.LayoutParams(-1,dp(44));sportLp.topMargin=dp(6);
-        content.addView(sport,sportLp);
-        sport.setOnClickListener(v->startActivity(new android.content.Intent(this,SportActivity.class)));
 
         accountPanel=horizontal();accountPanel.setPadding(dp(16),dp(14),dp(16),dp(14));accountPanel.setBackground(surface(PANEL,15,0xFF51401D));accountPanel.setElevation(dp(2));
         TextView accountLabel=label("ВИРТУАЛЬНЫЙ БАЛАНС",10,MUTED,true);
@@ -299,14 +296,18 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,chartHeight);content.addView(chart,cp);
 
         quoteText=label("Нажмите «АНАЛИЗ», чтобы загрузить подтверждённые котировки.",11,MUTED,false);quoteText.setPadding(dp(4),dp(6),0,dp(4));content.addView(quoteText);
-        analysisButton=button("АНАЛИЗ",GOLD,NAVY);
-        LinearLayout.LayoutParams abp=new LinearLayout.LayoutParams(-1,dp(44));abp.topMargin=dp(5);content.addView(analysisButton,abp);
+        analysisButton=button("Анализ",GOLD,NAVY);analysisButton.setTextSize(12);
         analysisButton.setOnClickListener(v->toggleAnalysis());
 
         analysisDivider=new View(this);analysisDivider.setBackgroundColor(0xFF263D5A);
         LinearLayout.LayoutParams divp=new LinearLayout.LayoutParams(-1,dp(1));divp.topMargin=dp(8);content.addView(analysisDivider,divp);
         analysisText=label("РЫНОЧНЫЙ АНАЛИЗ\nНажмите «АНАЛИЗ», чтобы получить свечи и рассчитать направление. Без свежих данных сделки заблокированы.",12,TEXT,false);
         stylePanel(analysisText,10);content.addView(analysisText);
+
+        signalText=label("ОЦЕНКА МОДЕЛИ: —",11,MUTED,true);signalText.setPadding(dp(4),dp(10),0,dp(3));content.addView(signalText);
+        strengthBar=new ModelStrengthBar(this);
+        strengthBar.setMax(100);strengthBar.setProgress(0);strengthBar.setProgressTintList(ColorStateList.valueOf(GOLD));
+        LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(22));content.addView(strengthBar,bp);
 
         controlsPanel=vertical();
         TextView expiryLabel=label("ЭКСПИРАЦИЯ",10,MUTED,true);expiryLabel.setPadding(dp(4),dp(10),0,dp(4));controlsPanel.addView(expiryLabel);
@@ -320,18 +321,14 @@ public class MainActivity extends Activity {
         stakeInput.setBackground(surface(PANEL,10,0xFF51401D));stakeInput.setPadding(dp(12),0,dp(12),0);
         controlsPanel.addView(stakeInput,new LinearLayout.LayoutParams(-1,dp(48)));
         LinearLayout actions=horizontal();
-        upButton=button("ВВЕРХ",GREEN,Color.WHITE);downButton=button("ВНИЗ",RED,Color.WHITE);
+        upButton=button("↑ ВВЕРХ",GREEN,Color.WHITE);downButton=button("↓ ВНИЗ",RED,Color.WHITE);upButton.setTextSize(12);downButton.setTextSize(12);
         LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,dp(52),1);half.rightMargin=dp(5);actions.addView(upButton,half);
+        LinearLayout.LayoutParams middle=new LinearLayout.LayoutParams(0,dp(52),1);middle.leftMargin=dp(2);middle.rightMargin=dp(2);actions.addView(analysisButton,middle);
         LinearLayout.LayoutParams half2=new LinearLayout.LayoutParams(0,dp(52),1);half2.leftMargin=dp(5);actions.addView(downButton,half2);
         LinearLayout.LayoutParams actp=new LinearLayout.LayoutParams(-1,-2);actp.topMargin=dp(8);controlsPanel.addView(actions,actp);
         upButton.setEnabled(false);downButton.setEnabled(false);
         upButton.setOnClickListener(v->placeTrade("UP"));downButton.setOnClickListener(v->placeTrade("DOWN"));
         content.addView(controlsPanel);
-
-        signalText=label("ОЦЕНКА МОДЕЛИ: —",11,MUTED,true);signalText.setPadding(dp(4),dp(10),0,dp(3));content.addView(signalText);
-        strengthBar=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
-        strengthBar.setMax(100);strengthBar.setProgress(0);strengthBar.setProgressTintList(ColorStateList.valueOf(GOLD));
-        LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(4));content.addView(strengthBar,bp);
 
         historyPanel=vertical();
         TextView statsTitle=label("СТАТИСТИКА СДЕЛОК  ▾",11,GOLD,true);statsTitle.setPadding(dp(4),dp(12),0,dp(5));historyPanel.addView(statsTitle);
@@ -661,7 +658,7 @@ public class MainActivity extends Activity {
         controlsPanel.setVisibility(View.VISIBLE);
         historyPanel.setVisibility(analysisMode?View.GONE:View.VISIBLE);
         signalText.setVisibility(View.VISIBLE);strengthBar.setVisibility(View.VISIBLE);
-        analysisButton.setText(analysisMode?"СВЕРНУТЬ АНАЛИЗ":"АНАЛИЗ");
+        analysisButton.setText(analysisMode?"Свернуть":"Анализ");
         MarketAnalyzer.Result currentAnalysis=MarketAnalyzer.analyze(latestCandles);
         chart.setDecision(currentAnalysis.direction,currentAnalysis.strength);
         analysisText.setText(analysisMode?"ПОЛНЫЙ АНАЛИЗ\n"+currentAnalysis.explanation:currentAnalysis.explanation);

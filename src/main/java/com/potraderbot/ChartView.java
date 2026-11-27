@@ -93,8 +93,8 @@ public class ChartView extends View {
     @Override protected void onDraw(Canvas c) {
         super.onDraw(c);
         float w=getWidth(), h=getHeight();
-        c.drawColor(0xFF0A0D12);
-        p.setColor(0xFF202630); p.setStrokeWidth(1f);
+        c.drawColor(0xFF0B1420);
+        p.setColor(0xFF1D2A38); p.setStrokeWidth(1f);
         for(int i=1;i<6;i++) c.drawLine(0,h*i/6f,w,h*i/6f,p);
         for(int i=1;i<8;i++) c.drawLine(w*i/8f,0,w*i/8f,h,p);
         p.setColor(0xFFF7BE37); p.setTextSize(14f); p.setFakeBoldText(true);
@@ -131,11 +131,11 @@ public class ChartView extends View {
 
             if(showDecision && candles.size()>=21) {
                 drawEma(c,ema(9),0xFFF7BE37,left,slot,bottom,plotH,min,max);
-                drawEma(c,ema(21),0xFF979AA3,left,slot,bottom,plotH,min,max);
+                drawEma(c,ema(21),0xFF369DFA,left,slot,bottom,plotH,min,max);
 
                 p.setTextSize(10f); p.setFakeBoldText(true);
                 p.setColor(0xFFF7BE37); c.drawText("EMA 9",16,42,p);
-                p.setColor(0xFF979AA3); c.drawText("EMA 21",66,42,p);
+                p.setColor(0xFF369DFA); c.drawText("EMA 21",66,42,p);
                 p.setFakeBoldText(false);
 
                 int signalColor = decision.contains("ВВЕРХ") ? 0xFF00BE55 :
