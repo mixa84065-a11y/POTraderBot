@@ -206,7 +206,14 @@ public final class SportActivity extends Activity {
         int home=h.optInt("id",-1),away=a.optInt("id",-1);long cutoff=fixture.optLong("timestamp",0);
         String title=h.optString("name")+" — "+a.optString("name");
         if(home<=0||away<=0||cutoff<=0){status.setText("Недостаточно данных о матче.");return;}
-        new AlertDialog.Builder(this).setTitle(title).setMessage("Дата: "+fixture.optString("date")+"\nЗагрузить историю команд? До трёх запросов API, включая личные встречи; кэш на 6 часов.").setNegativeButton("Закрыть",null).setNeutralButton("Угловые и ЖК",(d,w)->loadDetails(title,home,away,cutoff)).setPositiveButton("Анализ",(d,w)->loadHistory(title,home,away,cutoff)).show();
+        long fixtureId=fixture.optLong("id",0);
+        String[] options={"Анализ и личные встречи (до 3 запросов)","Угловые и ЖК (до 8 запросов)","Составы и травмы (до 2 запросов)"};
+        new AlertDialog.Builder(this).setTitle(title+"\n"+fixture.optString("date")).setItems(options,(d,w)->{
+            if(w==0)loadHistory(title,home,away,cutoff);
+            else if(w==1)loadDetails(title,home,away,cutoff);
+            else if(fixtureId>0)loadSquads(title,fixtureId);
+            else status.setText("Нет идентификатора матча.");
+        }).setNegativeButton("Закрыть",null).show();
     }
     private JSONObject teamHistory(int team,String token)throws Exception{
         return historicalRequest("history_"+team,"fixtures?team="+team+"&last=20&status=FT",token);
@@ -215,8 +222,11 @@ public final class SportActivity extends Activity {
         return historicalRequest("history_h2h_"+Math.min(home,away)+"_"+Math.max(home,away),"fixtures/headtohead?h2h="+home+"-"+away+"&last=10&status=FT",token);
     }
     private JSONObject historicalRequest(String cache,String endpoint,String token)throws Exception{
+        return cachedRequest(cache,endpoint,token,21600000);
+    }
+    private JSONObject cachedRequest(String cache,String endpoint,String token,long ttl)throws Exception{
         long now=System.currentTimeMillis(),age=now-prefs.getLong(cache+"_time",0);
-        if(age>=0&&age<21600000){String saved=prefs.getString(cache,"");if(!saved.isEmpty())return new JSONObject(saved);}
+        if(age>=0&&age<ttl){String saved=prefs.getString(cache,"");if(!saved.isEmpty())return new JSONObject(saved);}
         reserveRequest();
         HttpsURLConnection conn=(HttpsURLConnection)new URL("https://v3.football.api-sports.io/"+endpoint).openConnection();
         try{
@@ -232,6 +242,18 @@ public final class SportActivity extends Activity {
             if((err instanceof JSONObject&&((JSONObject)err).length()>0)||(err instanceof JSONArray&&((JSONArray)err).length()>0)||data.optJSONArray("response")==null)throw new IllegalStateException("История недоступна на текущем тарифе или API вернул ошибку.");
             prefs.edit().putString(cache,data.toString()).putLong(cache+"_time",System.currentTimeMillis()).apply();return data;
         }finally{conn.disconnect();}
+    }
+    private void loadSquads(String title,long id){
+        if(busy)return;busy=true;load.setEnabled(false);settings.setEnabled(false);status.setText("Загрузка составов и травм…");
+        worker.execute(()->{
+            StringBuilder out=new StringBuilder("Данные API на момент загрузки. Составы могут публиковаться незадолго до матча. Пустой ответ не означает отсутствие травм.\n");
+            try{
+                String token=readKey();if(token.isEmpty())throw new IllegalStateException("Сначала сохраните API-ключ.");
+                try{out.append("\nСОСТАВЫ\n").append(SportSquads.lineups(cachedRequest("history_lineups_"+id,"fixtures/lineups?fixture="+id,token,600000).getJSONArray("response")));}catch(Exception e){out.append("\nСоставы: данные недоступны.");}
+                try{out.append("\n\nТРАВМЫ И ОТСУТСТВУЮЩИЕ\n").append(SportSquads.injuries(cachedRequest("history_injuries_"+id,"injuries?fixture="+id,token,1800000).getJSONArray("response")));}catch(Exception e){out.append("\nТравмы: данные недоступны.");}
+            }catch(Exception e){out.append("\nСначала проверьте API-ключ.");}
+            String msg=out.toString();runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);status.setText("Осталось запросов по API: "+(remaining<0?"неизвестно":remaining));new AlertDialog.Builder(this).setTitle(title).setMessage(msg).setPositiveButton("ОК",null).show();});
+        });
     }
     private JSONObject fixtureDetails(long id,String token)throws Exception{
         String cache="history_detail_"+id;String saved=prefs.getString(cache,"");
