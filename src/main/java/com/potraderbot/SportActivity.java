@@ -184,7 +184,7 @@ public final class SportActivity extends Activity {
         int home=h.optInt("id",-1),away=a.optInt("id",-1);long cutoff=fixture.optLong("timestamp",0);
         String title=h.optString("name")+" — "+a.optString("name");
         if(home<=0||away<=0||cutoff<=0){status.setText("Недостаточно данных о матче.");return;}
-        new AlertDialog.Builder(this).setTitle(title).setMessage("Дата: "+fixture.optString("date")+"\nЗагрузить историю команд? До двух запросов API, кэш на 6 часов.").setNegativeButton("Закрыть",null).setPositiveButton("Статистика",(d,w)->loadHistory(title,home,away,cutoff)).show();
+        new AlertDialog.Builder(this).setTitle(title).setMessage("Дата: "+fixture.optString("date")+"\nЗагрузить историю команд? До двух запросов API, кэш на 6 часов.").setNegativeButton("Закрыть",null).setNeutralButton("Угловые и ЖК",(d,w)->loadDetails(title,home,away,cutoff)).setPositiveButton("Статистика",(d,w)->loadHistory(title,home,away,cutoff)).show();
     }
     private JSONObject teamHistory(int team,String token)throws Exception{
         String cache="history_"+team;long now=System.currentTimeMillis(),age=now-prefs.getLong(cache+"_time",0);
@@ -208,6 +208,51 @@ public final class SportActivity extends Activity {
             if((err instanceof JSONObject&&((JSONObject)err).length()>0)||(err instanceof JSONArray&&((JSONArray)err).length()>0)||data.optJSONArray("response")==null)throw new IllegalStateException("История недоступна на текущем тарифе или API вернул ошибку.");
             prefs.edit().putString(cache,data.toString()).putLong(cache+"_time",System.currentTimeMillis()).apply();return data;
         }finally{conn.disconnect();}
+    }
+    private JSONObject fixtureDetails(long id,String token)throws Exception{
+        String cache="history_detail_"+id;String saved=prefs.getString(cache,"");
+        if(!saved.isEmpty())return new JSONObject(saved);
+        String day=today();
+        if(!day.equals(prefs.getString("history_budget_day","")))prefs.edit().putString("history_budget_day",day).putInt("history_budget_count",0).commit();
+        int used=prefs.getInt("history_budget_count",0);
+        if(used>=80||remaining==0)throw new IllegalStateException("Лимит запросов истории исчерпан.");
+        if(!prefs.edit().putInt("history_budget_count",used+1).commit())throw new IllegalStateException("Не удалось сохранить счётчик.");
+        HttpsURLConnection conn=(HttpsURLConnection)new URL("https://v3.football.api-sports.io/fixtures/statistics?fixture="+id).openConnection();
+        try{
+            conn.setInstanceFollowRedirects(false);conn.setConnectTimeout(12000);conn.setReadTimeout(20000);conn.setRequestProperty("x-apisports-key",token);
+            int code=conn.getResponseCode();try{remaining=Integer.parseInt(conn.getHeaderField("x-ratelimit-requests-remaining"));}catch(Exception ignored){remaining=-1;}
+            if(code!=200)throw new IllegalStateException("API HTTP "+code);
+            JSONObject data;
+            try(InputStream in=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
+                byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){if(out.size()+n>1000000)throw new IllegalStateException("Ответ слишком большой.");out.write(buf,0,n);}
+                data=new JSONObject(new String(out.toByteArray(),StandardCharsets.UTF_8));
+            }
+            Object err=data.opt("errors");
+            if((err instanceof JSONObject&&((JSONObject)err).length()>0)||(err instanceof JSONArray&&((JSONArray)err).length()>0)||data.optJSONArray("response")==null)throw new IllegalStateException("Подробная статистика недоступна на текущем тарифе.");
+            if(data.getJSONArray("response").length()>0)prefs.edit().putString(cache,data.toString()).apply();
+            return data;
+        }finally{conn.disconnect();}
+    }
+    private void loadDetails(String title,int home,int away,long cutoff){
+        if(busy)return;
+        new AlertDialog.Builder(this).setTitle("Подробная история").setMessage("До 8 запросов: история двух команд и статистика до трёх завершённых матчей каждой. Кэш сокращает расход.").setNegativeButton("Отмена",null).setPositiveButton("Загрузить",(d,w)->{
+            if(busy)return;busy=true;load.setEnabled(false);settings.setEnabled(false);status.setText("Загрузка угловых и карточек…");
+            worker.execute(()->{
+                String output;
+                try{
+                    String token=readKey();if(token.isEmpty())throw new IllegalStateException("Сначала сохраните API-ключ.");
+                    SportDetailHistory.Summary h=new SportDetailHistory.Summary(),a=new SportDetailHistory.Summary();
+                    for(long id:SportDetailHistory.recentIds(teamHistory(home,token).getJSONArray("response"),home,cutoff))h.add(fixtureDetails(id,token).getJSONArray("response"),home);
+                    for(long id:SportDetailHistory.recentIds(teamHistory(away,token).getJSONArray("response"),away,cutoff))a.add(fixtureDetails(id,token).getJSONArray("response"),away);
+                    output="Исторические средние, не прогноз. До трёх матчей на команду; выборка мала.\n\nХозяева\n"+describeDetails(h)+"\n\nГости\n"+describeDetails(a);
+                }catch(IllegalStateException e){output=e.getMessage();}catch(Exception e){output="Не удалось получить подробные данные. Проверьте тариф и интернет.";}
+                final String msg=output;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);status.setText("Осталось запросов по API: "+(remaining<0?"неизвестно":remaining));new AlertDialog.Builder(this).setTitle(title).setMessage(msg).setPositiveButton("ОК",null).show();});
+            });
+        }).show();
+    }
+    private String describeDetails(SportDetailHistory.Summary s){
+        return "Угловые: "+(s.cornersN==0?"нет данных":String.format(Locale.US,"%.2f своих / %.2f соперника (%d матчей)",s.cornersFor/(double)s.cornersN,s.cornersAgainst/(double)s.cornersN,s.cornersN))+
+        "\nЖК: "+(s.cardsN==0?"нет данных":String.format(Locale.US,"%.2f своих / %.2f соперника (%d матчей)",s.cardsFor/(double)s.cardsN,s.cardsAgainst/(double)s.cardsN,s.cardsN));
     }
     private void loadHistory(String title,int home,int away,long cutoff){
         if(busy)return;busy=true;load.setEnabled(false);settings.setEnabled(false);status.setText("Загрузка истории команд…");
