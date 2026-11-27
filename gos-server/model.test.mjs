@@ -1,0 +1,10 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { analyze } from "./model.mjs";
+const home={n:10,gf:15,ga:10,htN:10,htFor:5,htAgainst:3};
+const away={n:10,gf:10,ga:15,htN:10,htFor:3,htAgainst:5};
+test("normalized outcome and first half complement",()=>{const r=analyze({home,away});assert.equal(r.status,"ok");assert.ok(r.fullTime.homeWin>r.fullTime.awayWin);assert.ok(Math.abs(r.fullTime.homeWin+r.fullTime.draw+r.fullTime.awayWin-1)<1e-10);assert.ok(Math.abs(r.firstHalf.noGoal+r.firstHalf.goalsAtLeast1-1)<1e-10);});
+test("insufficient samples",()=>{assert.equal(analyze({home:{...home,n:4,gf:4,ga:4,htN:4,htFor:1,htAgainst:1},away}).status,"insufficient_history");});
+test("invalid data rejected",()=>{assert.throws(()=>analyze({home:{...home,n:21},away}));assert.throws(()=>analyze({home:{...home,htN:11},away}));assert.throws(()=>analyze({home:{...home,gf:-1},away}));});
+test("missing half time stays missing",()=>{assert.equal(analyze({home:{...home,htN:0,htFor:0,htAgainst:0},away}).firstHalf,null);});
+test("zero means",()=>{const z={n:5,gf:0,ga:0,htN:5,htFor:0,htAgainst:0};const r=analyze({home:z,away:z});assert.equal(r.fullTime.draw,1);assert.equal(r.firstHalf.noGoal,1);});
