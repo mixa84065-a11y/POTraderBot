@@ -381,13 +381,22 @@ public final class SportActivity extends Activity {
         ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,names);adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         h.setAdapter(adapter);a.setAdapter(adapter);a.setSelection(1);
         form.addView(label("Хозяева",14,GOLD));form.addView(h);form.addView(label("Гости",14,GOLD));form.addView(a);
-        new AlertDialog.Builder(this).setTitle(league).setView(form).setNegativeButton("Закрыть",null).setPositiveButton("Анализ",(d,w)->{
+        new AlertDialog.Builder(this).setTitle(league).setView(form).setNegativeButton("Закрыть",null).setNeutralButton("Тест моделей",(d,w)->replayCsv(archive,league)).setPositiveButton("Анализ",(d,w)->{
             String home=(String)h.getSelectedItem(),away=(String)a.getSelectedItem();
             if(home.equals(away)){status.setText("Выберите разные команды.");return;}
             SportCsvHistory.Team x=archive.team(home),y=archive.team(away);
             String msg="Источник: Football-Data.co.uk. До 20 последних завершённых матчей каждой команды, только текущий сезон. Составы, травмы и live не учитываются.\n\n"+home+"\n"+describe(x.goals)+"\n"+x.details()+"\n"+x.formDetails()+"\n\n"+away+"\n"+describe(y.goals)+"\n"+y.details()+"\n"+y.formDetails()+"\n\n"+model(x.goals,y.goals)+"\n\nОтдельная модель: не сохраняется в журнал API-SPORTS.";
             new AlertDialog.Builder(this).setTitle(home+" — "+away).setMessage(msg).setPositiveButton("ОК",null).show();
         }).show();
+    }
+    private void replayCsv(SportCsvHistory archive,String league){
+        if(busy)return;busy=true;load.setEnabled(false);settings.setEnabled(false);status.setText("Историческая проверка моделей…");
+        worker.execute(()->{
+            String msg;
+            try{msg=archive.replay().report()+"\n\nИсточник: Football-Data, текущий сезон, до 200 последних матчей. Для обучения берутся только предыдущие календарные дни, минимум 5 матчей на команду и 3 по соответствующему полю. Без новых сетевых запросов.";}
+            catch(Exception e){msg="Не удалось выполнить историческую проверку.";}
+            final String out=msg;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);status.setText("Историческая проверка завершена.");new AlertDialog.Builder(this).setTitle(league+" • тест моделей").setMessage(out).setPositiveButton("ОК",null).show();});
+        });
     }
     private void probeSStats(){
         if(busy)return;

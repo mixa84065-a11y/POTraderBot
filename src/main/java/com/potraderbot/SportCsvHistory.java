@@ -84,9 +84,46 @@ public final class SportCsvHistory {
   public String details(){return "Угловые (свои / соперника): "+mean(cn,cf,ca)+"\nЖК (свои / соперника): "+mean(yn,yf,ya);}
   private static String mean(int n,int f,int a){return n==0?"нет данных":String.format(Locale.US,"%.2f / %.2f (%d матчей)",f/(double)n,a/(double)n,n);}
  }
- public Team team(String name){
+ public static final class Replay {
+  int tested,skipped,baseCorrect,venueCorrect,baselineCorrect;
+  double baseBrier,venueBrier,baselineBrier;
+  private static int best(double[] p){int b=0;for(int i=1;i<3;i++)if(p[i]>p[b])b=i;return b;}
+  private static double brier(double[] p,int actual){double sum=0;for(int i=0;i<3;i++){double d=p[i]-(i==actual?1:0);sum+=d*d;}return sum;}
+  void add(double[] base,double[] venue,double[] baseline,int actual){
+   tested++;if(best(base)==actual)baseCorrect++;if(best(venue)==actual)venueCorrect++;if(best(baseline)==actual)baselineCorrect++;
+   baseBrier+=brier(base,actual);venueBrier+=brier(venue,actual);baselineBrier+=brier(baseline,actual);
+  }
+  private String metric(String label,int correct,double score){return String.format(Locale.US,"%s: %.1f%% (%d/%d) • Brier %.4f",label,100.0*correct/tested,correct,tested,score/tested);}
+  public String report(){if(tested==0)return "Недостаточно исторических матчей для проверки. Пропущено: "+skipped;
+   return "Проверено: "+tested+" • пропущено: "+skipped+"\n"+
+    metric("Пуассон: общая форма",baseCorrect,baseBrier)+"\n"+
+    metric("Пуассон: с учётом поля",venueCorrect,venueBrier)+"\n"+
+    metric("Базовая частота исходов лиги",baselineCorrect,baselineBrier)+
+    "\n\nBrier 1X2: 0 — идеально, меньше — лучше (диапазон 0–2). Точность — доля угаданных наиболее вероятных исходов. Одинаковая выборка для всех моделей. Это ретроспективная оценка, не гарантия будущих результатов.";
+  }
+ }
+ public Replay replay(){
+  Replay r=new Replay();
+  // Limit work to the most recent 200 fixtures, use only earlier calendar days.
+  for(int i=Math.min(200,rows.size())-1;i>=0;i--){
+   Match m=rows.get(i);Team h=teamBefore(m.home,m.time),a=teamBefore(m.away,m.time);
+   if(h.goals.n<5||a.goals.n<5||h.homeN<3||a.awayN<3){r.skipped++;continue;}
+   double x=(h.goals.gf/(double)h.goals.n+a.goals.ga/(double)a.goals.n)/2;
+   double y=(a.goals.gf/(double)a.goals.n+h.goals.ga/(double)h.goals.n)/2;
+   double vx=(h.homeGF/(double)h.homeN+a.awayGA/(double)a.awayN)/2;
+   double vy=(a.awayGF/(double)a.awayN+h.homeGA/(double)h.homeN)/2;
+   double[] freq={1,1,1};double n=3;
+   for(Match old:rows)if(old.time<m.time){freq[old.hg>old.ag?0:old.hg==old.ag?1:2]++;n++;}
+   for(int j=0;j<3;j++)freq[j]/=n;
+   r.add(SportAutoModel.outcomes(x,y),SportAutoModel.outcomes(vx,vy),freq,m.hg>m.ag?0:m.hg==m.ag?1:2);
+  }
+  return r;
+ }
+ public Team team(String name){return teamBefore(name,Long.MAX_VALUE);}
+ private Team teamBefore(String name,long cutoff){
   Team t=new Team();SportHistory.Summary s=t.goals;
   for(Match m:rows){
+   if(m.time>=cutoff)continue;
    boolean h=name.equals(m.home);if(!h&&!name.equals(m.away))continue;if(s.n>=20)break;
    int f=h?m.hg:m.ag,a=h?m.ag:m.hg;s.n++;s.gf+=f;s.ga+=a;if(f>a)s.w++;else if(f==a)s.d++;else s.l++;if(f>0&&a>0)s.both++;
    if(s.n<=5){t.recentN++;t.recentPoints+=f>a?3:f==a?1:0;t.recentGF+=f;t.recentGA+=a;if(t.form.length()>0)t.form.append(" ");t.form.append(f>a?"В":f==a?"Н":"П");}
