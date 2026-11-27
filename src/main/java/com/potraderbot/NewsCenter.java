@@ -93,13 +93,34 @@ final class NewsCenter {
                 String name=h.optString("name","—")+" — "+away.optString("name","—");
                 if(goals!=null&&!goals.isNull("home")&&!goals.isNull("away"))name+="  "+goals.optInt("home")+":"+goals.optInt("away");
                 long ts=f.optLong("timestamp",0);String date=ts>0?format(ts*1000):"Время неизвестно";
-                card(name,(league==null?"":league.optString("name")+" · ")+date+" · "+statusName(status),null);shown++;
+                final String title=name, meta=(league==null?"":league.optString("name")+" · ")+date+" · "+statusName(status);
+                final long id=f.optLong("id",0);
+                card(title,meta+"\nПодробнее ›",()->details(title,meta,id,prefs));shown++;
             }
             if(shown==0)add(content,label("В GoS пока нет сохранённых матчей. Откройте GoS и загрузите календарь.",14,WHITE,false));
             else if(fixtures.length()>shown&&shown==80)add(content,label("Показано до 80 событий. Полный календарь доступен в GoS.",12,MUTED,false));
         }catch(Exception e){add(content,label("Кэш GoS недоступен. Откройте спортивный раздел.",14,WHITE,false));}
         card("Спортивные новости · Sportbox","Источник из списка GoS · открыть оригинал",()->link("https://news.sportbox.ru/"));
         card("Soccer365","Новости и статистика · открыть оригинал",()->link("https://soccer365.ru/"));
+    }
+    private void details(String title,String meta,long id,SharedPreferences prefs){
+        StringBuilder out=new StringBuilder(meta);
+        out.append("\n\nИсточник: сохранённые данные GoS. Не прямой эфир.\n");
+        out.append("\nСОСТАВЫ\n").append(cachedSquads(prefs,"history_lineups_"+id,600000L,true,id));
+        out.append("\n\nТРАВМЫ И ОТСУТСТВУЮЩИЕ\n").append(cachedSquads(prefs,"history_injuries_"+id,1800000L,false,id));
+        new AlertDialog.Builder(a).setTitle(title).setMessage(out.toString()).setNegativeButton("Закрыть",null)
+            .setPositiveButton("Открыть GoS",(d,w)->{dialog.dismiss();openSport.run();}).show();
+    }
+    private String cachedSquads(SharedPreferences prefs,String key,long ttl,boolean lineups,long id){
+        if(id<=0)return "Данные недоступны.";
+        try{
+            long saved=prefs.getLong(key+"_time",0),now=System.currentTimeMillis();
+            if(saved<=0||now<saved)return "Ещё не загружено. Откройте матч в GoS.";
+            JSONArray rows=new JSONObject(prefs.getString(key,"{}")).optJSONArray("response");
+            if(rows==null)return "Данные недоступны.";
+            String age="Кэш: "+format(saved)+(now-saved>=ttl?" · устарел, требуется обновление":"")+"\n";
+            return age+(lineups?SportSquads.lineups(rows):SportSquads.injuries(rows));
+        }catch(Exception e){return "Не удалось прочитать кэш GoS.";}
     }
     private void economy(){
         select(false);
@@ -109,6 +130,7 @@ final class NewsCenter {
         card("Экономический календарь","Время выхода, важность, факт, прогноз, предыдущее значение",()->link("https://ru.investing.com/economic-calendar"));
         card("Экономические показатели","Инфляция, занятость и другие публикации",()->link("https://ru.investing.com/news/economic-indicators"));
         card("Все финансовые новости","Открыть ленту Investing.com на русском",()->link("https://ru.investing.com/news"));
+        card("RSS-ленты и информеры","Официальные инструменты Investing.com; условия использования у источника",()->link("https://ru.investing.com/webmaster-tools/rss"));
     }
     private void link(String url){
         try{a.startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}
