@@ -227,6 +227,10 @@ public class MainActivity extends Activity {
         Button menu=button("⋮",PANEL,TEXT);header.addView(menu,new LinearLayout.LayoutParams(dp(48),dp(42)));
         content.addView(header);
         menu.setOnClickListener(v->showMenu());
+        Button sport=button("GoS  •  SPORT AI",PANEL,GOLD);
+        LinearLayout.LayoutParams sportLp=new LinearLayout.LayoutParams(-1,dp(44));sportLp.topMargin=dp(6);
+        content.addView(sport,sportLp);
+        sport.setOnClickListener(v->startActivity(new android.content.Intent(this,SportActivity.class)));
 
         accountPanel=horizontal();accountPanel.setPadding(dp(16),dp(14),dp(16),dp(14));accountPanel.setBackground(surface(PANEL,15,0xFF51401D));accountPanel.setElevation(dp(2));
         TextView accountLabel=label("ВИРТУАЛЬНЫЙ БАЛАНС",10,MUTED,true);
