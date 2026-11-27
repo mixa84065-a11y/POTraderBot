@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 /** Football-Data league CSV; independent of API-SPORTS identity and quota. */
 public final class SportCsvHistory {
  private final List<Match> rows=new ArrayList<>();
- private static final Set<String> CODES=new HashSet<>(Arrays.asList("E0","SP1","D1","I1","F1"));
+ private static final Set<String> CODES=new HashSet<>(Arrays.asList("E0","E1","E2","E3","SP1","SP2","D1","D2","I1","I2","F1","F2","N1","P1","B1","SC0","T1","G1"));
  private static class Match {String home,away;long time;int hg,ag,hh,ah,hc,ac,hy,ay;}
  public static String season(){
   Calendar c=Calendar.getInstance(TimeZone.getTimeZone("UTC"));int y=c.get(Calendar.YEAR);if(c.get(Calendar.MONTH)<Calendar.JULY)y--;
@@ -69,6 +69,18 @@ public final class SportCsvHistory {
  public String[] teams(){Set<String> names=new TreeSet<>();for(Match m:rows){names.add(m.home);names.add(m.away);}return names.toArray(new String[0]);}
  public static final class Team {
   public final SportHistory.Summary goals=new SportHistory.Summary();int cn,cf,ca,yn,yf,ya;
+  int recentN,recentPoints,recentGF,recentGA,homeN,homeGF,homeGA,awayN,awayGF,awayGA,secondGF,secondGA,cleanSheets,scoreless;
+  StringBuilder form=new StringBuilder();
+  public String formDetails(){
+   return "Последние "+recentN+" (от нового к старому): "+(recentN==0?"нет данных":form.toString())+
+    "\nОчки за матч (последние 5): "+average(recentN,recentPoints)+
+    "\nГолы забито / пропущено (последние 5): "+mean(recentN,recentGF,recentGA)+
+    "\nДома: "+mean(homeN,homeGF,homeGA)+
+    "\nВ гостях: "+mean(awayN,awayGF,awayGA)+
+    "\nВторой тайм: "+mean(goals.htN,secondGF,secondGA)+
+    "\nСухие матчи: "+cleanSheets+"/"+goals.n+" • без забитых: "+scoreless+"/"+goals.n;
+  }
+  private static String average(int n,int x){return n==0?"нет данных":String.format(Locale.US,"%.2f",x/(double)n);}
   public String details(){return "Угловые (свои / соперника): "+mean(cn,cf,ca)+"\nЖК (свои / соперника): "+mean(yn,yf,ya);}
   private static String mean(int n,int f,int a){return n==0?"нет данных":String.format(Locale.US,"%.2f / %.2f (%d матчей)",f/(double)n,a/(double)n,n);}
  }
@@ -77,7 +89,9 @@ public final class SportCsvHistory {
   for(Match m:rows){
    boolean h=name.equals(m.home);if(!h&&!name.equals(m.away))continue;if(s.n>=20)break;
    int f=h?m.hg:m.ag,a=h?m.ag:m.hg;s.n++;s.gf+=f;s.ga+=a;if(f>a)s.w++;else if(f==a)s.d++;else s.l++;if(f>0&&a>0)s.both++;
-   if(m.hh>=0&&m.ah>=0&&m.hh<=m.hg&&m.ah<=m.ag){s.htN++;s.htFor+=h?m.hh:m.ah;s.htAgainst+=h?m.ah:m.hh;if(m.hh+m.ah>0)s.htGoal++;}
+   if(s.n<=5){t.recentN++;t.recentPoints+=f>a?3:f==a?1:0;t.recentGF+=f;t.recentGA+=a;if(t.form.length()>0)t.form.append(" ");t.form.append(f>a?"В":f==a?"Н":"П");}
+   if(h){t.homeN++;t.homeGF+=f;t.homeGA+=a;}else{t.awayN++;t.awayGF+=f;t.awayGA+=a;}if(a==0)t.cleanSheets++;if(f==0)t.scoreless++;
+   if(m.hh>=0&&m.ah>=0&&m.hh<=m.hg&&m.ah<=m.ag){s.htN++;s.htFor+=h?m.hh:m.ah;s.htAgainst+=h?m.ah:m.hh;if(m.hh+m.ah>0)s.htGoal++;t.secondGF+=f-(h?m.hh:m.ah);t.secondGA+=a-(h?m.ah:m.hh);}
    if(m.hc>=0&&m.ac>=0){t.cn++;t.cf+=h?m.hc:m.ac;t.ca+=h?m.ac:m.hc;}
    if(m.hy>=0&&m.ay>=0){t.yn++;t.yf+=h?m.hy:m.ay;t.ya+=h?m.ay:m.hy;}
   }return t;

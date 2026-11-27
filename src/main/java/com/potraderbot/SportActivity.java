@@ -349,8 +349,8 @@ public final class SportActivity extends Activity {
     }
     private void chooseCsvLeague(){
         if(busy)return;
-        String[] leagues={"Англия • Премьер-лига","Испания • Ла Лига","Германия • Бундеслига","Италия • Серия А","Франция • Лига 1"};
-        String[] codes={"E0","SP1","D1","I1","F1"};
+        String[] leagues={"Англия • Премьер-лига","Англия • Чемпионшип","Англия • Лига 1","Англия • Лига 2","Испания • Ла Лига","Испания • Сегунда","Германия • Бундеслига","Германия • Бундеслига 2","Италия • Серия А","Италия • Серия B","Франция • Лига 1","Франция • Лига 2","Нидерланды • Эредивизи","Португалия • Примейра","Бельгия • Про-лига","Шотландия • Премьершип","Турция • Суперлига","Греция • Суперлига"};
+        String[] codes={"E0","E1","E2","E3","SP1","SP2","D1","D2","I1","I2","F1","F2","N1","P1","B1","SC0","T1","G1"};
         new AlertDialog.Builder(this).setTitle("Football-Data.co.uk • бесплатный архив").setItems(leagues,(d,i)->loadCsv(codes[i],leagues[i])).setNegativeButton("Закрыть",null).show();
     }
     private void loadCsv(String code,String league){
@@ -385,7 +385,7 @@ public final class SportActivity extends Activity {
             String home=(String)h.getSelectedItem(),away=(String)a.getSelectedItem();
             if(home.equals(away)){status.setText("Выберите разные команды.");return;}
             SportCsvHistory.Team x=archive.team(home),y=archive.team(away);
-            String msg="Источник: Football-Data.co.uk. До 20 последних завершённых матчей каждой команды, только текущий сезон. Составы, травмы и live не учитываются.\n\n"+home+"\n"+describe(x.goals)+"\n"+x.details()+"\n\n"+away+"\n"+describe(y.goals)+"\n"+y.details()+"\n\n"+model(x.goals,y.goals)+"\n\nОтдельная модель: не сохраняется в журнал API-SPORTS.";
+            String msg="Источник: Football-Data.co.uk. До 20 последних завершённых матчей каждой команды, только текущий сезон. Составы, травмы и live не учитываются.\n\n"+home+"\n"+describe(x.goals)+"\n"+x.details()+"\n"+x.formDetails()+"\n\n"+away+"\n"+describe(y.goals)+"\n"+y.details()+"\n"+y.formDetails()+"\n\n"+model(x.goals,y.goals)+"\n\nОтдельная модель: не сохраняется в журнал API-SPORTS.";
             new AlertDialog.Builder(this).setTitle(home+" — "+away).setMessage(msg).setPositiveButton("ОК",null).show();
         }).show();
     }
