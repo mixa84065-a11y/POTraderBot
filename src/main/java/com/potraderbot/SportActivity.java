@@ -42,6 +42,9 @@ public final class SportActivity extends Activity {
     static final Object QUOTA_LOCK=new Object();
     private JSONObject shownFixtures;
     private EditText search;
+    private TeamLogoLoader logos;
+    private int matchFilter=0;
+    private Button[] filterTabs;
     private int dp(int x){return Math.round(x*getResources().getDisplayMetrics().density);}
     private TextView label(String value,int size,int color){TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(color);t.setPadding(dp(8),dp(8),dp(8),dp(8));return t;}
     private Button button(String value){Button b=new Button(this);b.setText(value);b.setAllCaps(false);b.setTextColor(GOLD);b.setBackground(cardSurface(0xff17212e,0xff5c4c30));b.setMinHeight(dp(44));return b;}
@@ -49,6 +52,7 @@ public final class SportActivity extends Activity {
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
         prefs=getSharedPreferences("gos_local",MODE_PRIVATE);
+        logos=new TeamLogoLoader(this);
         remaining=storedRemaining();
         LinearLayout page=new LinearLayout(this);page.setOrientation(1);page.setPadding(dp(16),dp(16),dp(16),dp(16));page.setBackgroundColor(BG);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(page);setContentView(scroll);
@@ -100,7 +104,15 @@ public final class SportActivity extends Activity {
               }).show();
         });
         // Keep search and actual match cards near the top; secondary tools remain available below.
-        View[] primary={load,status,search,results};
+        LinearLayout filters=new LinearLayout(this);filterTabs=new Button[4];
+        String[] names={"Все","Ожидаются","Идут","Итоги"};
+        for(int i=0;i<names.length;i++){
+            final int index=i;Button tab=button(names[i]);tab.setTextSize(11);tab.setPadding(dp(2),0,dp(2),0);
+            filterTabs[i]=tab;LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(44),1);lp.setMargins(dp(2),0,dp(2),0);filters.addView(tab,lp);
+            tab.setOnClickListener(v->{matchFilter=index;styleFilters();if(shownFixtures!=null)render(shownFixtures);});
+        }
+        styleFilters();page.addView(filters);
+        View[] primary={load,status,filters,search,results};
         for(View v:primary)page.removeView(v);
         int at=2;for(View v:primary)page.addView(v,at++);
         String cached=prefs.getString("fixtures_cache","");
@@ -200,6 +212,7 @@ public final class SportActivity extends Activity {
             final JSONObject result=data;final String msg=message;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);status.setText(msg);if(result!=null)render(result);});
         });
     }
+    private void styleFilters(){if(filterTabs==null)return;for(int i=0;i<filterTabs.length;i++){filterTabs[i].setBackground(i==matchFilter?cardSurface(0xffb38334,0xfff5c65a):cardSurface(PANEL,0xff445569));filterTabs[i].setTextColor(i==matchFilter?Color.WHITE:GOLD);}}
     private void render(JSONObject data){
         shownFixtures=data;results.removeAllViews();JSONArray list=data.optJSONArray("response");if(list==null)return;
         results.addView(label("Матчей в ответе: "+list.length()+" • поиск по всему списку",14,GOLD));
@@ -212,8 +225,9 @@ public final class SportActivity extends Activity {
             String title=h.optString("name")+" — "+a.optString("name");
             String leagueName=league==null?"":league.optString("name");
             if(!(title+" "+leagueName).toLowerCase(Locale.ROOT).contains(query))continue;
-            shown++;
             JSONObject st=fixture.optJSONObject("status");
+            if(!SportMatchFilter.matches(matchFilter,st==null?"":st.optString("short")))continue;
+            shown++;
             String score=goals!=null&&!goals.isNull("home")&&!goals.isNull("away")?" • "+goals.optString("home")+" : "+goals.optString("away"):"";
             LinearLayout card=new LinearLayout(this);card.setOrientation(1);card.setPadding(dp(9),dp(8),dp(9),dp(8));
             card.setBackground(cardSurface(PANEL,0xff445569));card.setFocusable(true);
@@ -228,6 +242,8 @@ public final class SportActivity extends Activity {
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(9);results.addView(card,lp);
             card.setOnClickListener(v->openMatch(item));
         }
+        if(shown==0)results.addView(label("В сохранённом списке нет подходящих матчей.",14,Color.WHITE));
+        if(shown==200)results.addView(label("Показаны первые 200 матчей. Уточните поиск.",12,GOLD));
     }
     private String matchTime(JSONObject f){
         long seconds=f.optLong("timestamp",0);
@@ -249,7 +265,11 @@ public final class SportActivity extends Activity {
         LinearLayout row=new LinearLayout(this);row.setGravity(android.view.Gravity.CENTER_VERTICAL);
         String name=team.optString("name","—");String initial=name.isEmpty()?"?":name.substring(0,1).toUpperCase(Locale.ROOT);
         TextView badge=label(initial,14,GOLD);badge.setGravity(android.view.Gravity.CENTER);badge.setPadding(0,0,0,0);badge.setBackground(cardSurface(0xff28364a,0xff65748a));badge.setContentDescription("Инициалы команды");
-        row.addView(badge,new LinearLayout.LayoutParams(dp(30),dp(30)));
+        FrameLayout holder=new FrameLayout(this);holder.addView(badge,new FrameLayout.LayoutParams(-1,-1));
+        ImageView crest=new ImageView(this);crest.setScaleType(ImageView.ScaleType.FIT_CENTER);crest.setVisibility(View.GONE);
+        crest.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);holder.addView(crest,new FrameLayout.LayoutParams(-1,-1));
+        row.addView(holder,new LinearLayout.LayoutParams(dp(30),dp(30)));
+        logos.bind(team.optInt("id",-1),team.optString("logo",""),crest,badge);
         TextView title=label(name,14,Color.WHITE);title.setTypeface(null,1);row.addView(title,new LinearLayout.LayoutParams(0,-2,1));return row;
     }
     private void openMatch(JSONObject item){
@@ -609,5 +629,5 @@ public final class SportActivity extends Activity {
         if(s.n==0)return "Недостаточно завершённых матчей.";
         return "Матчей: "+s.n+"\nПобеды / ничьи / поражения: "+s.w+" / "+s.d+" / "+s.l+"\nСредние голы забито / пропущено: "+String.format(Locale.US,"%.2f / %.2f",s.gf/(double)s.n,s.ga/(double)s.n)+"\nОЗ в истории: "+s.both+"/"+s.n+" ("+percent(s.both/(double)s.n)+")\nГол в первом тайме: "+(s.htN==0?"нет данных":s.htGoal+"/"+s.htN+" ("+percent(s.htGoal/(double)s.htN)+")");
     }
-    @Override protected void onDestroy(){worker.shutdown();super.onDestroy();}
+    @Override protected void onDestroy(){if(logos!=null)logos.close();worker.shutdown();super.onDestroy();}
 }
