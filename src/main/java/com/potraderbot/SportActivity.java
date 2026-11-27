@@ -76,6 +76,7 @@ public final class SportActivity extends Activity {
             public void onTextChanged(CharSequence t,int start,int before,int count){if(shownFixtures!=null)render(shownFixtures);}
             public void afterTextChanged(android.text.Editable e){}
         });
+        Button sites=button("СПОРТИВНЫЕ ИСТОЧНИКИ • LIVE");sites.setOnClickListener(v->chooseExternalSource());page.addView(sites,Math.max(0,page.indexOfChild(results)));
         Button csv=button("FOOTBALL-DATA • ИСТОРИЯ БЕЗ КЛЮЧА");csv.setOnClickListener(v->chooseCsvLeague());page.addView(csv,Math.max(0,page.indexOfChild(results)));
         Button source=button("SSTATS • ПРОВЕРКА ИСТОЧНИКА");source.setOnClickListener(v->probeSStats());page.addView(source,Math.max(0,page.indexOfChild(results)));
         Button local=button("ЛОКАЛЬНАЯ БАЗА GoS");local.setOnClickListener(v->localInfo());page.addView(local,Math.max(0,page.indexOfChild(results)));
@@ -312,6 +313,16 @@ public final class SportActivity extends Activity {
     private String describeDetails(SportDetailHistory.Summary s){
         return "Угловые: "+(s.cornersN==0?"нет данных":String.format(Locale.US,"%.2f своих / %.2f соперника (%d матчей)",s.cornersFor/(double)s.cornersN,s.cornersAgainst/(double)s.cornersN,s.cornersN))+
         "\nЖК: "+(s.cardsN==0?"нет данных":String.format(Locale.US,"%.2f своих / %.2f соперника (%d матчей)",s.cardsFor/(double)s.cardsN,s.cardsAgainst/(double)s.cardsN,s.cardsN));
+    }
+    private void chooseExternalSource(){
+        String[] names={"Soccer365 — футбол, результаты и статистика","Flashscore — live и разные виды спорта"};
+        final String[] urls={"https://soccer365.ru/","https://www.flashscore.com.ua/"};
+        new AlertDialog.Builder(this).setTitle("Источники для сверки статистики").setItems(names,(d,i)->{
+            new AlertDialog.Builder(this).setTitle(names[i]).setMessage("Откроется официальный сайт во внешнем браузере. GoS не копирует его данные автоматически и не передаёт ключ API-SPORTS. Просмотр не расходует лимит API-SPORTS.").setNegativeButton("Отмена",null).setPositiveButton("Открыть",(dd,w)->{
+                try{startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(urls[i])));}
+                catch(android.content.ActivityNotFoundException e){status.setText("На телефоне нет доступного браузера.");}
+            }).show();
+        }).setNegativeButton("Закрыть",null).show();
     }
     private void chooseCsvLeague(){
         if(busy)return;
