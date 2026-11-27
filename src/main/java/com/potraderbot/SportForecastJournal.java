@@ -15,32 +15,40 @@ public final class SportForecastJournal{
   }return j;
  }
  public static boolean settle(JSONObject p,long id,JSONObject row)throws JSONException{
-  if(row==null||p.has("result")||p.optLong("created")>=p.optLong("cutoff"))return false;
+  if(row==null||closed(p)||p.optLong("created")>=p.optLong("cutoff"))return false;
   JSONObject f=row.optJSONObject("fixture"),t=row.optJSONObject("teams"),g=row.optJSONObject("goals");
-  if(f==null||t==null||g==null||f.optLong("id")!=id)return false;
+  if(f==null||t==null||f.optLong("id")!=id)return false;
   JSONObject st=f.optJSONObject("status"),h=t.optJSONObject("home"),a=t.optJSONObject("away");
-  if(st==null||!"FT".equals(st.optString("short"))||h==null||a==null||h.optInt("id")!=p.optInt("home")||a.optInt("id")!=p.optInt("away"))return false;
-  if(f.optLong("timestamp")!=p.optLong("cutoff"))return false;
+  if(st==null||h==null||a==null||h.optInt("id")!=p.optInt("home")||a.optInt("id")!=p.optInt("away"))return false;
+  String status=st.optString("short");
+  if(Arrays.asList("CANC","ABD","AWD","WO","AET","PEN").contains(status)){
+   p.put("excluded","Статус "+status);return true;
+  }
+  long time=f.optLong("timestamp",0);
+  if(time>0&&time!=p.optLong("cutoff")){p.put("excluded","Изменилось время начала");return true;}
+  if(!"FT".equals(status)||g==null||time<=0)return false;
   int x=g.optInt("home",-1),y=g.optInt("away",-1);if(x<0||y<0)return false;
   JSONObject result=new JSONObject().put("home",x).put("away",y);
   JSONObject score=row.optJSONObject("score"),ht=score==null?null:score.optJSONObject("halftime");
   if(ht!=null){int u=ht.optInt("home",-1),v=ht.optInt("away",-1);if(u>=0&&v>=0&&u<=x&&v<=y)result.put("htHome",u).put("htAway",v);}
   p.put("result",result);return true;
  }
+ public static boolean closed(JSONObject p){return p.has("result")||p.has("excluded");}
  private static double loss(double p,boolean actual){double d=p-(actual?1:0);return d*d;}
  public static String report(JSONObject journal){
-  int n=0,correct=0,htN=0;double outcome=0,btts=0,over=0,ht=0;
+  int n=0,correct=0,htN=0,excluded=0;double outcome=0,btts=0,over=0,ht=0;
   Iterator<String> keys=journal.keys();StringBuilder recent=new StringBuilder();int displayed=0;
   while(keys.hasNext()){
    JSONObject p=journal.optJSONObject(keys.next());if(p==null)continue;
    JSONObject r=p.optJSONObject("result");
-   if(displayed++<20)recent.append("\n").append(p.optString("title")).append(" • ").append(r==null?"ожидает":r.optInt("home")+":"+r.optInt("away"));
+   if(displayed++<20)recent.append("\n").append(p.optString("title")).append(" • ").append(p.has("excluded")?p.optString("excluded"):r==null?"ожидает":r.optInt("home")+":"+r.optInt("away"));
+   if(p.has("excluded")){excluded++;continue;}
    if(r==null)continue;int x=r.optInt("home"),y=r.optInt("away");double a=p.optDouble("p1"),b=p.optDouble("px"),c=p.optDouble("p2");
    n++;int actual=x>y?0:x==y?1:2;int pick=a>=b&&a>=c?0:b>=c?1:2;if(pick==actual)correct++;
    outcome+=(loss(a,actual==0)+loss(b,actual==1)+loss(c,actual==2))/3;
    btts+=loss(p.optDouble("btts"),x>0&&y>0);over+=loss(p.optDouble("over2"),x+y>=3);
    if(p.has("ht1")&&r.has("htHome")&&r.has("htAway")){int u=r.optInt("htHome"),v=r.optInt("htAway");htN++;ht+=(loss(p.optDouble("ht1"),u+v>=1)+loss(p.optDouble("ht2"),u+v>=2)+loss(p.optDouble("ht3"),u+v>=3)+loss(p.optDouble("htbtts"),u>0&&v>0))/4;}
   }
-  return "Сохранено: "+journal.length()+"\nПроверено: "+n+"\nОжидают: "+(journal.length()-n)+(n==0?"\nНедостаточно результатов.":String.format(Locale.US,"\nСовпадение наиболее вероятного исхода: %d/%d (%.1f%%)\nСредняя квадратичная ошибка вероятностей (меньше — лучше):\nП1/X/П2 %.3f\nОЗ %.3f\nТотал 2,5 %.3f",correct,n,100.0*correct/n,outcome/n,btts/n,over/n))+(htN==0?"\nПервый тайм: нет проверенных данных.":String.format(Locale.US,"\nПервый тайм: %.3f (%d матчей)",ht/htN,htN))+"\n\nВыборка не доказывает будущую точность. Сверка — до 5 матчей за нажатие.\n"+recent;
+  return "Сохранено: "+journal.length()+"\nПроверено: "+n+"\nИсключено: "+excluded+"\nОжидают: "+(journal.length()-n-excluded)+(n==0?"\nНедостаточно результатов.":String.format(Locale.US,"\nСовпадение наиболее вероятного исхода: %d/%d (%.1f%%)\nСредняя квадратичная ошибка вероятностей (меньше — лучше):\nП1/X/П2 %.3f\nОЗ %.3f\nТотал 2,5 %.3f",correct,n,100.0*correct/n,outcome/n,btts/n,over/n))+(htN==0?"\nПервый тайм: нет проверенных данных.":String.format(Locale.US,"\nПервый тайм: %.3f (%d матчей)",ht/htN,htN))+"\n\nВыборка не доказывает будущую точность. Сверка — до 5 матчей за нажатие.\n"+recent;
  }
 }

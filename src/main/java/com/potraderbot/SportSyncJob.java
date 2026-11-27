@@ -74,7 +74,7 @@ public final class SportSyncJob extends JobService {
    try{
     String token=readKey(p);if(token.isEmpty())return;
     JSONObject snapshot=new JSONObject(p.getString("forecast_journal_v1","{}"));List<String> eligible=new ArrayList<>();Iterator<String> it=snapshot.keys();long now=System.currentTimeMillis()/1000;
-    while(it.hasNext()){String k=it.next();JSONObject e=snapshot.optJSONObject(k);if(e!=null&&!e.has("result")&&now>=e.optLong("cutoff")+7200)eligible.add(k);}
+    while(it.hasNext()){String k=it.next();JSONObject e=snapshot.optJSONObject(k);if(e!=null&&!SportForecastJournal.closed(e)&&now>=e.optLong("cutoff")+7200)eligible.add(k);}
     Collections.sort(eligible,(a,b)->Long.compare(p.getLong("gos_bg_attempt_"+a,0),p.getLong("gos_bg_attempt_"+b,0)));
     int checked=0;
     for(String k:eligible){
@@ -85,7 +85,7 @@ public final class SportSyncJob extends JobService {
      if(stopped||!p.getBoolean("gos_auto_sync",false))break;
      synchronized(SportActivity.JOURNAL_LOCK){
       JSONObject current=new JSONObject(p.getString("forecast_journal_v1","{}"));JSONObject entry=current.optJSONObject(k);
-      if(entry==null||entry.has("result"))continue;
+      if(entry==null||SportForecastJournal.closed(entry))continue;
       for(int i=0;i<rows.length();i++){if(SportForecastJournal.settle(entry,id,rows.optJSONObject(i))){p.edit().putString("forecast_journal_v1",current.toString()).commit();break;}}
      }
     }

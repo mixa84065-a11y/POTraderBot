@@ -340,17 +340,20 @@ public final class SportActivity extends Activity {
             int checked=0,settled=0;String error="";
             try{
                 String token=readKey();if(token.isEmpty())throw new IllegalStateException("Сначала сохраните API-ключ.");
-                JSONObject snapshot=journal();java.util.Iterator<String> keys=snapshot.keys();
-                while(keys.hasNext()&&checked<5){
-                    String k=keys.next();JSONObject p=snapshot.getJSONObject(k);
-                    if(p.has("result")||System.currentTimeMillis()/1000<p.optLong("cutoff")+7200)continue;
+                JSONObject snapshot=journal();java.util.ArrayList<String> eligible=new java.util.ArrayList<>();
+                java.util.Iterator<String> keys=snapshot.keys();
+                while(keys.hasNext()){String k=keys.next();JSONObject p=snapshot.optJSONObject(k);if(p!=null&&!SportForecastJournal.closed(p)&&System.currentTimeMillis()/1000>=p.optLong("cutoff")+7200)eligible.add(k);}
+                java.util.Collections.sort(eligible,(a,b)->Long.compare(prefs.getLong("gos_bg_attempt_"+a,0),prefs.getLong("gos_bg_attempt_"+b,0)));
+                for(String k:eligible){
+                    if(checked>=5)break;
                     long id=Long.parseLong(k);checked++;
+                    prefs.edit().putLong("gos_bg_attempt_"+k,System.currentTimeMillis()).apply();
                     JSONArray rows=cachedRequest("history_result_"+id,"fixtures?id="+id,token,600000).getJSONArray("response");
                     synchronized(JOURNAL_LOCK){
                         JSONObject current=journal(),entry=current.getJSONObject(k);
                         for(int i=0;i<rows.length();i++){
                             JSONObject row=rows.optJSONObject(i);
-                            if(!entry.has("result")&&SportForecastJournal.settle(entry,id,row)){
+                            if(!SportForecastJournal.closed(entry)&&SportForecastJournal.settle(entry,id,row)){
                                 if(!prefs.edit().putString("forecast_journal_v1",current.toString()).commit())throw new IllegalStateException("Ошибка сохранения.");
                                 settled++;
                             }
@@ -358,7 +361,7 @@ public final class SportActivity extends Activity {
                     }
                 }
             }catch(Exception e){error="\nСверка прервана: проверьте лимит, тариф или интернет.";}
-            final String msg="Проверено: "+checked+"; завершено: "+settled+error;
+            final String msg="Проверено: "+checked+"; обработано (включая исключения): "+settled+error;
             runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);status.setText(msg);showJournal();});
         });
     }
