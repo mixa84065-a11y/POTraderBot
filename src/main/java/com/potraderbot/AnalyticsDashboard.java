@@ -76,16 +76,16 @@ final class AnalyticsDashboard {
         addPair(p,tile("📊","Трейдинг","Торговый бот\nАнализ рынков",false,()->action.open("trade")),
                 tile("⚽","Спорт","Анализ матчей\nЭкспрессы",true,()->action.open("sport")));
         addPair(p,tile("₿","Криптосканер","Сканер Bybit\nТорговый терминал",false,()->action.open("crypto")),
-                tile("📈","Инвестиции","Акции, фонды\nВ разработке",true,()->planned("Инвестиции","Источники котировок акций, фондов и дивидендов ещё не подключены.")));
+                tile("📈","Инвестиции","Акции, фонды\nДоходность",true,()->new AnalyticsTools(a).investments()));
         addPair(p,tile("▤","Новости","Футбол · GoS\nЭкономика · Investing",false,()->new NewsCenter(a,()->action.open("sport")).show()),
                 tile("▰","Финансы","Демо-статистика\nПрибыль и убытки",true,()->action.open("finance")));
-        addPair(p,tile("⚗","Лаборатория","Калькулятор риска\nТесты стратегий",false,this::calculator),
+        addPair(p,tile("⚗","Лаборатория","Риск и просадка\nПроверка сделок",false,()->new AlertDialog.Builder(a).setTitle("Лаборатория стратегий").setItems(new String[]{"Калькулятор риска","Анализ серии сделок"},(dialog,which)->{if(which==0)calculator();else new AnalyticsTools(a).laboratory();}).show()),
                 tile("🎓","Обучение","Трейдинг, инвестиции\nСпортивный анализ",true,this::education));
         LinearLayout ai=row();ai.setPadding(dp(14),dp(14),dp(14),dp(14));
-        clickable(ai,GOLD,0xff393020,0xff10151e,()->planned("GoD AI","ИИ-помощник пока не подключён. Здесь не выдаются автоматические прогнозы и не выполняются финансовые действия."));
+        clickable(ai,GOLD,0xff393020,0xff10151e,()->new AnalyticsTools(a).openAssistant());
         TextView robot=text("♛",44,GOLD,true);ai.addView(robot,new LinearLayout.LayoutParams(dp(56),-2));
         LinearLayout aiCopy=column();aiCopy.addView(text("GoD AI",23,GOLD,true));aiCopy.addView(text("ИИ-помощник",15,GOLD,true));
-        TextView ad=text("Анализ · Прогнозы · Автоматизация\nВ разработке",11,WHITE,false);ad.setPadding(0,dp(5),0,0);aiCopy.addView(ad);
+        TextView ad=text("Анализ · Прогнозы · Автоматизация\nОткрыть приложение",11,WHITE,false);ad.setPadding(0,dp(5),0,0);aiCopy.addView(ad);
         ai.addView(aiCopy,new LinearLayout.LayoutParams(0,-2,1));ai.addView(text("›",30,GOLD,true));
         p.addView(ai,new LinearLayout.LayoutParams(-1,-2));
         centered(p,"Версия "+BuildConfig.VERSION_NAME,10,MUTED,false,8);
