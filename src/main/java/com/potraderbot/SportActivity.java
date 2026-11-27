@@ -50,6 +50,7 @@ public final class SportActivity extends Activity {
         Button back=button("‹  GoT 2.0");back.setOnClickListener(v->finish());page.addView(back);
         page.addView(label("GoS  •  GOD OF SPORT AI",23,GOLD));
         page.addView(label("Футбол • календарь и результаты • API-SPORTS",14,Color.WHITE));
+        Button stats=button("СТАТИСТИЧЕСКАЯ МОДЕЛЬ");stats.setOnClickListener(v->statistics());page.addView(stats);
         settings=button("НАСТРОЙКИ API-SPORTS");settings.setOnClickListener(v->settings());page.addView(settings);
         load=button("МАТЧИ НА СЕГОДНЯ");load.setOnClickListener(v->loadFixtures());page.addView(load);
         status=label("Лимит тарифа: 100 запросов в сутки. Запросы только по нажатию.",13,GOLD);page.addView(status);
@@ -57,6 +58,35 @@ public final class SportActivity extends Activity {
         String cached=prefs.getString("fixtures_cache","");
         if(!cached.isEmpty())try{render(new JSONObject(cached));status.setText("Сохранённые данные: "+prefs.getString("cache_date","")+"; не обновлены.");}catch(Exception ignored){}
     }
+    private void statistics(){
+        LinearLayout form=new LinearLayout(this);form.setOrientation(1);form.setPadding(dp(12),dp(8),dp(12),dp(8));
+        form.addView(label("Учебная модель Пуассона. Введите ожидаемые средние, рассчитанные по независимой исторической выборке. Без данных прогноз не строится. Не учитывает зависимость событий и не подтверждена на реальных матчах.",13,Color.WHITE));
+        String[] names={"Голы хозяев за матч","Голы гостей за матч","Голы хозяев в первом тайме","Голы гостей в первом тайме","Средний суммарный счёт угловых","Средний суммарный счёт жёлтых карточек"};
+        EditText[] fields=new EditText[names.length];
+        for(int i=0;i<names.length;i++){form.addView(label(names[i],13,GOLD));EditText f=new EditText(this);f.setSingleLine(true);f.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);f.setHint("Нет данных");fields[i]=f;form.addView(f);}
+        ScrollView scroll=new ScrollView(this);scroll.addView(form);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("GoS — статистическая модель").setView(scroll).setPositiveButton("Рассчитать",null).setNegativeButton("Закрыть",null).create();
+        dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            try{
+                double[] x=new double[fields.length];for(int i=0;i<x.length;i++){String value=fields[i].getText().toString().trim().replace(',','.');if(value.isEmpty()){fields[i].setError("Введите среднее");return;}x[i]=Double.parseDouble(value);}
+                if(x[2]>x[0]||x[3]>x[1])throw new IllegalArgumentException();
+                StringBuilder out=new StringBuilder("Условные вероятности модели, не проверенные прогнозы.\n");
+                out.append("\nПервый тайм: ожидаемые голы ").append(String.format(Locale.US,"%.2f",x[2]+x[3]));
+                out.append("\nХотя бы один гол: ").append(percent(SportStatistics.above(x[2]+x[3],0)));
+                out.append("\nБез голов: ").append(percent(1-SportStatistics.above(x[2]+x[3],0)));
+                out.append("\nДва и более: ").append(percent(SportStatistics.above(x[2]+x[3],1)));
+                out.append("\nТри и более: ").append(percent(SportStatistics.above(x[2]+x[3],2)));
+                out.append("\nОбе забьют в первом тайме: ").append(percent(SportStatistics.bothScore(x[2],x[3])));
+                out.append("\n\nОбе забьют за матч: ").append(percent(SportStatistics.bothScore(x[0],x[1])));
+                out.append("\n\nУгловые: ожидаемое количество ").append(String.format(Locale.US,"%.2f",x[4]));
+                out.append("\nЖёлтые карточки: ожидаемое количество ").append(String.format(Locale.US,"%.2f",x[5]));
+                // Validate count means as well; do not treat raw values as measured statistics.
+                SportStatistics.above(x[4],0);SportStatistics.above(x[5],0);
+                new AlertDialog.Builder(this).setTitle("Результаты модели").setMessage(out.toString()).setPositiveButton("ОК",null).show();
+            }catch(Exception e){new AlertDialog.Builder(this).setMessage("Проверьте средние: числа 0–50, значения первого тайма не выше полного матча.").setPositiveButton("ОК",null).show();}
+        }));dialog.show();
+    }
+    private String percent(double value){return String.format(Locale.US,"%.1f%%",value*100);}
     private SecretKey key()throws Exception{
         KeyStore store=KeyStore.getInstance("AndroidKeyStore");store.load(null);
         if(!store.containsAlias(ALIAS)){
