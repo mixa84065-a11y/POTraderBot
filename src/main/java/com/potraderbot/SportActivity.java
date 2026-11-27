@@ -206,13 +206,19 @@ public final class SportActivity extends Activity {
         int home=h.optInt("id",-1),away=a.optInt("id",-1);long cutoff=fixture.optLong("timestamp",0);
         String title=h.optString("name")+" — "+a.optString("name");
         if(home<=0||away<=0||cutoff<=0){status.setText("Недостаточно данных о матче.");return;}
-        new AlertDialog.Builder(this).setTitle(title).setMessage("Дата: "+fixture.optString("date")+"\nЗагрузить историю команд? До двух запросов API, кэш на 6 часов.").setNegativeButton("Закрыть",null).setNeutralButton("Угловые и ЖК",(d,w)->loadDetails(title,home,away,cutoff)).setPositiveButton("Анализ",(d,w)->loadHistory(title,home,away,cutoff)).show();
+        new AlertDialog.Builder(this).setTitle(title).setMessage("Дата: "+fixture.optString("date")+"\nЗагрузить историю команд? До трёх запросов API, включая личные встречи; кэш на 6 часов.").setNegativeButton("Закрыть",null).setNeutralButton("Угловые и ЖК",(d,w)->loadDetails(title,home,away,cutoff)).setPositiveButton("Анализ",(d,w)->loadHistory(title,home,away,cutoff)).show();
     }
     private JSONObject teamHistory(int team,String token)throws Exception{
-        String cache="history_"+team;long now=System.currentTimeMillis(),age=now-prefs.getLong(cache+"_time",0);
+        return historicalRequest("history_"+team,"fixtures?team="+team+"&last=20&status=FT",token);
+    }
+    private JSONObject headToHead(int home,int away,String token)throws Exception{
+        return historicalRequest("history_h2h_"+Math.min(home,away)+"_"+Math.max(home,away),"fixtures/headtohead?h2h="+home+"-"+away+"&last=10&status=FT",token);
+    }
+    private JSONObject historicalRequest(String cache,String endpoint,String token)throws Exception{
+        long now=System.currentTimeMillis(),age=now-prefs.getLong(cache+"_time",0);
         if(age>=0&&age<21600000){String saved=prefs.getString(cache,"");if(!saved.isEmpty())return new JSONObject(saved);}
         reserveRequest();
-        HttpsURLConnection conn=(HttpsURLConnection)new URL("https://v3.football.api-sports.io/fixtures?team="+team+"&last=20&status=FT").openConnection();
+        HttpsURLConnection conn=(HttpsURLConnection)new URL("https://v3.football.api-sports.io/"+endpoint).openConnection();
         try{
             conn.setInstanceFollowRedirects(false);conn.setConnectTimeout(12000);conn.setReadTimeout(20000);conn.setRequestProperty("x-apisports-key",token);
             int code=conn.getResponseCode();updateQuota(conn.getHeaderField("x-ratelimit-requests-remaining"));
@@ -277,9 +283,20 @@ public final class SportActivity extends Activity {
                 SportHistory.Summary h=SportHistory.summarize(teamHistory(home,token).getJSONArray("response"),home,cutoff);
                 SportHistory.Summary a=SportHistory.summarize(teamHistory(away,token).getJSONArray("response"),away,cutoff);
                 output="Историческая статистика до начала матча. Не прогноз.\n\nХозяева\n"+describe(h)+"\n\nГости\n"+describe(a)+"\n\n"+model(h,a)+"\n\nУгловые и ЖК: нужны отдельные данные статистики матчей.";
+                try{output+="\n\nЛичные встречи (до 10)\n"+describe(SportHistory.summarize(onlyPair(headToHead(home,away,token).getJSONArray("response"),home,away),home,cutoff));}catch(Exception e){output+="\n\nЛичные встречи: данные недоступны."; }
             }catch(IllegalStateException e){output=e.getMessage();}catch(Exception e){output="Не удалось получить историю. Проверьте интернет и тариф.";}
             final String msg=output;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);status.setText("Осталось запросов по API: "+(remaining<0?"неизвестно":remaining));new AlertDialog.Builder(this).setTitle(title).setMessage(msg).setPositiveButton("ОК",null).show();});
         });
+    }
+    static JSONArray onlyPair(JSONArray rows,int home,int away){
+        JSONArray out=new JSONArray();
+        for(int i=0;i<rows.length();i++){
+            JSONObject r=rows.optJSONObject(i),t=r==null?null:r.optJSONObject("teams");
+            if(t==null)continue;JSONObject h=t.optJSONObject("home"),a=t.optJSONObject("away");
+            if(h==null||a==null)continue;
+            int x=h.optInt("id",-1),y=a.optInt("id",-1);
+            if((x==home&&y==away)||(x==away&&y==home))out.put(r);
+        }return out;
     }
     private String model(SportHistory.Summary h,SportHistory.Summary a){
         if(h.n<5||a.n<5)return "Модель: недостаточно данных (нужно минимум 5 завершённых матчей каждой команды).";
