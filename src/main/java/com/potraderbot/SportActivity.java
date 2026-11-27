@@ -55,6 +55,7 @@ public final class SportActivity extends Activity {
         page.addView(label("GoS  •  GOD OF SPORT AI",23,GOLD));
         page.addView(label("Футбол • календарь и результаты • API-SPORTS",14,Color.WHITE));
         Button stats=button("СТАТИСТИЧЕСКАЯ МОДЕЛЬ");stats.setOnClickListener(v->statistics());page.addView(stats);
+        Button journal=button("ЖУРНАЛ ПРОГНОЗОВ");journal.setOnClickListener(v->showJournal());page.addView(journal);
         settings=button("НАСТРОЙКИ API-SPORTS");settings.setOnClickListener(v->settings());page.addView(settings);
         load=button("МАТЧИ НА СЕГОДНЯ");load.setOnClickListener(v->loadFixtures());page.addView(load);
         status=label("Лимит тарифа: 100 запросов в сутки. Запросы только по нажатию.",13,GOLD);page.addView(status);
@@ -209,7 +210,7 @@ public final class SportActivity extends Activity {
         long fixtureId=fixture.optLong("id",0);
         String[] options={"Анализ и личные встречи (до 3 запросов)","Угловые и ЖК (до 8 запросов)","Составы и травмы (до 2 запросов)"};
         new AlertDialog.Builder(this).setTitle(title+"\n"+fixture.optString("date")).setItems(options,(d,w)->{
-            if(w==0)loadHistory(title,home,away,cutoff);
+            if(w==0)loadHistory(title,home,away,cutoff,fixtureId);
             else if(w==1)loadDetails(title,home,away,cutoff);
             else if(fixtureId>0)loadSquads(title,fixtureId);
             else status.setText("Нет идентификатора матча.");
@@ -296,7 +297,7 @@ public final class SportActivity extends Activity {
         return "Угловые: "+(s.cornersN==0?"нет данных":String.format(Locale.US,"%.2f своих / %.2f соперника (%d матчей)",s.cornersFor/(double)s.cornersN,s.cornersAgainst/(double)s.cornersN,s.cornersN))+
         "\nЖК: "+(s.cardsN==0?"нет данных":String.format(Locale.US,"%.2f своих / %.2f соперника (%d матчей)",s.cardsFor/(double)s.cardsN,s.cardsAgainst/(double)s.cardsN,s.cardsN));
     }
-    private void loadHistory(String title,int home,int away,long cutoff){
+    private void loadHistory(String title,int home,int away,long cutoff,long fixtureId){
         if(busy)return;busy=true;load.setEnabled(false);settings.setEnabled(false);status.setText("Загрузка истории команд…");
         worker.execute(()->{
             String output;
@@ -305,6 +306,7 @@ public final class SportActivity extends Activity {
                 SportHistory.Summary h=SportHistory.summarize(teamHistory(home,token).getJSONArray("response"),home,cutoff);
                 SportHistory.Summary a=SportHistory.summarize(teamHistory(away,token).getJSONArray("response"),away,cutoff);
                 output="Историческая статистика до начала матча. Не прогноз.\n\nХозяева\n"+describe(h)+"\n\nГости\n"+describe(a)+"\n\n"+model(h,a)+"\n\nУгловые и ЖК: нужны отдельные данные статистики матчей.";
+                try{output+="\n\n"+recordForecast(fixtureId,title,home,away,cutoff,h,a);}catch(Exception e){output+="\n\nНе удалось сохранить прогноз.";}
                 try{output+="\n\nЛичные встречи (до 10)\n"+describe(SportHistory.summarize(onlyPair(headToHead(home,away,token).getJSONArray("response"),home,away),home,cutoff));}catch(Exception e){output+="\n\nЛичные встречи: данные недоступны."; }
             }catch(IllegalStateException e){output=e.getMessage();}catch(Exception e){output="Не удалось получить историю. Проверьте интернет и тариф.";}
             final String msg=output;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);status.setText("Осталось запросов по API: "+(remaining<0?"неизвестно":remaining));new AlertDialog.Builder(this).setTitle(title).setMessage(msg).setPositiveButton("ОК",null).show();});
@@ -319,6 +321,53 @@ public final class SportActivity extends Activity {
             int x=h.optInt("id",-1),y=a.optInt("id",-1);
             if((x==home&&y==away)||(x==away&&y==home))out.put(r);
         }return out;
+    }
+    private static final Object JOURNAL_LOCK=new Object();
+    private JSONObject journal()throws JSONException{return new JSONObject(prefs.getString("forecast_journal_v1","{}"));}
+    private String recordForecast(long id,String title,int home,int away,long cutoff,SportHistory.Summary h,SportHistory.Summary a)throws Exception{
+        synchronized(JOURNAL_LOCK){
+            JSONObject j=journal();String k=Long.toString(id);
+            if(j.has(k))return "Первоначальный прогноз уже сохранён.";
+            if(id<=0||System.currentTimeMillis()/1000>=cutoff||h.n<5||a.n<5)return "Прогноз не сохранён: матч начался или недостаточно истории.";
+            if(j.length()>=500)return "Журнал заполнен (500 матчей).";
+            JSONObject p=SportForecastJournal.create(title,home,away,cutoff,h,a);
+            if(p==null)return "Прогноз не сохранён: несогласованные данные.";
+            j.put(k,p);if(!prefs.edit().putString("forecast_journal_v1",j.toString()).commit())throw new Exception();
+            return "Первоначальный прогноз сохранён в журнале.";
+        }
+    }
+    private void showJournal(){
+        if(busy){status.setText("Дождитесь завершения текущего запроса.");return;}
+        try{JSONObject j=journal();new AlertDialog.Builder(this).setTitle("Журнал прогнозов GoS").setMessage(SportForecastJournal.report(j)).setNegativeButton("Закрыть",null).setPositiveButton("Сверить результаты",(d,w)->reconcileJournal()).show();}
+        catch(Exception e){status.setText("Не удалось прочитать журнал.");}
+    }
+    private void reconcileJournal(){
+        if(busy)return;busy=true;load.setEnabled(false);settings.setEnabled(false);status.setText("Сверка результатов…");
+        worker.execute(()->{
+            int checked=0,settled=0;String error="";
+            try{
+                String token=readKey();if(token.isEmpty())throw new IllegalStateException("Сначала сохраните API-ключ.");
+                JSONObject snapshot=journal();java.util.Iterator<String> keys=snapshot.keys();
+                while(keys.hasNext()&&checked<5){
+                    String k=keys.next();JSONObject p=snapshot.getJSONObject(k);
+                    if(p.has("result")||System.currentTimeMillis()/1000<p.optLong("cutoff")+7200)continue;
+                    long id=Long.parseLong(k);checked++;
+                    JSONArray rows=cachedRequest("history_result_"+id,"fixtures?id="+id,token,600000).getJSONArray("response");
+                    synchronized(JOURNAL_LOCK){
+                        JSONObject current=journal(),entry=current.getJSONObject(k);
+                        for(int i=0;i<rows.length();i++){
+                            JSONObject row=rows.optJSONObject(i);
+                            if(!entry.has("result")&&SportForecastJournal.settle(entry,id,row)){
+                                if(!prefs.edit().putString("forecast_journal_v1",current.toString()).commit())throw new IllegalStateException("Ошибка сохранения.");
+                                settled++;
+                            }
+                        }
+                    }
+                }
+            }catch(Exception e){error="\nСверка прервана: проверьте лимит, тариф или интернет.";}
+            final String msg="Проверено: "+checked+"; завершено: "+settled+error;
+            runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);status.setText(msg);showJournal();});
+        });
     }
     private String model(SportHistory.Summary h,SportHistory.Summary a){
         if(h.n<5||a.n<5)return "Модель: недостаточно данных (нужно минимум 5 завершённых матчей каждой команды).";
