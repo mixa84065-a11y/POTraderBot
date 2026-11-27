@@ -47,10 +47,11 @@ final class AnalyticsDashboard {
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.topMargin=dp(top);p.addView(t,lp);
     }
     private void space(LinearLayout p,int height){p.addView(new View(a),new LinearLayout.LayoutParams(-1,dp(height)));}
-    private TextView nav(String symbol,String label,int color,Runnable r){
-        TextView t=text(symbol+"\n"+label,12,color,true);t.setGravity(Gravity.CENTER);
-        t.setPadding(dp(2),dp(8),dp(2),dp(8));t.setContentDescription(label);t.setOnClickListener(v->r.run());
-        t.setFocusable(true);return t;
+    private View nav(String symbol,String label,int color,Runnable r){
+        LinearLayout item=column();item.setGravity(Gravity.CENTER);item.setPadding(dp(2),dp(4),dp(2),dp(4));
+        DashboardIcon icon=new DashboardIcon(a,symbol,color);item.addView(icon,new LinearLayout.LayoutParams(dp(26),dp(27)));
+        TextView t=text(label,11,color,false);t.setGravity(Gravity.CENTER);t.setPadding(0,dp(3),0,0);item.addView(t);
+        item.setContentDescription(label);item.setOnClickListener(v->r.run());item.setFocusable(true);return item;
     }
     View build(){
         LinearLayout shell=column();shell.setBackgroundColor(BG);
@@ -58,55 +59,58 @@ final class AnalyticsDashboard {
         shell.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout p=column();p.setPadding(dp(12),dp(12),dp(12),dp(14));scroll.addView(p);
         LinearLayout top=row();
-        TextView profile=nav("♙","Профиль",WHITE,()->action.open("profile"));
-        top.addView(profile,new LinearLayout.LayoutParams(dp(68),dp(42)));
+        View profile=nav("profile","Профиль",WHITE,()->action.open("profile"));
+        top.addView(profile,new LinearLayout.LayoutParams(dp(68),dp(48)));
         top.addView(new View(a),new LinearLayout.LayoutParams(0,1,1));
-        TextView notifications=nav("♧","Сигналы",WHITE,()->action.open("signals"));
+        View notifications=nav("bell","Сигналы",WHITE,()->action.open("signals"));
         top.addView(notifications,new LinearLayout.LayoutParams(dp(68),dp(42)));p.addView(top);
-        Crown crown=new Crown(a);
-        LinearLayout.LayoutParams crownLp=new LinearLayout.LayoutParams(dp(96),dp(57));crownLp.gravity=Gravity.CENTER;
+        DashboardIcon crown=new DashboardIcon(a,"crown",GOLD);
+        LinearLayout.LayoutParams crownLp=new LinearLayout.LayoutParams(dp(100),dp(60));crownLp.gravity=Gravity.CENTER;
         p.addView(crown,crownLp);
-        centered(p,"GOD OF TRADING 2.0",25,GOLD,true,2);
+        TextView brand=text("GOD OF TRADING 2.0",25,GOLD,true);brand.setGravity(Gravity.CENTER);brand.setSingleLine(true);
+        brand.setShadowLayer(dp(3),0,dp(2),0xff9f6813);
+        brand.getPaint().setShader(new LinearGradient(0,0,0,brand.getTextSize()*1.15f,new int[]{0xfffff8d6,0xfff2c35b,0xffb77714,0xffffda75},null,Shader.TileMode.CLAMP));
+        p.addView(brand,new LinearLayout.LayoutParams(-1,-2));
         centered(p,"АНАЛИТИЧЕСКАЯ ПЛАТФОРМА",12,WHITE,false,6);
         space(p,10);
-        View line=new View(a);line.setBackground(gradient(0xff302514,0xffefbc4d,0,0));
-        p.addView(line,new LinearLayout.LayoutParams(-1,dp(2)));
+        DashboardIcon line=new DashboardIcon(a,"flare",GOLD);
+        p.addView(line,new LinearLayout.LayoutParams(-1,dp(14)));
         centered(p,"Торгуй грамотно, управляй рынком",13,GOLD,true,9);
-        space(p,16);
-        addPair(p,tile("📊","Трейдинг","Торговый бот\nАнализ рынков",false,()->action.open("trade")),
-                tile("⚽","Спорт","Анализ матчей\nЭкспрессы",true,()->action.open("sport")));
-        addPair(p,tile("₿","Криптосканер","Сканер Bybit\nТорговый терминал",false,()->action.open("crypto")),
-                tile("📈","Инвестиции","Акции, фонды\nДоходность",true,()->new AnalyticsTools(a).investments()));
-        addPair(p,tile("▤","Новости","Футбол · GoS\nЭкономика · Investing",false,()->new NewsCenter(a,()->action.open("sport")).show()),
-                tile("▰","Финансы","Демо-статистика\nПрибыль и убытки",true,()->action.open("finance")));
-        addPair(p,tile("⚗","Лаборатория","Риск и просадка\nПроверка сделок",false,()->new AlertDialog.Builder(a).setTitle("Лаборатория стратегий").setItems(new String[]{"Калькулятор риска","Анализ серии сделок","Бэктест спот-стратегии (CSV)"},(dialog,which)->{if(which==0)calculator();else if(which==1)new AnalyticsTools(a).laboratory();else new AnalyticsTools(a).replay();}).show()),
-                tile("🎓","Обучение","Трейдинг, инвестиции\nСпортивный анализ",true,()->new LearningCenter(a).show()));
+        space(p,12);
+        addPair(p,tile("trade","Трейдинг","Торговый бот\nАнализ рынков",false,()->action.open("trade")),
+                tile("sport","Спорт","Анализ матчей\nЭкспрессы",true,()->action.open("sport")));
+        addPair(p,tile("crypto","Криптосканер","Сканер Bybit\nТорговый терминал",false,()->action.open("crypto")),
+                tile("invest","Инвестиции","Акции, фонды\nДоходность",true,()->new AnalyticsTools(a).investments()));
+        addPair(p,tile("news","Новости","Футбол · GoS\nЭкономика · Investing",false,()->new NewsCenter(a,()->action.open("sport")).show()),
+                tile("wallet","Финансы","Демо-статистика\nПрибыль и убытки",true,()->action.open("finance")));
+        addPair(p,tile("lab","Лаборатория","Риск и просадка\nПроверка сделок",false,()->new AlertDialog.Builder(a).setTitle("Лаборатория стратегий").setItems(new String[]{"Калькулятор риска","Анализ серии сделок","Бэктест спот-стратегии (CSV)"},(dialog,which)->{if(which==0)calculator();else if(which==1)new AnalyticsTools(a).laboratory();else new AnalyticsTools(a).replay();}).show()),
+                tile("learn","Обучение","Трейдинг, инвестиции\nСпортивный анализ",true,()->new LearningCenter(a).show()));
         LinearLayout ai=row();ai.setPadding(dp(14),dp(14),dp(14),dp(14));
         clickable(ai,GOLD,0xff393020,0xff10151e,()->new AnalyticsTools(a).openAssistant());
-        TextView robot=text("♛",44,GOLD,true);ai.addView(robot,new LinearLayout.LayoutParams(dp(56),-2));
+        DashboardIcon robot=new DashboardIcon(a,"robot",GOLD);ai.addView(robot,new LinearLayout.LayoutParams(dp(87),dp(88)));
         LinearLayout aiCopy=column();aiCopy.addView(text("GoD AI",23,GOLD,true));aiCopy.addView(text("ИИ-помощник",15,GOLD,true));
         TextView ad=text("Анализ · Прогнозы · Автоматизация\nВстроенный чат",11,WHITE,false);ad.setPadding(0,dp(5),0,0);aiCopy.addView(ad);
         ai.addView(aiCopy,new LinearLayout.LayoutParams(0,-2,1));ai.addView(text("›",30,GOLD,true));
         p.addView(ai,new LinearLayout.LayoutParams(-1,-2));
         centered(p,"Версия "+BuildConfig.VERSION_NAME,10,MUTED,false,8);
         LinearLayout nav=row();nav.setBackground(gradient(0xff17202a,0xff0a0e15,0xff303b49,0));
-        String[] signs={"⌂","▥","◉","⚙"},labels={"Главная","Статистика","Сигналы","Настройки"};
+        String[] signs={"home","stats","signals","settings"},labels={"Главная","Статистика","Сигналы","Настройки"};
         Runnable[] actions={()->scroll.smoothScrollTo(0,0),()->action.open("finance"),()->action.open("signals"),()->action.open("settings")};
         for(int i=0;i<4;i++)nav.addView(nav(signs[i],labels[i],i==0?GOLD:MUTED,actions[i]),new LinearLayout.LayoutParams(0,dp(62),1));
         shell.addView(nav);return shell;
     }
     private View tile(String glyph,String name,String desc,boolean gold,Runnable r){
-        LinearLayout tile=row();tile.setGravity(Gravity.CENTER_VERTICAL);tile.setPadding(dp(9),dp(10),dp(7),dp(10));
-        clickable(tile,gold?0xff8b7139:0xff65738c,gold?0xff302b26:0xff232d40,0xff0f1621,r);
-        TextView icon=text(glyph,29,gold?GOLD:0xff8fcaff,true);icon.setGravity(Gravity.CENTER);
-        tile.addView(icon,new LinearLayout.LayoutParams(dp(37),-1));
+        LinearLayout tile=row();tile.setGravity(Gravity.CENTER_VERTICAL);tile.setPadding(dp(7),dp(8),dp(6),dp(8));
+        clickable(tile,gold?0xff8b7139:0xff65738c,gold?0xff302b26:0xff202a3d,0xff0b111a,r);
+        DashboardIcon icon=new DashboardIcon(a,glyph,GOLD);
+        LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(dp(43),dp(54));ip.rightMargin=dp(6);tile.addView(icon,ip);
         LinearLayout copy=column();TextView title=text(name,14,WHITE,true);copy.addView(title);
         TextView summary=text(desc,11,WHITE,false);summary.setPadding(0,dp(4),0,0);copy.addView(summary);
         tile.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
         tile.setContentDescription(name+". "+desc);return tile;
     }
     private void addPair(LinearLayout p,View left,View right){
-        LinearLayout r=row();LinearLayout.LayoutParams l=new LinearLayout.LayoutParams(0,dp(86),1);l.rightMargin=dp(5);
+        LinearLayout r=row();LinearLayout.LayoutParams l=new LinearLayout.LayoutParams(0,dp(84),1);l.rightMargin=dp(5);
         LinearLayout.LayoutParams q=new LinearLayout.LayoutParams(0,dp(86),1);q.leftMargin=dp(5);
         r.addView(left,l);r.addView(right,q);
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(10);p.addView(r,lp);
