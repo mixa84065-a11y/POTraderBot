@@ -47,7 +47,14 @@ jobs:
           test -n "$APK"
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
           test -n "$APKSIGNER"
-          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          "$APKSIGNER" verify --min-sdk-version 23 --verbose --print-certs "$APK"
+          TOOLS="$(dirname "$APKSIGNER")"
+          "$TOOLS/zipalign" -c -v 4 "$APK"
+          "$TOOLS/aapt" dump badging "$APK" > "$RUNNER_TEMP/apk-badging.txt"
+          grep -F "package: name='com.potraderbot.godoftrading2standalone' versionCode='54' versionName='2.0.0-alpha33'" "$RUNNER_TEMP/apk-badging.txt"
+          grep -Fx "sdkVersion:'23'" "$RUNNER_TEMP/apk-badging.txt"
+          unzip -t "$APK"
+          sha256sum "$APK"
           echo "Verified signed APK: $APK"
       - name: Upload persistently signed APK only after tests pass
         uses: actions/upload-artifact@v4

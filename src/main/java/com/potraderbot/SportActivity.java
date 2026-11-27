@@ -50,7 +50,7 @@ public final class SportActivity extends Activity {
         prefs=getSharedPreferences("gos_local",MODE_PRIVATE);
         remaining=storedRemaining();
         LinearLayout page=new LinearLayout(this);page.setOrientation(1);page.setPadding(dp(16),dp(16),dp(16),dp(16));page.setBackgroundColor(BG);
-        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(page);setContentView(scroll);
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setFitsSystemWindows(true);scroll.addView(page);setContentView(scroll);
         Button back=button("‹  GoT 2.0");back.setOnClickListener(v->finish());page.addView(back);
         page.addView(label("GoS  •  GOD OF SPORT AI",23,GOLD));
         page.addView(label("Футбол • календарь и результаты • API-SPORTS",14,Color.WHITE));
@@ -193,9 +193,38 @@ public final class SportActivity extends Activity {
             final JSONObject result=data;final String msg=message;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);status.setText(msg);if(result!=null)render(result);});
         });
     }
+    private String matchTime(JSONObject fixture){
+        long ts=fixture.optLong("timestamp",0);
+        if(ts<=0||ts>4102444800L)return "Время неизвестно";
+        SimpleDateFormat f=new SimpleDateFormat("dd.MM.yyyy HH:mm",new Locale("ru","RU"));
+        f.setTimeZone(TimeZone.getTimeZone("Europe/Moscow"));
+        return f.format(new Date(ts*1000L))+" МСК";
+    }
+    private String matchStatus(JSONObject fixture){
+        JSONObject st=fixture.optJSONObject("status");
+        String code=st==null?"":st.optString("short");
+        switch(code){
+            case "NS":return fixture.optLong("timestamp",0)*1000L<System.currentTimeMillis()?"Время начала прошло, статус не обновлён":"По расписанию";
+            case "FT":return "Завершён";
+            case "1H":return "Первый тайм";
+            case "2H":return "Второй тайм";
+            case "HT":return "Перерыв";
+            case "ET":return "Доп. время";
+            case "P":return "Пенальти";
+            case "AET":case "PEN":return "Завершён после доп. времени / пенальти";
+            case "PST":return "Перенесён";
+            case "CANC":return "Отменён";
+            case "ABD":return "Прерван";
+            case "SUSP":case "INT":return "Приостановлен";
+            case "LIVE":return "Идёт матч";
+            case "TBD":return "Время уточняется";
+            case "AWD":case "WO":return "Технический результат";
+            default:return "Статус неизвестен";
+        }
+    }
     private void render(JSONObject data){
         shownFixtures=data;results.removeAllViews();JSONArray list=data.optJSONArray("response");if(list==null)return;
-        results.addView(label("Матчей в ответе: "+list.length()+" • поиск по всему списку",14,GOLD));
+        results.addView(label("Матчей в ответе: "+list.length()+" • время по Москве • поиск по всему списку",14,GOLD));
         String query=search.getText().toString().trim().toLowerCase(Locale.ROOT);int shown=0;
         for(int i=0;i<list.length()&&shown<200;i++){
             JSONObject item=list.optJSONObject(i);if(item==null)continue;
@@ -207,8 +236,8 @@ public final class SportActivity extends Activity {
             if(!(title+" "+leagueName).toLowerCase(Locale.ROOT).contains(query))continue;
             shown++;
             JSONObject st=fixture.optJSONObject("status");
-            String score=goals!=null&&!goals.isNull("home")&&!goals.isNull("away")?" • "+goals.optString("home")+" : "+goals.optString("away"):"";
-            TextView row=label(h.optString("name")+" — "+a.optString("name")+score+"\n"+(league==null?"":league.optString("name"))+" • "+fixture.optString("date")+" • "+(st==null?"":st.optString("short")),14,Color.WHITE);
+            String score=goals!=null&&!goals.isNull("home")&&!goals.isNull("away")?"   "+goals.optString("home")+" : "+goals.optString("away"):"";
+            TextView row=label(h.optString("name")+" — "+a.optString("name")+score+"\n"+(league==null?"":league.optString("name"))+"\n"+matchTime(fixture)+"\n"+matchStatus(fixture),14,Color.WHITE);
             row.setBackgroundColor(PANEL);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(6);results.addView(row,lp);
             row.setOnClickListener(v->openMatch(item));
         }
@@ -222,7 +251,7 @@ public final class SportActivity extends Activity {
         int home=h.optInt("id",-1),away=a.optInt("id",-1);long cutoff=fixture.optLong("timestamp",0),fixtureId=fixture.optLong("id",0);
         String homeName=h.optString("name"),awayName=a.optString("name"),title=homeName+" — "+awayName;
         if(home<=0||away<=0||cutoff<=0){status.setText("Недостаточно данных о матче.");return;}
-        String meta=(league==null?"":league.optString("name")+" • ")+fixture.optString("date");
+        String meta=(league==null?"":league.optString("name")+" • ")+matchTime(fixture)+" • "+matchStatus(fixture);
         busy=true;load.setEnabled(false);settings.setEnabled(false);
         worker.execute(()->{
             String summary;
