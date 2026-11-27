@@ -231,6 +231,9 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams sportLp=new LinearLayout.LayoutParams(-1,dp(44));sportLp.topMargin=dp(6);
         content.addView(sport,sportLp);
         sport.setOnClickListener(v->startActivity(new android.content.Intent(this,SportActivity.class)));
+        Button investments=button("ИНВЕСТИЦИИ",PANEL,GOLD);
+        LinearLayout.LayoutParams investLp=new LinearLayout.LayoutParams(-1,dp(44));investLp.topMargin=dp(6);content.addView(investments,investLp);
+        investments.setOnClickListener(v->showInvestments());
 
         accountPanel=horizontal();accountPanel.setPadding(dp(16),dp(14),dp(16),dp(14));accountPanel.setBackground(surface(PANEL,15,0xFF51401D));accountPanel.setElevation(dp(2));
         TextView accountLabel=label("ВИРТУАЛЬНЫЙ БАЛАНС",10,MUTED,true);
@@ -648,6 +651,20 @@ public class MainActivity extends Activity {
         intent.putExtra("access_token",accessToken);
         intent.putExtra("refresh_token",refreshToken);
         startActivity(intent);
+    }
+
+    private void showInvestments(){
+        LinearLayout content=vertical();content.setPadding(dp(16),dp(16),dp(16),dp(16));
+        TextView title=label("ИНВЕСТИЦИИ",20,GOLD,true);content.addView(title);
+        String[] sections={"Микрозаймы для компаний","Тендеры — госзакупки"};
+        for(String name:sections){
+            Button item=button(name+"\nВ разработке",PANEL,GOLD);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.topMargin=dp(12);
+            item.setMinHeight(dp(68));content.addView(item,lp);
+            item.setOnClickListener(v->new AlertDialog.Builder(this).setTitle(name).setMessage("Раздел в разработке. Финансовые операции пока недоступны.").setPositiveButton("ОК",null).show());
+        }
+        Button back=button("НАЗАД",PANEL,TEXT);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(44));lp.topMargin=dp(16);content.addView(back,lp);back.setOnClickListener(v->showMain());
+        pageWithNavigation(content,-1);
     }
 
     private void showMenu(){
