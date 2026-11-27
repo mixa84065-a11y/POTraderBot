@@ -70,7 +70,7 @@ public class BybitTerminalActivity extends Activity {
     private double chartEntryPrice=0;
     private ScrollView terminalScroll;
     private String symbol="BTCUSDT";
-    private boolean loading=false, autoEnabled=false;
+    private boolean loading=false, autoEnabled=false, marketResumed=false;
     private JSONArray candles=new JSONArray();
     private double lastPrice=0;
     private final Runnable poll=new Runnable(){@Override public void run(){loadMarket();handler.postDelayed(this,15000);}};
@@ -902,22 +902,23 @@ public class BybitTerminalActivity extends Activity {
     }
 
     private void loadMarket(){
-        if(loading)return;loading=true;final String requested=symbol;
+        if(loading||!marketResumed)return;loading=true;final String requested=symbol;
+        final long started=android.os.SystemClock.elapsedRealtime();
         marketIo.execute(()->{
             JSONArray rows=null;JSONObject ticker=null;String error=null;
             try{
-                ticker=getJson(API+"/v5/market/tickers?category=spot&symbol="+requested).getJSONObject("result").getJSONArray("list").getJSONObject(0);
-                rows=getJson(API+"/v5/market/kline?category=spot&symbol="+requested+"&interval=1&limit=100").getJSONObject("result").getJSONArray("list");
+                JSONObject tick=getJson(API+"/v5/market/tickers?category=spot&symbol="+requested);
+                JSONObject history=getJson(API+"/v5/market/kline?category=spot&symbol="+requested+"&interval=1&limit=101");
+                ticker=PaperMarketGuard.ticker(tick,requested);
+                rows=PaperMarketGuard.closedBars(history,requested);
             }catch(Exception e){error=e.getMessage();}
             final JSONArray rr=rows;final JSONObject tt=ticker;final String ee=error;
             runOnUiThread(()->{
-                loading=false;if(isFinishing()||isDestroyed())return;
+                loading=false;if(isFinishing()||isDestroyed()||!marketResumed)return;
                 if(!requested.equals(symbol)){loadMarket();return;}
-                if(rr==null||tt==null){liveText.setText("● НЕТ СВЯЗИ");liveText.setTextColor(RED);priceText.setText("Цена недоступна");statusText.setText("Нет котировок Bybit: "+ee);priceChart.setEmptyMessage("Нет свежих данных Bybit");return;}
+                if(rr==null||tt==null||!QuoteFreshness.usable(started,android.os.SystemClock.elapsedRealtime())){invalidatePaperQuote("Нет подтверждённых котировок Bybit"+(ee==null?"":": "+ee));return;}
                 try{
-                    JSONArray ordered=new JSONArray();for(int i=rr.length()-1;i>=0;i--)ordered.put(rr.getJSONArray(i));
-                    // Discard the still-forming candle; only closed bars feed the strategy.
-                    if(ordered.length()>1)ordered.remove(ordered.length()-1);
+                    JSONArray ordered=rr;
                     double nextPrice=Double.parseDouble(tt.getString("lastPrice"));
                     if(!Double.isFinite(nextPrice)||nextPrice<=0||ordered.length()==0)throw new IllegalArgumentException("Некорректная цена или пустая история");
                     candles=ordered;lastPrice=nextPrice;
@@ -932,9 +933,14 @@ public class BybitTerminalActivity extends Activity {
                     chartEntryPrice=prefs.getBoolean("open",false) && requested.equals(prefs.getString("trade_symbol","")) ? prefs.getFloat("entry",0) : 0;
                     priceChart.setCandles(candles,chartEntryPrice);
                     evaluateStrategy();
-                }catch(Exception e){lastPrice=0;liveText.setText("● ОШИБКА");liveText.setTextColor(RED);statusText.setText("Ошибка обработки котировок: "+e.getMessage());}
+                }catch(Exception e){invalidatePaperQuote("Ошибка обработки котировок: "+e.getMessage());}
             });
         });
+    }
+    private void invalidatePaperQuote(String message){
+        lastPrice=0;candles=new JSONArray();liveText.setText("● НЕТ ДАННЫХ");liveText.setTextColor(RED);
+        priceText.setText("Цена недоступна");changeText.setText("24ч: —");signalText.setText("АНАЛИЗ: ожидание данных");signalText.setTextColor(MUTED);
+        statusText.setText(message);priceChart.setCandles(candles,0);priceChart.setAnalysis(0,"ОЖИДАНИЕ");priceChart.setEmptyMessage("Нет подтверждённых котировок");renderLedger();
     }
     private JSONObject getJson(String url)throws Exception{
         HttpURLConnection c=(HttpURLConnection)new URL(url).openConnection();
@@ -1003,7 +1009,9 @@ public class BybitTerminalActivity extends Activity {
     }
     private void managePaperTrade(int s,long candleTime){
         boolean open=prefs.getBoolean("open",false);
+        if(!marketResumed||!Double.isFinite(lastPrice)||lastPrice<=0)return;
         if(open){
+            if(!PaperMarketGuard.samePosition(symbol,prefs.getString("trade_symbol",""),lastPrice)){statusText.setText("Открытая демо-позиция: требуется котировка её инструмента.");return;}
             // Remember the candle that was already occupied so a stop/exit cannot
             // immediately trigger a second entry from the same unchanged signal.
             if(candleTime>0)prefs.edit().putLong("last_entry_signal_candle",candleTime).apply();
@@ -1021,7 +1029,7 @@ public class BybitTerminalActivity extends Activity {
                     .putString("last",String.format(Locale.US,"%s • %s • вход %.4f • выход %.4f • P/L %+.2f USDT",symbol,stop?"STOP":take?"TAKE PROFIT":"СИГНАЛ ЗАКРЫТ",entry,lastPrice,pnl)).apply();
                 if(stopAuto){autoEnabled=false;statusText.setText("Достигнут дневной лимит убытка 200 USDT. Автоторговля остановлена.");}
             }
-        }else if(autoEnabled&&s>=3&&lastPrice>0
+        }else if(autoEnabled&&s>=3&&candleTime>0&&lastPrice>0
                 &&candleTime!=prefs.getLong("last_entry_signal_candle",0)){
             double cash=prefs.getFloat("cash",(float)START_BALANCE);
             if(cash>=STAKE){
@@ -1043,8 +1051,8 @@ public class BybitTerminalActivity extends Activity {
         if(open)last+="\n\nОТКРЫТАЯ ПОЗИЦИЯ: "+prefs.getString("trade_symbol",symbol)+" • вход "+String.format(Locale.US,"%.4f",prefs.getFloat("entry",0))+" • стоп 0,7% / цель 1,4%";
         historyText.setText(last);
     }
-    @Override protected void onResume(){super.onResume();handler.removeCallbacks(poll);handler.post(poll);refreshServerReport();refreshPaperAutoReport();handler.removeCallbacks(paperStatusPoll);handler.postDelayed(paperStatusPoll,60000);}
-    @Override protected void onPause(){super.onPause();handler.removeCallbacks(poll);handler.removeCallbacks(paperStatusPoll);}
+    @Override protected void onResume(){super.onResume();marketResumed=true;handler.removeCallbacks(poll);handler.post(poll);refreshServerReport();refreshPaperAutoReport();handler.removeCallbacks(paperStatusPoll);handler.postDelayed(paperStatusPoll,60000);}
+    @Override protected void onPause(){super.onPause();marketResumed=false;handler.removeCallbacks(poll);handler.removeCallbacks(paperStatusPoll);}
     @Override protected void onDestroy(){handler.removeCallbacks(poll);handler.removeCallbacks(paperStatusPoll);io.shutdownNow();marketIo.shutdownNow();super.onDestroy();}
 
     private final class PriceChart extends View{
