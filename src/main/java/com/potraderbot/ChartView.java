@@ -97,11 +97,11 @@ public class ChartView extends View {
         p.setColor(0xFF1D2A38); p.setStrokeWidth(1f);
         for(int i=1;i<6;i++) c.drawLine(0,h*i/6f,w,h*i/6f,p);
         for(int i=1;i<8;i++) c.drawLine(w*i/8f,0,w*i/8f,h,p);
-        p.setColor(0xFFF7BE37); p.setTextSize(14f); p.setFakeBoldText(true);
-        c.drawText(expanded ? "ГРАФИК И АНАЛИЗ • " + symbol + " • M1" : symbol + " • M1",16,24,p);
+        p.setColor(0xFFF7BE37); p.setTextSize(14f*getResources().getDisplayMetrics().density); p.setFakeBoldText(true);
+        c.drawText(expanded ? "ГРАФИК И АНАЛИЗ • " + symbol + " • M1" : symbol + " • M1",16,24*getResources().getDisplayMetrics().density,p);
         p.setFakeBoldText(false);
         if(candles.isEmpty()) {
-            p.setColor(0xFF979AA3); p.setTextSize(12f);
+            p.setColor(0xFF979AA3); p.setTextSize(11f*getResources().getDisplayMetrics().density);
             String t="Нажмите «АНАЛИЗ» для загрузки свечей";
             c.drawText(t,Math.max(12,(w-p.measureText(t))/2f),h/2f,p);
         } else {
@@ -110,7 +110,8 @@ public class ChartView extends View {
             double pad=(max-min)*0.12;
             if(pad<=0) pad=Math.max(max*0.0001,0.000001);
             min-=pad; max+=pad;
-            float left=12, right=w-12, top=42, bottom=h-22;
+            float density=getResources().getDisplayMetrics().density;
+            float left=8*density, right=w-8*density, top=32*density, bottom=h-18*density;
             float plotH=Math.max(1,bottom-top);
             float slot=(right-left)/candles.size();
             float bodyW=Math.max(2,Math.min(12,slot*0.58f));
@@ -133,7 +134,7 @@ public class ChartView extends View {
                 drawEma(c,ema(9),0xFFF7BE37,left,slot,bottom,plotH,min,max);
                 drawEma(c,ema(21),0xFF369DFA,left,slot,bottom,plotH,min,max);
 
-                p.setTextSize(10f); p.setFakeBoldText(true);
+                p.setTextSize(9f*getResources().getDisplayMetrics().density); p.setFakeBoldText(true);
                 p.setColor(0xFFF7BE37); c.drawText("EMA 9",16,42,p);
                 p.setColor(0xFF369DFA); c.drawText("EMA 21",66,42,p);
                 p.setFakeBoldText(false);
@@ -152,6 +153,6 @@ public class ChartView extends View {
             }
         }
         p.setColor(fresh?0xFF00BE55:0xFF979AA3); p.setTextSize(10f);
-        c.drawText(message,16,h-7,p);
+        c.drawText(message,16,h-5*getResources().getDisplayMetrics().density,p);
     }
 }

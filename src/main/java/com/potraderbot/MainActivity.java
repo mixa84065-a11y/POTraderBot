@@ -35,7 +35,7 @@ public class MainActivity extends Activity {
     private static final int MUTED=Color.rgb(151,154,163), GREEN=Color.rgb(0,190,85), RED=Color.rgb(224,43,43);
     private final ExecutorService io=Executors.newSingleThreadExecutor();
     private final Handler handler=new Handler(Looper.getMainLooper());
-    private String accessToken="", refreshToken="";
+    private volatile String accessToken="", refreshToken="";
     private String symbol="EUR/USD";
     private final Set<String> activeTradeSymbols=new HashSet<>();
     private final Set<String> openingTradeSymbols=new HashSet<>();
@@ -136,10 +136,10 @@ public class MainActivity extends Activity {
         scroll.addView(content);shell.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout nav=horizontal();nav.setPadding(dp(7),dp(7),dp(7),dp(7));
         nav.setBackground(surface(PANEL,15,0xFF3B321E));
-        String[] labels={"ГЛАВНАЯ","BYBIT","АНАЛИЗ","СДЕЛКИ","ЕЩЁ"};
+        String[] labels={"Главная","Bybit","Анализ","Сделки","Ещё"};
         for(int i=0;i<labels.length;i++){
             final int tab=i;Button item=button(labels[i],i==selected?GOLD:PANEL,i==selected?NAVY:TEXT);
-            item.setTextSize(9);item.setMinHeight(dp(46));
+            item.setTextSize(10);item.setPadding(dp(2),dp(3),dp(2),dp(3));item.setSingleLine(true);item.setMinHeight(dp(42));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(48),1);
             lp.leftMargin=dp(2);lp.rightMargin=dp(2);nav.addView(item,lp);
             item.setOnClickListener(v->{
@@ -247,7 +247,7 @@ public class MainActivity extends Activity {
     private void showTradingScreen(){
         dashboardVisible=false;
         analysisMode=false;
-        LinearLayout content=vertical();content.setPadding(dp(16),dp(16),dp(16),dp(24));
+        LinearLayout content=vertical();content.setPadding(dp(10),dp(8),dp(10),dp(12));
         LinearLayout header=horizontal();
         Button back=button("‹",PANEL,GOLD);header.addView(back,new LinearLayout.LayoutParams(dp(44),dp(42)));back.setOnClickListener(v->showMain());
         TextView brand=label("Трейдинг",20,TEXT,true);brand.setGravity(Gravity.CENTER_VERTICAL);header.addView(brand,new LinearLayout.LayoutParams(0,dp(42),1));
@@ -257,10 +257,10 @@ public class MainActivity extends Activity {
         content.addView(header);
         menu.setOnClickListener(v->showMenu());
 
-        accountPanel=horizontal();accountPanel.setPadding(dp(16),dp(14),dp(16),dp(14));accountPanel.setBackground(surface(PANEL,15,0xFF51401D));accountPanel.setElevation(dp(2));
+        accountPanel=vertical();accountPanel.setPadding(dp(12),dp(8),dp(12),dp(8));accountPanel.setBackground(surface(PANEL,15,0xFF51401D));accountPanel.setElevation(dp(2));
         TextView accountLabel=label("ВИРТУАЛЬНЫЙ БАЛАНС",10,MUTED,true);
-        accountPanel.addView(accountLabel,new LinearLayout.LayoutParams(0,-2,1));
-        balanceText=label("Загрузка…",18,TEXT,true);accountPanel.addView(balanceText);
+        accountPanel.addView(accountLabel,new LinearLayout.LayoutParams(-1,-2));
+        balanceText=label("Загрузка…",17,TEXT,true);accountPanel.addView(balanceText);
         LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(-1,-2);ap.topMargin=dp(8);content.addView(accountPanel,ap);
         // Persistent navigation is rendered outside the scrolling content.
 
@@ -292,22 +292,12 @@ public class MainActivity extends Activity {
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
         });
         chart=new ChartView(this);chart.setSymbol(symbol);
-        int chartHeight=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?dp(175):dp(256);
+        int chartHeight=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?dp(160):dp(190);
         LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,chartHeight);content.addView(chart,cp);
 
         quoteText=label("Нажмите «АНАЛИЗ», чтобы загрузить подтверждённые котировки.",11,MUTED,false);quoteText.setPadding(dp(4),dp(6),0,dp(4));content.addView(quoteText);
         analysisButton=button("Анализ",GOLD,NAVY);analysisButton.setTextSize(12);
         analysisButton.setOnClickListener(v->toggleAnalysis());
-
-        analysisDivider=new View(this);analysisDivider.setBackgroundColor(0xFF263D5A);
-        LinearLayout.LayoutParams divp=new LinearLayout.LayoutParams(-1,dp(1));divp.topMargin=dp(8);content.addView(analysisDivider,divp);
-        analysisText=label("РЫНОЧНЫЙ АНАЛИЗ\nНажмите «АНАЛИЗ», чтобы получить свечи и рассчитать направление. Без свежих данных сделки заблокированы.",12,TEXT,false);
-        stylePanel(analysisText,10);content.addView(analysisText);
-
-        signalText=label("ОЦЕНКА МОДЕЛИ: —",11,MUTED,true);signalText.setPadding(dp(4),dp(10),0,dp(3));content.addView(signalText);
-        strengthBar=new ModelStrengthBar(this);
-        strengthBar.setMax(100);strengthBar.setProgress(0);strengthBar.setProgressTintList(ColorStateList.valueOf(GOLD));
-        LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(22));content.addView(strengthBar,bp);
 
         controlsPanel=vertical();
         TextView expiryLabel=label("ЭКСПИРАЦИЯ",10,MUTED,true);expiryLabel.setPadding(dp(4),dp(10),0,dp(4));controlsPanel.addView(expiryLabel);
@@ -329,6 +319,17 @@ public class MainActivity extends Activity {
         upButton.setEnabled(false);downButton.setEnabled(false);
         upButton.setOnClickListener(v->placeTrade("UP"));downButton.setOnClickListener(v->placeTrade("DOWN"));
         content.addView(controlsPanel);
+        analysisDivider=new View(this);analysisDivider.setBackgroundColor(0xFF263D5A);
+        LinearLayout.LayoutParams divp=new LinearLayout.LayoutParams(-1,dp(1));divp.topMargin=dp(8);content.addView(analysisDivider,divp);
+        analysisText=label("РЫНОЧНЫЙ АНАЛИЗ\nНажмите «АНАЛИЗ», чтобы получить свечи и рассчитать направление. Без свежих данных сделки заблокированы.",12,TEXT,false);
+        stylePanel(analysisText,10);content.addView(analysisText);
+
+        signalText=label("ОЦЕНКА МОДЕЛИ: —",11,MUTED,true);signalText.setPadding(dp(4),dp(10),0,dp(3));content.addView(signalText);
+        strengthBar=new ModelStrengthBar(this);
+        strengthBar.setMax(100);strengthBar.setProgress(0);strengthBar.setProgressTintList(ColorStateList.valueOf(GOLD));
+        LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(22));content.addView(strengthBar,bp);
+
+
 
         historyPanel=vertical();
         TextView statsTitle=label("СТАТИСТИКА СДЕЛОК  ▾",11,GOLD,true);statsTitle.setPadding(dp(4),dp(12),0,dp(5));historyPanel.addView(statsTitle);
@@ -452,8 +453,13 @@ public class MainActivity extends Activity {
         io.execute(()->{
             JSONObject wallet=null;JSONArray trades=null;
             String walletError=null,tradesError=null;
-            try{wallet=SupabaseApi.getWallet(token);}catch(Exception e){walletError=e.getMessage();}
-            try{trades=SupabaseApi.getTrades(token);}catch(Exception e){tradesError=e.getMessage();}
+            String active=token;
+            try{active=ensureSession(token,false);wallet=SupabaseApi.getWallet(active);}
+            catch(Exception e){
+                if(SessionStore.isExpired(e.getMessage()))try{active=ensureSession(active,true);wallet=SupabaseApi.getWallet(active);}catch(Exception again){walletError=again.getMessage();}
+                else walletError=e.getMessage();
+            }
+            try{trades=SupabaseApi.getTrades(active);}catch(Exception e){tradesError=e.getMessage();}
             final JSONObject fw=wallet;final JSONArray ft=trades;
             final String fwe=walletError,fte=tradesError;
             runOnUiThread(()->{
@@ -462,7 +468,7 @@ public class MainActivity extends Activity {
                 if(fw!=null&&fw.has("balance")&&!fw.isNull("balance")){
                     try{balanceText.setText(String.format(Locale.US,"%,.2f ₽",fw.getDouble("balance")));}
                     catch(Exception ignored){balanceText.setText(fw.optString("balance")+" ₽");}
-                }else balanceText.setText(fwe==null?"Баланс не найден":"Ошибка баланса: "+fwe);
+                }else balanceText.setText(fwe==null?"Баланс не найден":SessionStore.isExpired(fwe)?"Сессия истекла. Войдите снова.":"Баланс недоступен. Проверьте связь.");
                 if(ft==null && fte!=null) historyText.setText("История недоступна: "+fte);
                 if(ft!=null){
                     activeTradeSymbols.clear();
@@ -477,6 +483,11 @@ public class MainActivity extends Activity {
         });
     }
 
+    private String ensureSession(String expected,boolean force)throws Exception{
+        String[] next=SessionStore.fresh(this,expected,force);
+        if(!SessionStore.sameSession(accessToken,expected))throw new Exception("Сессия изменена. Войдите снова.");
+        accessToken=next[0];refreshToken=next[1];return next[0];
+    }
     private void updateTradeButtons(){
         boolean canTrade=quoteFresh&&demoEnabled
             && !activeTradeSymbols.contains(symbol)
@@ -497,8 +508,9 @@ public class MainActivity extends Activity {
         final String token=accessToken,requestedSymbol=symbol;
         io.execute(()->{
             JSONObject snapshot=null;String error=null;
-            try{snapshot=SupabaseApi.getMarketSnapshot(token,requestedSymbol);}
-            catch(Exception e){error=e.getMessage();}
+            String active=token;
+            try{active=ensureSession(token,false);snapshot=SupabaseApi.getMarketSnapshot(active,requestedSymbol);}
+            catch(Exception e){if(SessionStore.isExpired(e.getMessage()))try{active=ensureSession(active,true);snapshot=SupabaseApi.getMarketSnapshot(active,requestedSymbol);}catch(Exception again){error=again.getMessage();}else error=e.getMessage();}
             final JSONObject fs=snapshot;final String fe=error;            runOnUiThread(()->{
                 refreshingMarket=false;
                 if(isFinishing()||accessToken.isEmpty())return;
@@ -599,7 +611,8 @@ public class MainActivity extends Activity {
         final double amount=stake;final String token=accessToken;
         io.execute(()->{
             try{
-                JSONObject result=SupabaseApi.openDemoTrade(token,tradeSymbol,direction,amount,expirySeconds);
+                String current=ensureSession(token,false);
+                JSONObject result=SupabaseApi.openDemoTrade(current,tradeSymbol,direction,amount,expirySeconds);
                 final int tradeExpiry=expirySeconds;
                 runOnUiThread(()->{
                     JSONObject trade=result.optJSONObject("trade");
@@ -608,7 +621,7 @@ public class MainActivity extends Activity {
                     activeTradeSymbols.add(tradeSymbol);
                     updateTradeButtons();
                     Toast.makeText(this,"Демо-сделка открыта"+(id.isEmpty()?"":" • "+id),Toast.LENGTH_LONG).show();
-                    scheduleExpiryQuote(token,tradeSymbol,tradeExpiry);
+                    scheduleExpiryQuote(current,tradeSymbol,tradeExpiry);
                 });
             }catch(Exception e){runOnUiThread(()->{
                 openingTradeSymbols.remove(tradeSymbol);

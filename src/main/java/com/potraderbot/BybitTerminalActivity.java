@@ -45,8 +45,9 @@ public class BybitTerminalActivity extends Activity {
     private static final double START_BALANCE=20000.0, STAKE=100.0, STOP_PCT=0.007, TAKE_PCT=0.014, MAX_DAILY_LOSS=200.0;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService io=Executors.newSingleThreadExecutor();
+    private final ExecutorService marketIo=Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
-    private String accessToken="", refreshToken="";
+    private volatile String accessToken="", refreshToken="";
     private TextView serverReportText, connectionStatusText, paperAutoReportText, paperStatsHeader, paperStatsText;
     private Button paperStartButton, paperStopButton, paperPrepareButton, bybitPrepareButton;
     private boolean preparePaperRequested=false, prepareBybitRequested=false;
@@ -130,15 +131,15 @@ public class BybitTerminalActivity extends Activity {
     private LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(1);return l;}
     private LinearLayout horizontal(){LinearLayout l=new LinearLayout(this);l.setOrientation(0);l.setGravity(Gravity.CENTER_VERTICAL);return l;}
     private void buildScreen(){
-        LinearLayout root=vertical();root.setPadding(dp(16),dp(16),dp(16),dp(24));root.setBackgroundColor(BG);
+        LinearLayout root=vertical();root.setPadding(dp(10),dp(8),dp(10),dp(14));root.setBackgroundColor(BG);
         LinearLayout top=horizontal();
-        TextView title=text("♛  GOD OF TRADING 2.0",19,GOLD,true);
+        TextView title=text("Bybit · Криптосканер",18,GOLD,true);
         top.addView(title,new LinearLayout.LayoutParams(0,dp(44),1));
-        Button back=button("НАЗАД",PANEL,WHITE);top.addView(back,new LinearLayout.LayoutParams(-2,dp(40)));
+        Button back=button("‹ Назад",PANEL,WHITE);top.addView(back,new LinearLayout.LayoutParams(-2,dp(40)));
         back.setOnClickListener(v->finish());root.addView(top);
-        TextView sub=text("BYBIT  /  ПРОФЕССИОНАЛЬНЫЙ ТЕРМИНАЛ",10,MUTED,true);sub.setPadding(0,dp(2),0,dp(10));root.addView(sub);
+        TextView sub=text("Спот · локальный демо-режим",11,MUTED,true);sub.setPadding(0,dp(2),0,dp(10));root.addView(sub);
         LinearLayout select=horizontal();
-        TextView pairLabel=text("ИНСТРУМЕНТ",10,MUTED,true);select.addView(pairLabel);
+        TextView pairLabel=text("Пара",12,MUTED,true);select.addView(pairLabel);
         symbolPicker=new Spinner(this);
         symbolPicker.setBackground(surface(PANEL,10,0xFF51401D));symbolPicker.setPadding(dp(8),0,dp(8),0);
         String[] symbols={"BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","BNBUSDT","DOGEUSDT"};
@@ -171,15 +172,16 @@ public class BybitTerminalActivity extends Activity {
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> p){}
         });
-        LinearLayout quote=horizontal();quote.setPadding(dp(14),dp(14),dp(14),dp(14));quote.setBackground(surface(PANEL,16,0xFF51401D));quote.setElevation(dp(2));
+        LinearLayout quote=horizontal();quote.setPadding(dp(10),dp(8),dp(10),dp(8));quote.setBackground(surface(PANEL,16,0xFF51401D));quote.setElevation(dp(2));
         LinearLayout qleft=vertical();
-        priceText=text("Загрузка цены…",25,WHITE,true);qleft.addView(priceText);
+        priceText=text("Загрузка цены…",19,WHITE,true);qleft.addView(priceText);
         changeText=text("24ч: —",11,MUTED,false);qleft.addView(changeText);
         quote.addView(qleft,new LinearLayout.LayoutParams(0,-2,1));
         liveText=text("● ОЖИДАНИЕ",11,MUTED,true);quote.addView(liveText); 
         LinearLayout.LayoutParams qp=new LinearLayout.LayoutParams(-1,-2);qp.topMargin=dp(8);root.addView(quote,qp);
-        priceChart=new PriceChart();LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(250));cp.topMargin=dp(8);root.addView(priceChart,cp);
+        priceChart=new PriceChart();LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(205));cp.topMargin=dp(8);root.addView(priceChart,cp);
         TextView tf=text("ГРАФИК  /  M1  /  100 ЗАКРЫТЫХ СВЕЧЕЙ",10,MUTED,true);tf.setPadding(dp(3),dp(5),0,dp(5));root.addView(tf);
+        Button refreshQuote=button("Обновить котировки",PANEL,GOLD);root.addView(refreshQuote,new LinearLayout.LayoutParams(-1,dp(40)));refreshQuote.setOnClickListener(v->loadMarket());
         LinearLayout wallet=horizontal();wallet.setPadding(dp(14),dp(14),dp(14),dp(14));wallet.setBackground(surface(PANEL,16,0xFF51401D));wallet.setElevation(dp(2));
         LinearLayout cashCol=vertical();cashCol.addView(text("ДЕМО-БАЛАНС",10,MUTED,true));
         balanceText=text("",20,WHITE,true);cashCol.addView(balanceText);
@@ -205,15 +207,16 @@ public class BybitTerminalActivity extends Activity {
         foot.setPadding(dp(4),dp(12),dp(4),0);root.addView(foot);
         // Keep the autonomous multi-market demo immediately after the local terminal,
         // before the longer 48-hour Bybit Demo section, so it is easy to find.
+        root.removeView(multiScan);root.removeView(multiScanText);root.addView(multiScan);root.addView(multiScanText);
         buildMultiMarketPaperSection(root);        buildServerReport(root);
         terminalScroll=new ScrollView(this);terminalScroll.setFillViewport(true);terminalScroll.setBackgroundColor(BG);terminalScroll.addView(root);
         LinearLayout shell=vertical();shell.setBackgroundColor(BG);
         shell.addView(terminalScroll,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout nav=horizontal();nav.setPadding(dp(7),dp(7),dp(7),dp(7));nav.setBackground(surface(PANEL,15,0xFF3B321E));
-        String[] tabs={"ОБЗОР","РЫНКИ","АНАЛИЗ","АВТОДЕМО"};
+        String[] tabs={"Главная","Рынки","Анализ","Автодемо"};
         for(int i=0;i<tabs.length;i++){
             final int tab=i;Button item=button(tabs[i],i==1?GOLD:PANEL,i==1?BG:WHITE);
-            item.setTextSize(9);item.setMinHeight(dp(46));
+            item.setTextSize(10);item.setPadding(dp(2),dp(3),dp(2),dp(3));item.setMinHeight(dp(42));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(48),1);lp.leftMargin=dp(2);lp.rightMargin=dp(2);nav.addView(item,lp);
             item.setOnClickListener(v->{
                 if(tab==0)finish();
@@ -408,15 +411,7 @@ public class BybitTerminalActivity extends Activity {
     }
 
     private synchronized String refreshExpiredSession(String failedToken) throws Exception {
-        if(!accessToken.isEmpty()&&!accessToken.equals(failedToken))return accessToken;
-        if(refreshToken.isEmpty())throw new Exception("Сессия истекла. Войдите в аккаунт заново.");
-        JSONObject refreshed=SupabaseApi.refresh(refreshToken);
-        String newAccess=refreshed.optString("access_token","");
-        String newRefresh=refreshed.optString("refresh_token",refreshToken);
-        if(newAccess.isEmpty())throw new Exception("Не удалось обновить сессию. Войдите в аккаунт заново.");
-        SessionStore.save(this,newAccess,newRefresh);
-        accessToken=newAccess;refreshToken=newRefresh;
-        return accessToken;
+        String[] next=SessionStore.fresh(this,failedToken,true);accessToken=next[0];refreshToken=next[1];return accessToken;
     }
 
     private JSONObject getMultiMarketReportWithRefresh(String expectedId) throws Exception {
@@ -898,7 +893,7 @@ public class BybitTerminalActivity extends Activity {
 
     private void loadMarket(){
         if(loading)return;loading=true;final String requested=symbol;
-        io.execute(()->{
+        marketIo.execute(()->{
             JSONArray rows=null;JSONObject ticker=null;String error=null;
             try{
                 ticker=getJson(API+"/v5/market/tickers?category=spot&symbol="+requested).getJSONObject("result").getJSONArray("list").getJSONObject(0);
@@ -907,7 +902,7 @@ public class BybitTerminalActivity extends Activity {
             final JSONArray rr=rows;final JSONObject tt=ticker;final String ee=error;
             runOnUiThread(()->{
                 loading=false;if(isFinishing()||!requested.equals(symbol))return;
-                if(rr==null||tt==null){liveText.setText("● OFFLINE");liveText.setTextColor(RED);statusText.setText("Нет котировок Bybit: "+ee);return;}
+                if(rr==null||tt==null){liveText.setText("● НЕТ СВЯЗИ");liveText.setTextColor(RED);priceText.setText("Цена недоступна");statusText.setText("Нет котировок Bybit: "+ee);priceChart.setEmptyMessage("Нет свежих данных Bybit");return;}
                 try{
                     JSONArray ordered=new JSONArray();for(int i=rr.length()-1;i>=0;i--)ordered.put(rr.getJSONArray(i));
                     // Discard the still-forming candle; only closed bars feed the strategy.
@@ -915,9 +910,9 @@ public class BybitTerminalActivity extends Activity {
                     candles=ordered;lastPrice=Double.parseDouble(tt.getString("lastPrice"));
                     long latestClosed=Long.parseLong(candles.getJSONArray(candles.length()-1).getString(0));
                     boolean marketFresh=System.currentTimeMillis()-latestClosed<=180000L;
-                    liveText.setText(marketFresh?"● LIVE":"● STALE");
+                    liveText.setText(marketFresh?"● Актуально":"● Устарело");
                     liveText.setTextColor(marketFresh?GREEN:RED);
-                    priceText.setText(String.format(Locale.US,"%s  %,.4f",requested,lastPrice));
+                    priceText.setText(String.format(Locale.US,"%,.4f USDT",lastPrice));
                     double change=Double.parseDouble(tt.optString("price24hPcnt","0"))*100.0;
                     changeText.setText(String.format(Locale.US,"24ч: %+.2f%%",change));
                     changeText.setTextColor(change>=0?GREEN:RED);
@@ -1037,11 +1032,13 @@ public class BybitTerminalActivity extends Activity {
     }
     @Override protected void onResume(){super.onResume();handler.removeCallbacks(poll);handler.post(poll);refreshServerReport();refreshPaperAutoReport();handler.removeCallbacks(paperStatusPoll);handler.postDelayed(paperStatusPoll,60000);}
     @Override protected void onPause(){super.onPause();handler.removeCallbacks(poll);handler.removeCallbacks(paperStatusPoll);}
-    @Override protected void onDestroy(){handler.removeCallbacks(poll);handler.removeCallbacks(paperStatusPoll);io.shutdownNow();super.onDestroy();}
+    @Override protected void onDestroy(){handler.removeCallbacks(poll);handler.removeCallbacks(paperStatusPoll);io.shutdownNow();marketIo.shutdownNow();super.onDestroy();}
 
     private final class PriceChart extends View{
         private final Paint p=new Paint(3);private JSONArray data=new JSONArray();private double entryPrice=0;private int analysisScore=0;private String analysisLabel="ОЖИДАНИЕ АНАЛИЗА";
-        PriceChart(){super(BybitTerminalActivity.this);setBackgroundColor(PANEL);}
+        private String emptyMessage="Загружаются котировки Bybit…";
+        PriceChart(){super(BybitTerminalActivity.this);setBackgroundColor(0xff0b1420);}
+        void setEmptyMessage(String message){emptyMessage=message;invalidate();}
         void setCandles(JSONArray d,double entry){data=d;entryPrice=entry;invalidate();}
         void setAnalysis(int score,String label){analysisScore=score;analysisLabel=label;invalidate();}
         private double[] emaValues(int period){
@@ -1066,7 +1063,7 @@ public class BybitTerminalActivity extends Activity {
         @Override protected void onDraw(Canvas c){
             super.onDraw(c);float w=getWidth(),h=getHeight();p.setStrokeWidth(1);p.setColor(0xFF202630);
             for(int i=1;i<4;i++)c.drawLine(0,h*i/4,w,h*i/4,p);
-            if(data.length()<2)return;
+            if(data.length()<2){p.setTextSize(dp(12));p.setColor(MUTED);p.setTextAlign(Paint.Align.CENTER);c.drawText(emptyMessage,w/2,h/2,p);p.setTextAlign(Paint.Align.LEFT);return;}
             double min=Double.MAX_VALUE,max=-Double.MAX_VALUE;
             for(int i=0;i<data.length();i++){try{JSONArray row=data.getJSONArray(i);min=Math.min(min,Double.parseDouble(row.getString(3)));max=Math.max(max,Double.parseDouble(row.getString(2)));}catch(Exception ignored){}}
             if(entryPrice>0){min=Math.min(min,entryPrice);max=Math.max(max,entryPrice);}
