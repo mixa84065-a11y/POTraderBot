@@ -168,11 +168,68 @@ public class MainActivity extends Activity {
         Button login=button("ВОЙТИ",GOLD,NAVY);root.addView(login,new LinearLayout.LayoutParams(-1,dp(50)));
         Button register=button("СОЗДАТЬ АККАУНТ",PANEL,TEXT);
         LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(50));rp.topMargin=dp(8);root.addView(register,rp);
+        Button forgot=button("ЗАБЫЛИ ПАРОЛЬ?",PANEL,GOLD);
+        LinearLayout.LayoutParams fp=new LinearLayout.LayoutParams(-1,dp(48));fp.topMargin=dp(8);root.addView(forgot,fp);
+        forgot.setOnClickListener(v->{if(login.isEnabled()&&register.isEnabled())showPasswordRecovery(email.getText().toString());});
         TextView note=label("Каждому аккаунту выделяется отдельный виртуальный счёт. Реальные деньги и брокерские аккаунты не используются.",11,MUTED,false);
         note.setPadding(0,dp(18),0,0);root.addView(note);
         page(root);
         login.setOnClickListener(v->authenticate(email.getText().toString(),password.getText().toString(),false,statusText,login,register));
         register.setOnClickListener(v->authenticate(email.getText().toString(),password.getText().toString(),true,statusText,login,register));
+    }
+
+    private void showPasswordRecovery(String initialEmail){
+        LinearLayout fields=vertical();fields.setPadding(dp(20),dp(12),dp(20),dp(12));
+        EditText mail=new EditText(this);mail.setSingleLine(true);mail.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        mail.setHint("Электронная почта");mail.setText(initialEmail.trim());fields.addView(mail);
+        Button send=button("ОТПРАВИТЬ ПИСЬМО",GOLD,NAVY);fields.addView(send,new LinearLayout.LayoutParams(-1,dp(48)));
+        TextView help=label("Скопируйте ссылку из письма, не открывая её, или введите одноразовый код, если он указан в письме. Не передавайте ссылку или код другим людям.",12,TEXT,false);help.setPadding(0,dp(12),0,dp(8));fields.addView(help);
+        EditText proof=new EditText(this);proof.setSingleLine(true);proof.setHint("Ссылка или код из письма");proof.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);proof.setSaveEnabled(false);fields.addView(proof);
+        EditText pass=new EditText(this);pass.setSingleLine(true);pass.setHint("Новый пароль (от 8 символов)");pass.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);pass.setSaveEnabled(false);fields.addView(pass);
+        EditText repeat=new EditText(this);repeat.setSingleLine(true);repeat.setHint("Повторите пароль");repeat.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);repeat.setSaveEnabled(false);fields.addView(repeat);
+        TextView message=label("",12,MUTED,false);message.setPadding(0,dp(8),0,dp(8));fields.addView(message);
+        Button update=button("СМЕНИТЬ ПАРОЛЬ",GOLD,NAVY);fields.addView(update,new LinearLayout.LayoutParams(-1,dp(48)));
+        ScrollView sc=new ScrollView(this);sc.addView(fields);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Восстановление пароля").setView(sc).setNegativeButton("Закрыть",null).create();
+        dialog.setOnDismissListener(v->{proof.setText("");pass.setText("");repeat.setText("");});
+        dialog.show();dialog.getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE,android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        dialog.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        final long[] lastSend={-60000L};
+        send.setOnClickListener(v->{
+            String address=mail.getText().toString().trim();
+            if(!android.util.Patterns.EMAIL_ADDRESS.matcher(address).matches()){message.setText("Введите корректную почту.");return;}
+            long now=android.os.SystemClock.elapsedRealtime();
+            if(now-lastSend[0]<60000L){message.setText("Повторите запрос не раньше чем через минуту.");return;}
+            lastSend[0]=now;send.setEnabled(false);update.setEnabled(false);mail.setEnabled(false);message.setText("Запрашиваем письмо…");
+            io.execute(()->{
+                boolean accepted=false;
+                try{SupabaseApi.requestPasswordReset(address);accepted=true;}catch(Exception ignored){}
+                final boolean ok=accepted;
+                runOnUiThread(()->{if(!dialog.isShowing()||isFinishing())return;
+                    mail.setEnabled(true);send.setEnabled(true);update.setEnabled(true);
+                    message.setText(ok?"Если восстановление доступно, письмо поступит на указанный адрес. Проверьте также спам.":"Запрос не выполнен. Проверьте связь, подождите минуту или обратитесь к администратору.");
+                });
+            });
+        });
+        update.setOnClickListener(v->{
+            String address=mail.getText().toString().trim(),p=pass.getText().toString(),confirmation=repeat.getText().toString(),code=proof.getText().toString().trim();
+            if(!android.util.Patterns.EMAIL_ADDRESS.matcher(address).matches()){message.setText("Введите корректную почту.");return;}
+            if(p.length()<8||!p.equals(confirmation)){message.setText("Пароль должен содержать не менее 8 символов и совпадать с повтором.");return;}
+            try{RecoveryProof.body(BuildConfig.SUPABASE_URL,address,code);}catch(Exception e){message.setText("Вставьте исходную ссылку восстановления или код из письма.");return;}
+            send.setEnabled(false);update.setEnabled(false);mail.setEnabled(false);proof.setEnabled(false);pass.setEnabled(false);repeat.setEnabled(false);dialog.setCancelable(false);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(false);
+            message.setText("Проверяем код и меняем пароль…");
+            io.execute(()->{
+                boolean changed=false;
+                try{SupabaseApi.recoverPassword(address,code,p);changed=true;}catch(Exception ignored){}
+                final boolean ok=changed;
+                runOnUiThread(()->{
+                    if(!dialog.isShowing()||isFinishing()||isDestroyed())return;
+                    if(ok){dialog.dismiss();showLogin("Пароль изменён. Войдите с новым паролем.");}
+                    else{proof.setText("");pass.setText("");repeat.setText("");send.setEnabled(true);update.setEnabled(true);mail.setEnabled(true);proof.setEnabled(true);pass.setEnabled(true);repeat.setEnabled(true);dialog.setCancelable(true);dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(true);
+                    message.setText("Не удалось подтвердить смену пароля. Попробуйте войти с новым паролем. Если вход не удаётся, запросите новое письмо и проверьте требования к паролю.");}
+                });
+            });
+        });
     }
 
     private void restoreSession(){
