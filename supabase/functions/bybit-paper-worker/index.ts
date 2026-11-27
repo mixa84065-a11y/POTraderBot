@@ -275,14 +275,8 @@ async function processRun(run:Run){
    const blockedAssets=new Set([...openAssets,...recentStops.map(x=>assetKey(x.symbol))]);
    const cryptoCategories=new Set(["spot","linear","inverse"]);
    const cryptoExposureOpen=stillOpen.some(p=>cryptoCategories.has(p.market_category));
-   if(recentStops.length>0){
-    await log(run,"INFO","PAPER_GLOBAL_LOSS_COOLDOWN",
-     "Новые входы временно приостановлены после стоп-лосса; ожидается подтверждение нового рыночного цикла.",
-     {cooldown_minutes:45,recent_stop_losses:recentStops.length});
-   }
    for(const c of picks){
     if(opened>=Math.min(room,1)||testExpired(current))break;
-    if(recentStops.length>0)break;
     if(blockedAssets.has(assetKey(c.symbol))){diagnostics.add(c.category,"ASSET_BLOCKED");continue;}
     if(cryptoCategories.has(c.category)&&cryptoExposureOpen){diagnostics.add(c.category,"CRYPTO_EXPOSURE");continue;}
     const spread=(c.ask-c.bid)/c.price*100;if(!Number.isFinite(spread)||spread>0.08){diagnostics.add(c.category,"SPREAD");continue;}
@@ -307,7 +301,7 @@ async function processRun(run:Run){
     }catch(e){diagnostics.add(c.category,"ORDER_RPC_REJECTED");await log(run,"WARN","PAPER_ENTRY_SKIPPED",String(e),{category:c.category,symbol:c.symbol,score:c.score});}
    }
    await log(run,"INFO","PAPER_SCAN_DIAGNOSTICS","Причины отбора и отказа от виртуальных входов.",{
-     categories:diagnostics.counts,global_cooldown:recentStops.length>0,entry_limit_per_cycle:Math.min(room,1),opened,
+     categories:diagnostics.counts,global_cooldown:false,asset_cooldown_minutes:45,recent_stop_assets:recentStops.length,entry_limit_per_cycle:Math.min(room,1),opened,
      note:"CHECK_* counters overlap; each neutral symbol may fail multiple predicates. Structure influences candidate ordering only, not eligibility.",
      watchlist:{spot_pool_max:15,other_pool_max:12,rotation_minutes:5,spot_budget:3,other_budget:2},
      cost_model:{fee_per_side:0.0006,exit_slippage_bps:2,min_net_reward_risk:1.5},
