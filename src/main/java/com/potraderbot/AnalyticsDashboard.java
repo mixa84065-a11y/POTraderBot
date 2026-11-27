@@ -85,7 +85,7 @@ final class AnalyticsDashboard {
         clickable(ai,GOLD,0xff393020,0xff10151e,()->new AnalyticsTools(a).openAssistant());
         TextView robot=text("♛",44,GOLD,true);ai.addView(robot,new LinearLayout.LayoutParams(dp(56),-2));
         LinearLayout aiCopy=column();aiCopy.addView(text("GoD AI",23,GOLD,true));aiCopy.addView(text("ИИ-помощник",15,GOLD,true));
-        TextView ad=text("Анализ · Прогнозы · Автоматизация\nОткрыть приложение",11,WHITE,false);ad.setPadding(0,dp(5),0,0);aiCopy.addView(ad);
+        TextView ad=text("Анализ · Прогнозы · Автоматизация\nВстроенный чат",11,WHITE,false);ad.setPadding(0,dp(5),0,0);aiCopy.addView(ad);
         ai.addView(aiCopy,new LinearLayout.LayoutParams(0,-2,1));ai.addView(text("›",30,GOLD,true));
         p.addView(ai,new LinearLayout.LayoutParams(-1,-2));
         centered(p,"Версия "+BuildConfig.VERSION_NAME,10,MUTED,false,8);

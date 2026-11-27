@@ -142,6 +142,13 @@ final class AnalyticsTools {
         return String.format(Locale.forLanguageTag("ru-RU"),"%s\nСделок: %d · Плюс: %d · Минус: %d · Ноль: %d\nДоходность: %+.2f%% · Просадка: %.2f%%",title,m.trades,m.wins,m.losses,m.breakeven,m.returnPct(),m.maxDrawdownPct);
     }
     void openAssistant(){
+        new AlertDialog.Builder(a).setTitle("GoD AI")
+            .setMessage("Встроенный чат подключается к существующему серверу GoD AI. Вход выполняется отдельно. Данные торгового и спортивного аккаунтов не передаются автоматически.")
+            .setPositiveButton("Открыть чат",(d,w)->a.startActivity(new Intent(a,AssistantActivity.class)))
+            .setNeutralButton("Отдельное приложение",(d,w)->openExternalAssistant())
+            .setNegativeButton("Отмена",null).show();
+    }
+    private void openExternalAssistant(){
         for(String pkg:new String[]{"ai.god.companion","ai.god.companion.preview"}){
             Intent i=a.getPackageManager().getLaunchIntentForPackage(pkg);
             if(i!=null)try{a.startActivity(i);return;}catch(android.content.ActivityNotFoundException ignored){}
