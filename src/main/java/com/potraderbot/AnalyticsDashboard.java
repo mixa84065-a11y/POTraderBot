@@ -63,11 +63,11 @@ final class AnalyticsDashboard {
         top.addView(profile,new LinearLayout.LayoutParams(dp(68),dp(48)));
         top.addView(new View(a),new LinearLayout.LayoutParams(0,1,1));
         View notifications=nav("bell","Сигналы",WHITE,()->action.open("signals"));
-        top.addView(notifications,new LinearLayout.LayoutParams(dp(68),dp(42)));p.addView(top);
+        top.addView(notifications,new LinearLayout.LayoutParams(dp(68),dp(48)));p.addView(top);
         DashboardIcon crown=new DashboardIcon(a,"crown",GOLD);
         LinearLayout.LayoutParams crownLp=new LinearLayout.LayoutParams(dp(100),dp(60));crownLp.gravity=Gravity.CENTER;
         p.addView(crown,crownLp);
-        TextView brand=text("GOD OF TRADING 2.0",25,GOLD,true);brand.setGravity(Gravity.CENTER);brand.setSingleLine(true);
+        TextView brand=text("GOD OF TRADING 2.0",25,GOLD,true);brand.setGravity(Gravity.CENTER);brand.setMaxLines(2);
         brand.setShadowLayer(dp(3),0,dp(2),0xff9f6813);
         brand.getPaint().setShader(new LinearGradient(0,0,0,brand.getTextSize()*1.15f,new int[]{0xfffff8d6,0xfff2c35b,0xffb77714,0xffffda75},null,Shader.TileMode.CLAMP));
         p.addView(brand,new LinearLayout.LayoutParams(-1,-2));
@@ -100,7 +100,7 @@ final class AnalyticsDashboard {
         shell.addView(nav);return shell;
     }
     private View tile(String glyph,String name,String desc,boolean gold,Runnable r){
-        LinearLayout tile=row();tile.setGravity(Gravity.CENTER_VERTICAL);tile.setPadding(dp(7),dp(8),dp(6),dp(8));
+        LinearLayout tile=row();tile.setGravity(Gravity.CENTER_VERTICAL);tile.setMinimumHeight(dp(84));tile.setPadding(dp(7),dp(8),dp(6),dp(8));
         clickable(tile,gold?0xff8b7139:0xff65738c,gold?0xff302b26:0xff202a3d,0xff0b111a,r);
         DashboardIcon icon=new DashboardIcon(a,glyph,GOLD);
         LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(dp(43),dp(54));ip.rightMargin=dp(6);tile.addView(icon,ip);
@@ -110,8 +110,8 @@ final class AnalyticsDashboard {
         tile.setContentDescription(name+". "+desc);return tile;
     }
     private void addPair(LinearLayout p,View left,View right){
-        LinearLayout r=row();LinearLayout.LayoutParams l=new LinearLayout.LayoutParams(0,dp(84),1);l.rightMargin=dp(5);
-        LinearLayout.LayoutParams q=new LinearLayout.LayoutParams(0,dp(86),1);q.leftMargin=dp(5);
+        LinearLayout r=row();LinearLayout.LayoutParams l=new LinearLayout.LayoutParams(0,-2,1);l.rightMargin=dp(5);
+        LinearLayout.LayoutParams q=new LinearLayout.LayoutParams(0,-2,1);q.leftMargin=dp(5);
         r.addView(left,l);r.addView(right,q);
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(10);p.addView(r,lp);
     }
