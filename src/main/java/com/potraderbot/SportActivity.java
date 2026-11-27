@@ -76,8 +76,9 @@ public final class SportActivity extends Activity {
             public void onTextChanged(CharSequence t,int start,int before,int count){if(shownFixtures!=null)render(shownFixtures);}
             public void afterTextChanged(android.text.Editable e){}
         });
+        Button local=button("ЛОКАЛЬНАЯ БАЗА GoS");local.setOnClickListener(v->localInfo());page.addView(local,Math.max(0,page.indexOfChild(results)));
         String cached=prefs.getString("fixtures_cache","");
-        if(!cached.isEmpty())try{render(new JSONObject(cached));status.setText("Сохранённые данные: "+prefs.getString("cache_date","")+"; не обновлены.");}catch(Exception ignored){}
+        if(!cached.isEmpty())try{JSONObject initial=new JSONObject(cached);render(initial);worker.execute(()->storeArchive(initial.optJSONArray("response")));status.setText("Сохранённые данные: "+prefs.getString("cache_date","")+"; не обновлены.");}catch(Exception ignored){}
     }
     private void statistics(){
         LinearLayout form=new LinearLayout(this);form.setOrientation(1);form.setPadding(dp(12),dp(8),dp(12),dp(8));
@@ -167,7 +168,8 @@ public final class SportActivity extends Activity {
                 Object err=data.opt("errors");if((err instanceof JSONObject&&((JSONObject)err).length()>0)||(err instanceof JSONArray&&((JSONArray)err).length()>0))throw new IllegalStateException("API сообщил об ошибке. Проверьте доступные сезоны, ключ и лимит.");
                 if(data.optJSONArray("response")==null)throw new IllegalStateException("Нет списка матчей в ответе.");
                 prefs.edit().putString("fixtures_cache",data.toString()).putString("cache_date",date).putLong("cache_time",System.currentTimeMillis()).apply();
-                message="Данные за "+date+" (UTC). Осталось запросов: "+(remaining>=0?String.valueOf(remaining):"неизвестно");
+                int stored=storeArchive(data.optJSONArray("response"));
+                message="Данные за "+date+" (UTC). Осталось запросов: "+(remaining>=0?String.valueOf(remaining):"неизвестно")+"\nЛокальная база: "+(stored<0?"ошибка записи":stored+" завершённых матчей");
             }catch(IllegalStateException e){data=null;message=e.getMessage();}catch(Exception e){data=null;message="Не удалось получить данные. Проверьте интернет и ключ.";}finally{if(conn!=null)conn.disconnect();}
             final JSONObject result=data;final String msg=message;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);status.setText(msg);if(result!=null)render(result);});
         });
@@ -201,11 +203,12 @@ public final class SportActivity extends Activity {
         String title=h.optString("name")+" — "+a.optString("name");
         if(home<=0||away<=0||cutoff<=0){status.setText("Недостаточно данных о матче.");return;}
         long fixtureId=fixture.optLong("id",0);
-        String[] options={"Анализ и личные встречи (до 3 запросов)","История по датам • Free (до 14 запросов)","Угловые и ЖК (до 8 запросов)","Составы и травмы (до 2 запросов)"};
+        String[] options={"Анализ из локальной базы (0 запросов)","Анализ и личные встречи (до 3 запросов)","История по датам • Free (до 14 запросов)","Угловые и ЖК (до 8 запросов)","Составы и травмы (до 2 запросов)"};
         new AlertDialog.Builder(this).setTitle(title+"\n"+fixture.optString("date")).setItems(options,(d,w)->{
-            if(w==0)loadHistory(title,home,away,cutoff,fixtureId);
-            else if(w==1)archiveHistory(title,home,away,cutoff,fixtureId);
-            else if(w==2)loadDetails(title,home,away,cutoff);
+            if(w==0)localAnalysis(title,home,away,cutoff,fixtureId);
+            else if(w==1)loadHistory(title,home,away,cutoff,fixtureId);
+            else if(w==2)archiveHistory(title,home,away,cutoff,fixtureId);
+            else if(w==3)loadDetails(title,home,away,cutoff);
             else if(fixtureId>0)loadSquads(title,fixtureId);
             else status.setText("Нет идентификатора матча.");
         }).setNegativeButton("Закрыть",null).show();
@@ -292,6 +295,30 @@ public final class SportActivity extends Activity {
         return "Угловые: "+(s.cornersN==0?"нет данных":String.format(Locale.US,"%.2f своих / %.2f соперника (%d матчей)",s.cornersFor/(double)s.cornersN,s.cornersAgainst/(double)s.cornersN,s.cornersN))+
         "\nЖК: "+(s.cardsN==0?"нет данных":String.format(Locale.US,"%.2f своих / %.2f соперника (%d матчей)",s.cardsFor/(double)s.cardsN,s.cardsAgainst/(double)s.cardsN,s.cardsN));
     }
+    private int storeArchive(JSONArray rows){
+        if(rows==null)return -1;
+        try(SportLocalArchive db=new SportLocalArchive(getApplicationContext())){db.ingest(rows);return db.count();}catch(Exception e){return -1;}
+    }
+    private void localInfo(){
+        if(busy)return;
+        busy=true;load.setEnabled(false);settings.setEnabled(false);
+        worker.execute(()->{
+            String msg;
+            try(SportLocalArchive db=new SportLocalArchive(getApplicationContext())){msg="Завершённых матчей: "+db.count()+"\nИсточник: API-SPORTS.IO.\nАрхив автоматически пополняется при успешной загрузке календаря и истории по датам. Сохраняются только завершённые матчи и счёт. Данные хранятся на телефоне, не отправляются на сервер.\nДругие поставщики ещё не подключены.";}catch(Exception e){msg="Не удалось открыть локальную базу.";}
+            final String out=msg;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);new AlertDialog.Builder(this).setTitle("Локальная база GoS").setMessage(out).setPositiveButton("ОК",null).show();});
+        });
+    }
+    private void localAnalysis(String title,int home,int away,long cutoff,long id){
+        if(busy)return;busy=true;load.setEnabled(false);settings.setEnabled(false);
+        worker.execute(()->{
+            String msg;
+            try(SportLocalArchive db=new SportLocalArchive(getApplicationContext())){
+                SportHistory.Summary h=SportHistory.summarize(db.history(home,cutoff),home,cutoff),a=SportHistory.summarize(db.history(away,cutoff),away,cutoff);
+                msg="Локальный архив API-SPORTS.IO • без новых запросов. До 20 наблюдений на команду. История может быть неполной.\n\nХозяева\n"+describe(h)+"\n\nГости\n"+describe(a)+"\n\n"+model(h,a)+"\n\nЛичные встречи в архиве\n"+describe(SportHistory.summarize(db.pair(home,away,cutoff),home,cutoff))+"\n\nЛокальный расчёт не записывается в основной журнал: источник выборки отличается.";
+            }catch(Exception e){msg="Не удалось прочитать локальную историю.";}
+            final String out=msg;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);new AlertDialog.Builder(this).setTitle(title).setMessage(out).setPositiveButton("ОК",null).show();});
+        });
+    }
     private void archiveHistory(String title,int home,int away,long cutoff,long fixtureId){
         if(busy)return;
         new AlertDialog.Builder(this).setTitle("История по датам — Free").setMessage("Загрузить завершённые матчи за 14 предыдущих дней? До 14 запросов; кэш общий для всех команд. Если данных мало, прогноз не сохраняется. Доступ зависит от тарифа.").setNegativeButton("Отмена",null).setPositiveButton("Загрузить",(d,w)->{
@@ -308,6 +335,7 @@ public final class SportActivity extends Activity {
                         cal.add(java.util.Calendar.DATE,-1);String date=fmt.format(cal.getTime());
                         try{
                             JSONArray rows=cachedRequest("history_archive_"+date,"fixtures?date="+date+"&timezone=UTC",token,21600000).getJSONArray("response");
+                            storeArchive(rows);
                             JSONArray pair=SportArchive.forTeams(rows,home,away,cutoff);
                             for(int k=0;k<pair.length();k++)all.put(pair.getJSONObject(k));
                             days++;
