@@ -1058,9 +1058,10 @@ public class BybitTerminalActivity extends Activity {
     private final class PriceChart extends View{
         private final Paint p=new Paint(3);private JSONArray data=new JSONArray();private double entryPrice=0;private int analysisScore=0;private String analysisLabel="ОЖИДАНИЕ АНАЛИЗА";
         private String emptyMessage="Загружаются котировки Bybit…";
+        private SupportResistance.Levels levels=new SupportResistance.Levels(Double.NaN,Double.NaN);
         PriceChart(){super(BybitTerminalActivity.this);setBackgroundColor(0xff0b1420);}
         void setEmptyMessage(String message){emptyMessage=message;invalidate();}
-        void setCandles(JSONArray d,double entry){data=d;entryPrice=entry;invalidate();}
+        void setCandles(JSONArray d,double entry){data=d;entryPrice=entry;levels=SupportResistance.fromBybit(d,lastPrice);invalidate();}
         void setAnalysis(int score,String label){analysisScore=score;analysisLabel=label;invalidate();}
         private double[] emaValues(int period){
             double[] out=new double[data.length()];if(data.length()==0)return out;
@@ -1113,6 +1114,7 @@ public class BybitTerminalActivity extends Activity {
             }
             drawEma(c,ema9,GOLD,slot,bottom,plotH,min,range);
             drawEma(c,ema21,0xFF369DFA,slot,bottom,plotH,min,range);
+            LevelOverlay.draw(c,levels,0,plotRight,top,bottom,min,min+range,getResources().getDisplayMetrics().density);
             p.setStyle(Paint.Style.FILL);p.setTextSize(dp(9));p.setFakeBoldText(true);
             p.setColor(GOLD);c.drawText("EMA 9",dp(8),dp(15),p);
             p.setColor(0xFF369DFA);c.drawText("EMA 21",dp(58),dp(15),p);

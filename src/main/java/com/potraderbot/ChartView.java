@@ -14,6 +14,7 @@ public class ChartView extends View {
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final ArrayList<double[]> candles = new ArrayList<>();
     private boolean fresh = false;
+    private SupportResistance.Levels levels=new SupportResistance.Levels(Double.NaN,Double.NaN);
     private boolean expanded = false;
     private boolean showDecision = false;
     private String decision = "НЕТ СИГНАЛА";
@@ -54,6 +55,9 @@ public class ChartView extends View {
                         && open>0 && high>0 && low>0 && close>0) candles.add(new double[]{open,high,low,close});
             }
         }
+        // The ordinary-market source may include a forming last bar. Exclude it
+        // from level detection and use its close solely as the reference price.
+        levels=candles.size()>1?SupportResistance.calculate(candles.subList(0,candles.size()-1),candles.get(candles.size()-1)[3]):new SupportResistance.Levels(Double.NaN,Double.NaN);
         message = candles.isEmpty() ? "Нет свечей от подтверждённого источника" :
                 (fresh ? "Котировка актуальна" : "Последняя котировка устарела");
         invalidate();
@@ -133,6 +137,7 @@ public class ChartView extends View {
                 c.drawRect(new RectF(x-bodyW/2,y,x+bodyW/2,y+bh),p);
             }
 
+            LevelOverlay.draw(c,levels,left,right,top,bottom,min,max,1f);
             if(showDecision && candles.size()>=21) {
                 drawEma(c,ema(9),0xFFF7BE37,left,slot,bottom,plotH,min,max);
                 drawEma(c,ema(21),0xFF369DFA,left,slot,bottom,plotH,min,max);
