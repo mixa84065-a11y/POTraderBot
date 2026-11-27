@@ -1007,7 +1007,7 @@ public class BybitTerminalActivity extends Activity {
         if(priceChart!=null)priceChart.setAnalysis(s,dir);
         signalText.setText("АНАЛИЗ: "+dir+"  •  SCORE "+s);
         signalText.setTextColor(s>=3?GREEN:s<=-3?RED:WHITE);
-        statusText.setText("EMA 9/21 + RSI(14) + импульс. Балл — эвристика, не вероятность прибыли.\n"+SupportResistance.describe(SupportResistance.fromBybit(candles,lastPrice),lastPrice)+"\nРасстояние от текущей цены.");
+        statusText.setText("EMA 9/21 + RSI(14) + импульс. Балл — эвристика, не вероятность прибыли.\n"+SupportResistance.describe(SupportResistance.fromBybit(candles,lastPrice),lastPrice)+"\nРасстояние от текущей цены.\n"+MarketVolatility.describe(MarketVolatility.bybit(candles)));
         // Position exits are checked on every quote refresh, but a new entry is allowed
         // only once per completed candle. This prevents duplicate entries on 15s polling.
         managePaperTrade(s,candleTime);renderLedger();

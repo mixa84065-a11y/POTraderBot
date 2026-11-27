@@ -45,11 +45,19 @@ jobs:
           set -euo pipefail
           test -e /dev/kvm
           sudo chmod a+rw /dev/kvm
-          sdkmanager "platform-tools" "emulator" "system-images;android-35;google_apis;x86_64"
-          echo no | avdmanager create avd --force --name dashboard-smoke --package "system-images;android-35;google_apis;x86_64"
-          nohup "$ANDROID_HOME/emulator/emulator" -avd dashboard-smoke -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "$SDK" && test -d "$SDK"
+          SDKMANAGER="$(find "$SDK/cmdline-tools" -type f -name sdkmanager -print | sort -V | tail -n 1)"
+          test -n "$SDKMANAGER" && test -x "$SDKMANAGER"
+          TOOLS="$(dirname "$SDKMANAGER")"
+          test -x "$TOOLS/avdmanager"
+          "$SDKMANAGER" "platform-tools" "emulator" "system-images;android-35;google_apis;x86_64"
+          export PATH="$SDK/platform-tools:$SDK/emulator:$TOOLS:$PATH"
+          printf '%s\n' "$SDK/platform-tools" "$SDK/emulator" "$TOOLS" >> "$GITHUB_PATH"
+          printf 'no\n' | "$TOOLS/avdmanager" create avd --force --name dashboard-smoke --package "system-images;android-35;google_apis;x86_64"
+          nohup "$SDK/emulator/emulator" -avd dashboard-smoke -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
           timeout 300 adb wait-for-device
-          timeout 300 bash -c 'until [ "$(adb shell getprop sys.boot_completed | tr -d "\r")" = "1" ]; do sleep 5; done'
+          timeout 300 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do sleep 5; done'
           adb shell input keyevent 82
           adb shell settings put global window_animation_scale 0
           adb shell settings put global transition_animation_scale 0

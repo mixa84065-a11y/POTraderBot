@@ -603,7 +603,7 @@ public class MainActivity extends Activity {
                 }
                 MarketAnalyzer.Result a=MarketAnalyzer.analyze(latestCandles);
                 chart.setDecision(a.direction,a.strength);
-                analysisText.setText(a.explanation+"\n"+chart.levelDescription()+"\nРасстояние от цены последней свечи.");
+                analysisText.setText(a.explanation+"\n"+chart.levelDescription()+"\nРасстояние от цены последней свечи.\n"+MarketVolatility.describe(MarketVolatility.ordinary(latestCandles)));
                 signalText.setText(a.strength>50
                     ?"ОЦЕНКА НАПРАВЛЕНИЯ: "+a.direction+" • СИЛА "+a.strength+"%"
                     :"ОЦЕНКА МОДЕЛИ: НЕТ ПРЕИМУЩЕСТВА");
