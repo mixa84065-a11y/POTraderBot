@@ -3,7 +3,7 @@ import org.json.*;
 import java.util.HashSet;
 public final class SportHistory {
     private SportHistory(){}
-    public static final class Summary {public int n,w,d,l,gf,ga,both,htN,htGoal;}
+    public static final class Summary {public int n,w,d,l,gf,ga,both,htN,htGoal,htFor,htAgainst;}
     public static Summary summarize(JSONArray rows,int team,long cutoff){
         Summary s=new Summary();HashSet<Long> seen=new HashSet<>();
         for(int i=0;i<rows.length();i++){
@@ -20,7 +20,7 @@ public final class SportHistory {
             if(gf>ga)s.w++;else if(gf==ga)s.d++;else s.l++;
             if(hg>0&&ag>0)s.both++;
             JSONObject score=r.optJSONObject("score"),ht=score==null?null:score.optJSONObject("halftime");
-            if(ht!=null){int x=ht.optInt("home",-1),y=ht.optInt("away",-1);if(x>=0&&y>=0&&x<=hg&&y<=ag){s.htN++;if(x+y>0)s.htGoal++;}}
+            if(ht!=null){int x=ht.optInt("home",-1),y=ht.optInt("away",-1);if(x>=0&&y>=0&&x<=hg&&y<=ag){s.htN++;s.htFor+=home?x:y;s.htAgainst+=home?y:x;if(x+y>0)s.htGoal++;}}
         }return s;
     }
 }

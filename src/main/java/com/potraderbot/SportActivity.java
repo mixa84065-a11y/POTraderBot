@@ -184,7 +184,7 @@ public final class SportActivity extends Activity {
         int home=h.optInt("id",-1),away=a.optInt("id",-1);long cutoff=fixture.optLong("timestamp",0);
         String title=h.optString("name")+" — "+a.optString("name");
         if(home<=0||away<=0||cutoff<=0){status.setText("Недостаточно данных о матче.");return;}
-        new AlertDialog.Builder(this).setTitle(title).setMessage("Дата: "+fixture.optString("date")+"\nЗагрузить историю команд? До двух запросов API, кэш на 6 часов.").setNegativeButton("Закрыть",null).setNeutralButton("Угловые и ЖК",(d,w)->loadDetails(title,home,away,cutoff)).setPositiveButton("Статистика",(d,w)->loadHistory(title,home,away,cutoff)).show();
+        new AlertDialog.Builder(this).setTitle(title).setMessage("Дата: "+fixture.optString("date")+"\nЗагрузить историю команд? До двух запросов API, кэш на 6 часов.").setNegativeButton("Закрыть",null).setNeutralButton("Угловые и ЖК",(d,w)->loadDetails(title,home,away,cutoff)).setPositiveButton("Анализ",(d,w)->loadHistory(title,home,away,cutoff)).show();
     }
     private JSONObject teamHistory(int team,String token)throws Exception{
         String cache="history_"+team;long now=System.currentTimeMillis(),age=now-prefs.getLong(cache+"_time",0);
@@ -262,10 +262,30 @@ public final class SportActivity extends Activity {
                 String token=readKey();if(token.isEmpty())throw new IllegalStateException("Сначала сохраните API-ключ.");
                 SportHistory.Summary h=SportHistory.summarize(teamHistory(home,token).getJSONArray("response"),home,cutoff);
                 SportHistory.Summary a=SportHistory.summarize(teamHistory(away,token).getJSONArray("response"),away,cutoff);
-                output="Историческая статистика до начала матча. Не прогноз.\n\nХозяева\n"+describe(h)+"\n\nГости\n"+describe(a)+"\n\nУгловые и ЖК: нужны отдельные данные статистики матчей.";
+                output="Историческая статистика до начала матча. Не прогноз.\n\nХозяева\n"+describe(h)+"\n\nГости\n"+describe(a)+"\n\n"+model(h,a)+"\n\nУгловые и ЖК: нужны отдельные данные статистики матчей.";
             }catch(IllegalStateException e){output=e.getMessage();}catch(Exception e){output="Не удалось получить историю. Проверьте интернет и тариф.";}
             final String msg=output;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);status.setText("Осталось запросов по API: "+(remaining<0?"неизвестно":remaining));new AlertDialog.Builder(this).setTitle(title).setMessage(msg).setPositiveButton("ОК",null).show();});
         });
+    }
+    private String model(SportHistory.Summary h,SportHistory.Summary a){
+        if(h.n<5||a.n<5)return "Модель: недостаточно данных (нужно минимум 5 завершённых матчей каждой команды).";
+        double x=(h.gf/(double)h.n+a.ga/(double)a.n)/2,y=(a.gf/(double)a.n+h.ga/(double)h.n)/2;
+        if(x+y>50)return "Модель: некорректный диапазон средних.";
+        double[] p=SportAutoModel.outcomes(x,y);
+        String out="Учебная модель Пуассона — не проверена на реальных прогнозах. Средние атаки и пропущенных голов соперника имеют равный вес. Не учитываются составы, сила лиг и домашнее преимущество.\n"+
+            "Ожидаемые голы: "+String.format(Locale.US,"%.2f / %.2f",x,y)+
+            "\nП1 / X / П2: "+percent(p[0])+" / "+percent(p[1])+" / "+percent(p[2])+
+            "\nОЗ да / нет: "+percent(SportStatistics.bothScore(x,y))+" / "+percent(1-SportStatistics.bothScore(x,y))+
+            "\nГолов 3 и более: "+percent(SportStatistics.above(x+y,2));
+        if(h.htN<5||a.htN<5)return out+"\nПервый тайм: недостаточно данных.";
+        double u=(h.htFor/(double)h.htN+a.htAgainst/(double)a.htN)/2,v=(a.htFor/(double)a.htN+h.htAgainst/(double)h.htN)/2;
+        if(u+v>50||u>x||v>y)return out+"\nПервый тайм: несогласованные средние.";
+        return out+"\n\nПервый тайм (выборки "+h.htN+" / "+a.htN+"):"+
+            "\nБез голов: "+percent(1-SportStatistics.above(u+v,0))+
+            "\n1+ гол: "+percent(SportStatistics.above(u+v,0))+
+            "\n2+ гола: "+percent(SportStatistics.above(u+v,1))+
+            "\n3+ гола: "+percent(SportStatistics.above(u+v,2))+
+            "\nОЗ: "+percent(SportStatistics.bothScore(u,v));
     }
     private String describe(SportHistory.Summary s){
         if(s.n==0)return "Недостаточно завершённых матчей.";
