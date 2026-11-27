@@ -38,7 +38,8 @@ public final class SportActivity extends Activity {
     private LinearLayout results;
     private Button load,settings;
     private boolean busy;
-    private int remaining=-1;
+    private volatile int remaining=-1;
+    private static final Object QUOTA_LOCK=new Object();
     private JSONObject shownFixtures;
     private EditText search;
     private int dp(int x){return Math.round(x*getResources().getDisplayMetrics().density);}
@@ -47,6 +48,7 @@ public final class SportActivity extends Activity {
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
         prefs=getSharedPreferences("gos_local",MODE_PRIVATE);
+        remaining=storedRemaining();
         LinearLayout page=new LinearLayout(this);page.setOrientation(1);page.setPadding(dp(16),dp(16),dp(16),dp(16));page.setBackgroundColor(BG);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(page);setContentView(scroll);
         Button back=button("‹  GoT 2.0");back.setOnClickListener(v->finish());page.addView(back);
@@ -107,7 +109,7 @@ public final class SportActivity extends Activity {
         Cipher c=Cipher.getInstance("AES/GCM/NoPadding");c.init(Cipher.ENCRYPT_MODE,key());
         String iv=Base64.encodeToString(c.getIV(),Base64.NO_WRAP),enc=Base64.encodeToString(c.doFinal(token.getBytes(StandardCharsets.UTF_8)),Base64.NO_WRAP);
         if(!prefs.edit().putString("iv",iv).putString("cipher",enc).remove("fixtures_cache").remove("cache_date").commit())throw new Exception();
-        remaining=-1;clearHistoryCache();shownFixtures=null;
+        remaining=storedRemaining();clearHistoryCache();shownFixtures=null;
     }
     private void clearHistoryCache(){SharedPreferences.Editor e=prefs.edit();for(String k:prefs.getAll().keySet())if(k.startsWith("history_")&&!k.startsWith("history_budget_"))e.remove(k);e.apply();}
     private String readKey()throws Exception{
@@ -119,10 +121,30 @@ public final class SportActivity extends Activity {
         EditText field=new EditText(this);field.setSingleLine(true);field.setHint("API-SPORTS key");field.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
         new AlertDialog.Builder(this).setTitle("API-SPORTS").setMessage("Ключ хранится на этом телефоне в зашифрованном виде. Не отправляется на сервер GoT.").setView(field)
         .setPositiveButton("Сохранить",(d,w)->{String token=field.getText().toString().trim();if(!token.matches("[A-Za-z0-9_-]{16,128}")){status.setText("Проверьте формат ключа.");return;}try{saveKey(token);results.removeAllViews();status.setText("Ключ сохранён. Нажмите «Матчи на сегодня» для проверки.");}catch(Exception e){status.setText("Не удалось сохранить ключ.");}})
-        .setNeutralButton("Удалить",(d,w)->{prefs.edit().remove("iv").remove("cipher").remove("fixtures_cache").remove("cache_date").apply();remaining=-1;clearHistoryCache();shownFixtures=null;results.removeAllViews();status.setText("Ключ удалён.");})
+        .setNeutralButton("Удалить",(d,w)->{prefs.edit().remove("iv").remove("cipher").remove("fixtures_cache").remove("cache_date").apply();remaining=storedRemaining();clearHistoryCache();shownFixtures=null;results.removeAllViews();status.setText("Ключ удалён.");})
         .setNegativeButton("Отмена",null).show();
     }
     private String today(){SimpleDateFormat f=new SimpleDateFormat("yyyy-MM-dd",Locale.US);f.setTimeZone(TimeZone.getTimeZone("UTC"));return f.format(new Date());}
+    private int storedRemaining(){
+        return today().equals(prefs.getString("quota_day",""))?prefs.getInt("quota_remaining",-1):-1;
+    }
+    private void reserveRequest()throws Exception{
+        synchronized(QUOTA_LOCK){
+            String day=today();boolean same=day.equals(prefs.getString("quota_day",""));
+            int count=same?prefs.getInt("quota_count",0):0;
+            int left=same?prefs.getInt("quota_remaining",-1):-1;
+            if(!same&&day.equals(prefs.getString("history_budget_day","")))count=Math.max(count,prefs.getInt("history_budget_count",0));
+            if(count>=100||left==0)throw new IllegalStateException("Локальный лимит запросов исчерпан. Проверьте кабинет API.");
+            remaining=left<0?-1:left-1;
+            if(!prefs.edit().putString("quota_day",day).putInt("quota_count",count+1).putInt("quota_remaining",remaining).commit())throw new IllegalStateException("Не удалось сохранить счётчик.");
+        }
+    }
+    private void updateQuota(String header){
+        synchronized(QUOTA_LOCK){
+            if(!today().equals(prefs.getString("quota_day","")))return;
+            try{int reported=Integer.parseInt(header);if(reported<0)return;int saved=storedRemaining();remaining=saved<0?reported:Math.min(saved,reported);prefs.edit().putInt("quota_remaining",remaining).commit();}catch(Exception ignored){}
+        }
+    }
     private void loadFixtures(){
         if(busy)return;
         final String date=today();
@@ -137,12 +159,12 @@ public final class SportActivity extends Activity {
             HttpsURLConnection conn=null;
             try{
                 String token=readKey();if(token.isEmpty())throw new IllegalStateException("Сначала сохраните API-ключ.");
-                if(remaining==0)throw new IllegalStateException("Суточный лимит исчерпан. Проверьте лимит в кабинете API-SPORTS.");
+                reserveRequest();
                 prefs.edit().putLong("last_attempt",System.currentTimeMillis()).commit();
                 conn=(HttpsURLConnection)new URL("https://v3.football.api-sports.io/fixtures?date="+date+"&timezone=UTC").openConnection();
                 conn.setInstanceFollowRedirects(false);conn.setConnectTimeout(12000);conn.setReadTimeout(20000);conn.setRequestProperty("x-apisports-key",token);
                 int code=conn.getResponseCode();String quota=conn.getHeaderField("x-ratelimit-requests-remaining");
-                try{remaining=Integer.parseInt(quota);}catch(Exception ignored){remaining=-1;}
+                updateQuota(quota);
                 if(code!=200)throw new IllegalStateException("API вернул HTTP "+code+". Проверьте ключ и тариф.");
                 try(InputStream in=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
                     byte[] buf=new byte[8192];int n;while((n=in.read(buf))!=-1){if(out.size()+n>8_000_000)throw new IllegalStateException("Слишком большой ответ API.");out.write(buf,0,n);}
@@ -189,15 +211,11 @@ public final class SportActivity extends Activity {
     private JSONObject teamHistory(int team,String token)throws Exception{
         String cache="history_"+team;long now=System.currentTimeMillis(),age=now-prefs.getLong(cache+"_time",0);
         if(age>=0&&age<21600000){String saved=prefs.getString(cache,"");if(!saved.isEmpty())return new JSONObject(saved);}
-        String day=today();
-        if(!day.equals(prefs.getString("history_budget_day","")))prefs.edit().putString("history_budget_day",day).putInt("history_budget_count",0).commit();
-        int used=prefs.getInt("history_budget_count",0);
-        if(used>=80||remaining==0)throw new IllegalStateException("Лимит запросов истории исчерпан.");
-        if(!prefs.edit().putInt("history_budget_count",used+1).commit())throw new IllegalStateException("Не удалось сохранить счётчик.");
+        reserveRequest();
         HttpsURLConnection conn=(HttpsURLConnection)new URL("https://v3.football.api-sports.io/fixtures?team="+team+"&last=20&status=FT").openConnection();
         try{
             conn.setInstanceFollowRedirects(false);conn.setConnectTimeout(12000);conn.setReadTimeout(20000);conn.setRequestProperty("x-apisports-key",token);
-            int code=conn.getResponseCode();try{remaining=Integer.parseInt(conn.getHeaderField("x-ratelimit-requests-remaining"));}catch(Exception ignored){remaining=-1;}
+            int code=conn.getResponseCode();updateQuota(conn.getHeaderField("x-ratelimit-requests-remaining"));
             if(code!=200)throw new IllegalStateException("API HTTP "+code);
             JSONObject data;
             try(InputStream in=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
@@ -212,15 +230,11 @@ public final class SportActivity extends Activity {
     private JSONObject fixtureDetails(long id,String token)throws Exception{
         String cache="history_detail_"+id;String saved=prefs.getString(cache,"");
         if(!saved.isEmpty())return new JSONObject(saved);
-        String day=today();
-        if(!day.equals(prefs.getString("history_budget_day","")))prefs.edit().putString("history_budget_day",day).putInt("history_budget_count",0).commit();
-        int used=prefs.getInt("history_budget_count",0);
-        if(used>=80||remaining==0)throw new IllegalStateException("Лимит запросов истории исчерпан.");
-        if(!prefs.edit().putInt("history_budget_count",used+1).commit())throw new IllegalStateException("Не удалось сохранить счётчик.");
+        reserveRequest();
         HttpsURLConnection conn=(HttpsURLConnection)new URL("https://v3.football.api-sports.io/fixtures/statistics?fixture="+id).openConnection();
         try{
             conn.setInstanceFollowRedirects(false);conn.setConnectTimeout(12000);conn.setReadTimeout(20000);conn.setRequestProperty("x-apisports-key",token);
-            int code=conn.getResponseCode();try{remaining=Integer.parseInt(conn.getHeaderField("x-ratelimit-requests-remaining"));}catch(Exception ignored){remaining=-1;}
+            int code=conn.getResponseCode();updateQuota(conn.getHeaderField("x-ratelimit-requests-remaining"));
             if(code!=200)throw new IllegalStateException("API HTTP "+code);
             JSONObject data;
             try(InputStream in=conn.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
