@@ -134,24 +134,17 @@ public class MainActivity extends Activity {
         LinearLayout shell=vertical();shell.setBackgroundColor(NAVY);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(NAVY);
         scroll.addView(content);shell.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        LinearLayout nav=horizontal();nav.setPadding(dp(7),dp(7),dp(7),dp(7));
-        nav.setBackground(surface(PANEL,15,0xFF3B321E));
-        String[] labels={"Главная","Bybit","Анализ","Сделки","Ещё"};
+        LinearLayout nav=horizontal();nav.setPadding(dp(3),dp(2),dp(3),dp(2));nav.setBackground(surface(0xff17212e,0,0xff303b49));
+        String[] labels={"Главная","Статистика","Сигналы","Настройки"},icons={"home","stats","signals","settings"};
+        Runnable[] actions={()->showMain(),()->showSection("СТАТИСТИКА"),()->showSection("АНАЛИТИКА"),()->showMenu()};
         for(int i=0;i<labels.length;i++){
-            final int tab=i;Button item=button(labels[i],i==selected?GOLD:PANEL,i==selected?NAVY:TEXT);
-            item.setTextSize(10);item.setPadding(dp(2),dp(3),dp(2),dp(3));item.setSingleLine(true);item.setMinHeight(dp(42));
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(48),1);
-            lp.leftMargin=dp(2);lp.rightMargin=dp(2);nav.addView(item,lp);
-            item.setOnClickListener(v->{
-                if(tab==0)showMain();
-                else if(tab==1)openBybitTerminal();
-                else if(tab==2)showSection("АНАЛИТИКА");
-                else if(tab==3)showSection("ИСТОРИЯ СДЕЛОК");
-                else showMenu();
-            });
+            final int index=i;LinearLayout item=vertical();item.setGravity(Gravity.CENTER);int color=i==0?GOLD:MUTED;
+            item.addView(new DashboardIcon(this,icons[i],color),new LinearLayout.LayoutParams(dp(23),dp(24)));
+            TextView text=label(labels[i],10,color,false);text.setGravity(Gravity.CENTER);text.setSingleLine(true);item.addView(text);
+            item.setFocusable(true);item.setContentDescription(labels[i]);item.setOnClickListener(v->actions[index].run());
+            nav.addView(item,new LinearLayout.LayoutParams(0,dp(49),1));
         }
-        LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(-1,-2);np.leftMargin=dp(8);np.rightMargin=dp(8);np.bottomMargin=dp(8);
-        shell.addView(nav,np);setContentView(shell);
+        shell.addView(nav,new LinearLayout.LayoutParams(-1,-2));setContentView(shell);
     }
     private void showLogin(String status){
         dashboardVisible=false;
@@ -245,111 +238,110 @@ public class MainActivity extends Activity {
     }
 
     private void showTradingScreen(){
-        dashboardVisible=false;
-        analysisMode=false;
-        LinearLayout content=vertical();content.setPadding(dp(10),dp(8),dp(10),dp(12));
+        dashboardVisible=false;analysisMode=false;
+        LinearLayout content=vertical();content.setPadding(dp(9),dp(6),dp(9),dp(9));
         LinearLayout header=horizontal();
-        Button back=button("‹",PANEL,GOLD);header.addView(back,new LinearLayout.LayoutParams(dp(44),dp(42)));back.setOnClickListener(v->showMain());
-        TextView brand=label("Трейдинг",20,TEXT,true);brand.setGravity(Gravity.CENTER_VERTICAL);header.addView(brand,new LinearLayout.LayoutParams(0,dp(42),1));
-        Button bybit=button("BYBIT",GOLD,NAVY);header.addView(bybit,new LinearLayout.LayoutParams(dp(82),dp(42)));
-        bybit.setOnClickListener(v->openBybitTerminal());
-        Button menu=button("⋮",PANEL,TEXT);header.addView(menu,new LinearLayout.LayoutParams(dp(48),dp(42)));
+        Button back=button("‹",PANEL,TEXT);back.setPadding(0,0,0,0);
+        header.addView(back,new LinearLayout.LayoutParams(dp(36),dp(38)));back.setOnClickListener(v->showMain());
+        TextView brand=label("Трейдинг",19,TEXT,true);header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
+        header.addView(new DashboardIcon(this,"crown",GOLD),new LinearLayout.LayoutParams(dp(31),dp(34)));
+        Button mode=button("Демо ▾",PANEL,GREEN);mode.setTextSize(12);mode.setPadding(dp(6),0,dp(6),0);
+        header.addView(mode,new LinearLayout.LayoutParams(dp(74),dp(38)));
+        mode.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Торговый режим").setMessage("Виртуальный счёт. Реальные сделки отключены.").setPositiveButton("Открыть Bybit",(dialog,which)->openBybitTerminal()).setNegativeButton("Закрыть",null).show());
         content.addView(header);
-        menu.setOnClickListener(v->showMenu());
-
-        accountPanel=vertical();accountPanel.setPadding(dp(12),dp(8),dp(12),dp(8));accountPanel.setBackground(surface(PANEL,15,0xFF51401D));accountPanel.setElevation(dp(2));
-        TextView accountLabel=label("ВИРТУАЛЬНЫЙ БАЛАНС",10,MUTED,true);
-        accountPanel.addView(accountLabel,new LinearLayout.LayoutParams(-1,-2));
-        balanceText=label("Загрузка…",17,TEXT,true);accountPanel.addView(balanceText);
-        LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(-1,-2);ap.topMargin=dp(8);content.addView(accountPanel,ap);
-        // Persistent navigation is rendered outside the scrolling content.
-
-        TextView pairLabel=label("РЫНОК  /  ВАЛЮТНАЯ ПАРА",10,MUTED,true);
-        pairLabel.setPadding(dp(4),dp(10),0,dp(3));content.addView(pairLabel);
+        LinearLayout quoteRow=horizontal();
         pairSelector=new Spinner(this);
         String[] pairs={"EUR/USD","GBP/USD","USD/JPY","AUD/USD","USD/CHF","USD/CAD","NZD/USD"};
         ArrayAdapter<String> pairAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,pairs);
-        pairAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        pairSelector.setAdapter(pairAdapter);
-        pairSelector.setSelection(java.util.Arrays.asList(pairs).indexOf(symbol));
-        pairSelector.setBackground(surface(PANEL,10,0xFF51401D));pairSelector.setPadding(dp(10),0,dp(10),0);
-        content.addView(pairSelector,new LinearLayout.LayoutParams(-1,dp(44)));
-        TextView pairNote=label("Доступность демо-сделок зависит от включённого потока котировок.",10,MUTED,false);
-        content.addView(pairNote);
-        instrumentText=label(symbol+"  •  ОБЫЧНЫЙ РЫНОК  •  M1",11,MUTED,true);
-        instrumentText.setPadding(dp(4),dp(6),0,dp(4));content.addView(instrumentText);
+        pairAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);pairSelector.setAdapter(pairAdapter);
+        pairSelector.setSelection(Math.max(0,java.util.Arrays.asList(pairs).indexOf(symbol)));
+        pairSelector.setBackground(surface(PANEL,9,0xff445569));pairSelector.setPadding(dp(6),0,dp(4),0);
+        quoteRow.addView(pairSelector,new LinearLayout.LayoutParams(0,dp(38),1));
+        accountPanel=vertical();accountPanel.setGravity(Gravity.RIGHT);accountPanel.setPadding(dp(5),0,0,0);
+        TextView accountLabel=label("Демо-баланс",10,MUTED,false);accountPanel.addView(accountLabel);
+        balanceText=label("Загрузка…",14,TEXT,true);balanceText.setGravity(Gravity.RIGHT);balanceText.setMaxLines(2);
+        accountPanel.addView(balanceText);quoteRow.addView(accountPanel,new LinearLayout.LayoutParams(0,-2,1.2f));
+        content.addView(quoteRow,new LinearLayout.LayoutParams(-1,-2));
+        chart=new ChartView(this);chart.setSymbol(symbol);
+        android.widget.FrameLayout chartFrame=new android.widget.FrameLayout(this);
+        chartFrame.setBackground(surface(0xff0b1420,10,0xff445569));chartFrame.setPadding(dp(1),dp(1),dp(1),dp(1));
+        chartFrame.addView(chart,new android.widget.FrameLayout.LayoutParams(-1,-1));
+        Button expand=button("⛶",PANEL,TEXT);expand.setTextSize(15);expand.setPadding(0,0,0,0);
+        android.widget.FrameLayout.LayoutParams ep=new android.widget.FrameLayout.LayoutParams(dp(38),dp(34),Gravity.TOP|Gravity.RIGHT);
+        ep.setMargins(0,dp(3),dp(3),0);chartFrame.addView(expand,ep);
+        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(178));cp.topMargin=dp(6);content.addView(chartFrame,cp);
+        expand.setOnClickListener(v->{
+            analysisMode=!analysisMode;chart.setExpanded(analysisMode);
+            chartFrame.getLayoutParams().height=dp(analysisMode?380:178);chartFrame.requestLayout();
+        });
+        LinearLayout chartInfo=horizontal();
+        instrumentText=label("M1 · Закрытые свечи",10,GOLD,true);chartInfo.addView(instrumentText,new LinearLayout.LayoutParams(0,-2,1));
+        TextView bybit=label("Bybit ›",11,GOLD,true);bybit.setPadding(dp(9),dp(7),dp(2),dp(7));bybit.setOnClickListener(v->openBybitTerminal());chartInfo.addView(bybit);
+        content.addView(chartInfo);
+        quoteText=label("Нажмите «Анализ» для получения котировки.",10,MUTED,false);
+        quoteText.setPadding(dp(3),0,dp(3),dp(3));content.addView(quoteText);
+        signalText=label("Оценка модели: —",11,TEXT,true);signalText.setPadding(dp(3),dp(4),0,0);content.addView(signalText);
+        strengthBar=new ModelStrengthBar(this);strengthBar.setMax(100);strengthBar.setProgress(0);content.addView(strengthBar,new LinearLayout.LayoutParams(-1,dp(18)));
+        analysisDivider=new View(this);analysisDivider.setBackgroundColor(0xff263d5a);content.addView(analysisDivider,new LinearLayout.LayoutParams(-1,dp(1)));
+        analysisText=label("Анализ: ожидание котировки. Без свежих данных сделки заблокированы.",11,TEXT,false);
+        stylePanel(analysisText,7);content.addView(analysisText);
+        analysisText.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Рыночный анализ").setMessage(analysisText.getText()).setPositiveButton("Закрыть",null).show());
+        controlsPanel=vertical();
+        LinearLayout parameters=horizontal();
+        LinearLayout stakeCol=vertical(),expiryCol=vertical();
+        stakeCol.addView(label("Сумма демо-сделки, ₽",10,MUTED,false));
+        stakeInput=new EditText(this);stakeInput.setText("500");stakeInput.setSingleLine(true);stakeInput.setTextSize(14);
+        stakeInput.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);stakeInput.setTextColor(TEXT);
+        stakeInput.setBackground(surface(PANEL,9,0xff445569));stakeInput.setGravity(Gravity.CENTER);stakeInput.setPadding(dp(3),0,dp(3),0);
+        LinearLayout stakeRow=horizontal();
+        Button minus=button("−",PANEL,TEXT),plus=button("+",PANEL,TEXT);
+        for(Button btn:new Button[]{minus,plus}){btn.setPadding(0,0,0,0);btn.setMinWidth(0);btn.setMinimumWidth(0);}
+        stakeRow.addView(minus,new LinearLayout.LayoutParams(dp(33),dp(37)));
+        stakeRow.addView(stakeInput,new LinearLayout.LayoutParams(0,dp(37),1));
+        stakeRow.addView(plus,new LinearLayout.LayoutParams(dp(33),dp(37)));
+        minus.setOnClickListener(v->adjustStake(-100));plus.setOnClickListener(v->adjustStake(100));stakeCol.addView(stakeRow);
+        expiryCol.addView(label("Экспирация",10,MUTED,false));
+        expiryRow=horizontal();Button duration=button(expirySeconds/60+" мин ▾",PANEL,TEXT);duration.setTextSize(13);duration.setPadding(dp(4),0,dp(4),0);
+        expiryRow.addView(duration,new LinearLayout.LayoutParams(-1,dp(37)));
+        duration.setOnClickListener(v->new AlertDialog.Builder(this).setTitle("Экспирация").setSingleChoiceItems(new String[]{"3 мин","4 мин","5 мин"},Math.max(0,Math.min(2,expirySeconds/60-3)),(dialog,which)->{expirySeconds=180+which*60;updateExpiryButtons();dialog.dismiss();}).setNegativeButton("Отмена",null).show());
+        expiryCol.addView(expiryRow);parameters.addView(stakeCol,new LinearLayout.LayoutParams(0,-2,1.3f));
+        LinearLayout.LayoutParams ec=new LinearLayout.LayoutParams(0,-2,1);ec.leftMargin=dp(8);parameters.addView(expiryCol,ec);controlsPanel.addView(parameters);
+        LinearLayout actions=horizontal();
+        upButton=button("↑ ВВЕРХ",GREEN,Color.WHITE);downButton=button("↓ ВНИЗ",RED,Color.WHITE);analysisButton=button("Анализ",PANEL,GOLD);
+        for(Button btn:new Button[]{upButton,analysisButton,downButton}){btn.setTextSize(12);btn.setPadding(dp(2),0,dp(2),0);btn.setSingleLine(true);btn.setMinWidth(0);btn.setMinimumWidth(0);}
+        LinearLayout.LayoutParams l=new LinearLayout.LayoutParams(0,dp(45),1);l.rightMargin=dp(4);actions.addView(upButton,l);
+        actions.addView(analysisButton,new LinearLayout.LayoutParams(0,dp(45),.8f));
+        LinearLayout.LayoutParams r=new LinearLayout.LayoutParams(0,dp(45),1);r.leftMargin=dp(4);actions.addView(downButton,r);
+        LinearLayout.LayoutParams act=new LinearLayout.LayoutParams(-1,-2);act.topMargin=dp(6);controlsPanel.addView(actions,act);
+        upButton.setEnabled(false);downButton.setEnabled(false);
+        upButton.setOnClickListener(v->placeTrade("UP"));downButton.setOnClickListener(v->placeTrade("DOWN"));analysisButton.setOnClickListener(v->fetchMarketSnapshot());
+        content.addView(controlsPanel);
+        historyPanel=vertical();LinearLayout historyHeader=horizontal();
+        TextView historyTitle=label("История сделок",14,TEXT,true);historyHeader.addView(historyTitle,new LinearLayout.LayoutParams(0,-2,1));
+        TextView all=label("Все ›",11,GOLD,true);all.setOnClickListener(v->showSection("ИСТОРИЯ СДЕЛОК"));historyHeader.addView(all);historyPanel.addView(historyHeader);
+        historyText=label("Пока нет сделок",11,TEXT,false);stylePanel(historyText,7);historyText.setMaxLines(3);historyText.setOnClickListener(v->showSection("ИСТОРИЯ СДЕЛОК"));historyPanel.addView(historyText);
+        TextView statsTitle=label("Статистика ▸",11,GOLD,true);historyPanel.addView(statsTitle);
+        statsText=label("Загружаем статистику…",11,TEXT,false);stylePanel(statsText,7);statsText.setVisibility(View.GONE);historyPanel.addView(statsText);
+        statsTitle.setOnClickListener(v->{boolean open=statsText.getVisibility()==View.VISIBLE;statsText.setVisibility(open?View.GONE:View.VISIBLE);statsTitle.setText(open?"Статистика ▸":"Статистика ▾");});
+        content.addView(historyPanel);
+        TextView footer=label("Демо · оценка модели не гарантирует результат",9,MUTED,false);footer.setGravity(Gravity.CENTER);content.addView(footer);
         pairSelector.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
             @Override public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){
-                String selected=pairs[position];
-                if(!selected.equals(symbol)){
-                    symbol=selected;chart.setSymbol(symbol);quoteFresh=false;demoEnabled=false;
-                    instrumentText.setText(symbol+"  •  ОБЫЧНЫЙ РЫНОК  •  M1");
-                    updateTradeButtons();
-                    quoteText.setText("Загружаем котировки для "+symbol+"…");
-                    refreshData();
+                String selected=pairs[position];if(!selected.equals(symbol)){
+                    symbol=selected;quoteFresh=false;demoEnabled=false;latestCandles=new JSONArray();
+                    chart.setSymbol(symbol);chart.setMarketData(latestCandles,false);strengthBar.setProgress(0);signalText.setText("Оценка модели: —");
+                    analysisText.setText("Анализ: ожидание новой котировки.");quoteText.setText("Нажмите «Анализ» для "+symbol);updateTradeButtons();refreshData();
                 }
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
         });
-        chart=new ChartView(this);chart.setSymbol(symbol);
-        int chartHeight=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?dp(160):dp(190);
-        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,chartHeight);content.addView(chart,cp);
-
-        quoteText=label("Нажмите «АНАЛИЗ», чтобы загрузить подтверждённые котировки.",11,MUTED,false);quoteText.setPadding(dp(4),dp(6),0,dp(4));content.addView(quoteText);
-        analysisButton=button("Анализ",GOLD,NAVY);analysisButton.setTextSize(12);
-        analysisButton.setOnClickListener(v->toggleAnalysis());
-
-        controlsPanel=vertical();
-        TextView expiryLabel=label("ЭКСПИРАЦИЯ",10,MUTED,true);expiryLabel.setPadding(dp(4),dp(10),0,dp(4));controlsPanel.addView(expiryLabel);
-        expiryRow=horizontal();
-        addExpiry(180,"3 мин");addExpiry(240,"4 мин");addExpiry(300,"5 мин");
-        controlsPanel.addView(expiryRow);
-        TextView stakeLabel=label("СУММА ДЕМО-СДЕЛКИ, ₽",10,MUTED,true);stakeLabel.setPadding(dp(4),dp(10),0,dp(3));controlsPanel.addView(stakeLabel);
-        stakeInput=new EditText(this);stakeInput.setText("500");stakeInput.setSingleLine(true);
-        stakeInput.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        stakeInput.setTextColor(TEXT);stakeInput.setHintTextColor(MUTED);stakeInput.setHint("Например, 500");
-        stakeInput.setBackground(surface(PANEL,10,0xFF51401D));stakeInput.setPadding(dp(12),0,dp(12),0);
-        controlsPanel.addView(stakeInput,new LinearLayout.LayoutParams(-1,dp(48)));
-        LinearLayout actions=horizontal();
-        upButton=button("↑ ВВЕРХ",GREEN,Color.WHITE);downButton=button("↓ ВНИЗ",RED,Color.WHITE);upButton.setTextSize(12);downButton.setTextSize(12);
-        LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,dp(52),1);half.rightMargin=dp(5);actions.addView(upButton,half);
-        LinearLayout.LayoutParams middle=new LinearLayout.LayoutParams(0,dp(52),1);middle.leftMargin=dp(2);middle.rightMargin=dp(2);actions.addView(analysisButton,middle);
-        LinearLayout.LayoutParams half2=new LinearLayout.LayoutParams(0,dp(52),1);half2.leftMargin=dp(5);actions.addView(downButton,half2);
-        LinearLayout.LayoutParams actp=new LinearLayout.LayoutParams(-1,-2);actp.topMargin=dp(8);controlsPanel.addView(actions,actp);
-        upButton.setEnabled(false);downButton.setEnabled(false);
-        upButton.setOnClickListener(v->placeTrade("UP"));downButton.setOnClickListener(v->placeTrade("DOWN"));
-        content.addView(controlsPanel);
-        analysisDivider=new View(this);analysisDivider.setBackgroundColor(0xFF263D5A);
-        LinearLayout.LayoutParams divp=new LinearLayout.LayoutParams(-1,dp(1));divp.topMargin=dp(8);content.addView(analysisDivider,divp);
-        analysisText=label("РЫНОЧНЫЙ АНАЛИЗ\nНажмите «АНАЛИЗ», чтобы получить свечи и рассчитать направление. Без свежих данных сделки заблокированы.",12,TEXT,false);
-        stylePanel(analysisText,10);content.addView(analysisText);
-
-        signalText=label("ОЦЕНКА МОДЕЛИ: —",11,MUTED,true);signalText.setPadding(dp(4),dp(10),0,dp(3));content.addView(signalText);
-        strengthBar=new ModelStrengthBar(this);
-        strengthBar.setMax(100);strengthBar.setProgress(0);strengthBar.setProgressTintList(ColorStateList.valueOf(GOLD));
-        LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(22));content.addView(strengthBar,bp);
-
-
-
-        historyPanel=vertical();
-        TextView statsTitle=label("СТАТИСТИКА СДЕЛОК  ▾",11,GOLD,true);statsTitle.setPadding(dp(4),dp(12),0,dp(5));historyPanel.addView(statsTitle);
-        statsText=label("Загружаем статистику…",12,TEXT,false);stylePanel(statsText,10);historyPanel.addView(statsText);
-        statsTitle.setOnClickListener(v->{
-            boolean expanded=statsText.getVisibility()==View.VISIBLE;
-            statsText.setVisibility(expanded?View.GONE:View.VISIBLE);
-            statsTitle.setText(expanded?"СТАТИСТИКА СДЕЛОК  ▸":"СТАТИСТИКА СДЕЛОК  ▾");
-        });
-        TextView historyTitle=label("ПОСЛЕДНИЕ СДЕЛКИ",11,MUTED,true);historyTitle.setPadding(dp(4),dp(12),0,dp(5));historyPanel.addView(historyTitle);
-        historyText=label("Пока нет сделок",12,TEXT,false);stylePanel(historyText,10);historyPanel.addView(historyText);
-        content.addView(historyPanel);
-        TextView footer=label("Только виртуальный счёт • Аналитика не гарантирует результат",10,MUTED,false);
-        footer.setGravity(Gravity.CENTER);footer.setPadding(0,dp(14),0,dp(6));content.addView(footer);
-        pageWithNavigation(content,0);
-        updateExpiryButtons();
-        handler.removeCallbacks(poll);
-        handler.post(poll);
+        pageWithNavigation(content,0);updateExpiryButtons();handler.removeCallbacks(poll);handler.post(poll);
     }
-
+    private void adjustStake(int change){
+        double value=500;try{value=Double.parseDouble(stakeInput.getText().toString().replace(',','.'));}catch(Exception ignored){}
+        if(!Double.isFinite(value))value=500;
+        stakeInput.setText(String.format(Locale.US,"%.0f",Math.max(1,Math.min(20000,value+change))));
+    }
 
     private void showSection(String section){
         LinearLayout root=vertical();root.setPadding(dp(16),dp(18),dp(16),dp(24));root.setBackgroundColor(NAVY);
@@ -437,13 +429,7 @@ public class MainActivity extends Activity {
     }
 
     private void updateExpiryButtons(){
-        if(expiryRow==null)return;
-        for(int i=0;i<expiryRow.getChildCount();i++){
-            Button b=(Button)expiryRow.getChildAt(i);
-            boolean selected=((Integer)b.getTag())==expirySeconds;
-            b.setBackgroundTintList(ColorStateList.valueOf(selected?GOLD:PANEL));
-            b.setTextColor(selected?NAVY:TEXT);
-        }
+        if(expiryRow!=null&&expiryRow.getChildCount()>0)((Button)expiryRow.getChildAt(0)).setText(expirySeconds/60+" мин ▾");
     }
 
     // Wallet and trade history refresh independently; they never consume market-provider credits.

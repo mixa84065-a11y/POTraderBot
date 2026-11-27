@@ -92,29 +92,32 @@ public class ChartView extends View {
 
     @Override protected void onDraw(Canvas c) {
         super.onDraw(c);
-        float w=getWidth(), h=getHeight();
+        float density=getResources().getDisplayMetrics().density;
+        c.save();c.scale(density,density);
+        float w=getWidth()/density, h=getHeight()/density;
         c.drawColor(0xFF0B1420);
         p.setColor(0xFF1D2A38); p.setStrokeWidth(1f);
         for(int i=1;i<6;i++) c.drawLine(0,h*i/6f,w,h*i/6f,p);
         for(int i=1;i<8;i++) c.drawLine(w*i/8f,0,w*i/8f,h,p);
-        p.setColor(0xFFF7BE37); p.setTextSize(14f*getResources().getDisplayMetrics().density); p.setFakeBoldText(true);
-        c.drawText(expanded ? "ГРАФИК И АНАЛИЗ • " + symbol + " • M1" : symbol + " • M1",16,24*getResources().getDisplayMetrics().density,p);
+        p.setColor(0xFFF7BE37); p.setTextSize(14f); p.setFakeBoldText(true);
+        c.drawText(symbol+" · M1",8,16,p);
         p.setFakeBoldText(false);
         if(candles.isEmpty()) {
-            p.setColor(0xFF979AA3); p.setTextSize(11f*getResources().getDisplayMetrics().density);
+            p.setColor(0xFF979AA3); p.setTextSize(11f);
             String t="Нажмите «АНАЛИЗ» для загрузки свечей";
-            c.drawText(t,Math.max(12,(w-p.measureText(t))/2f),h/2f,p);
+            c.drawText(t,Math.max(6,(w-p.measureText(t))/2f),h/2f,p);
         } else {
             double min=Double.MAX_VALUE,max=-Double.MAX_VALUE;
             for(double[] a:candles){min=Math.min(min,a[2]);max=Math.max(max,a[1]);}
             double pad=(max-min)*0.12;
             if(pad<=0) pad=Math.max(max*0.0001,0.000001);
             min-=pad; max+=pad;
-            float density=getResources().getDisplayMetrics().density;
-            float left=8*density, right=w-8*density, top=32*density, bottom=h-18*density;
+            float left=8, right=w-54, top=29, bottom=h-20;
             float plotH=Math.max(1,bottom-top);
             float slot=(right-left)/candles.size();
-            float bodyW=Math.max(2,Math.min(12,slot*0.58f));
+            float bodyW=Math.max(.8f,Math.min(8,slot*0.62f));
+            p.setTextSize(8f);p.setColor(0xffb6c0cf);
+            for(int tick=0;tick<=4;tick++){float y=top+plotH*tick/4f;double price=max-(max-min)*tick/4.0;c.drawText(String.format(java.util.Locale.US,"%.5g",price),right+3,y+3,p);}
             for(int i=0;i<candles.size();i++){
                 double[] a=candles.get(i);
                 float x=left+slot*(i+0.5f);
@@ -134,9 +137,9 @@ public class ChartView extends View {
                 drawEma(c,ema(9),0xFFF7BE37,left,slot,bottom,plotH,min,max);
                 drawEma(c,ema(21),0xFF369DFA,left,slot,bottom,plotH,min,max);
 
-                p.setTextSize(9f*getResources().getDisplayMetrics().density); p.setFakeBoldText(true);
-                p.setColor(0xFFF7BE37); c.drawText("EMA 9",16,42,p);
-                p.setColor(0xFF369DFA); c.drawText("EMA 21",66,42,p);
+                p.setTextSize(9f); p.setFakeBoldText(true);
+                p.setColor(0xFFF7BE37); c.drawText("EMA 9",8,25,p);
+                p.setColor(0xFF369DFA); c.drawText("EMA 21",47,25,p);
                 p.setFakeBoldText(false);
 
                 int signalColor = decision.contains("ВВЕРХ") ? 0xFF00BE55 :
@@ -144,15 +147,16 @@ public class ChartView extends View {
                 String label = decision + " • " + decisionStrength + "%";
                 p.setTextSize(10f); p.setFakeBoldText(true);
                 float badgeW=p.measureText(label)+16;
-                float badgeLeft=Math.max(120,w-badgeW-12);
+                float badgeLeft=Math.max(115,w-badgeW-42);
                 p.setColor(0xFF171B22);
-                c.drawRoundRect(new RectF(badgeLeft,10,w-10,31),8,8,p);
+                c.drawRoundRect(new RectF(badgeLeft,2,w-40,20),8,8,p);
                 p.setColor(signalColor);
-                c.drawText(label,badgeLeft+8,24,p);
+                c.drawText(label,badgeLeft+4,14,p);
                 p.setFakeBoldText(false);
             }
         }
         p.setColor(fresh?0xFF00BE55:0xFF979AA3); p.setTextSize(10f);
-        c.drawText(message,16,h-5*getResources().getDisplayMetrics().density,p);
+        c.drawText(message,8,h-5,p);
+        c.restore();
     }
 }
