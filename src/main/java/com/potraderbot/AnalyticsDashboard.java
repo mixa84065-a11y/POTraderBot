@@ -77,7 +77,7 @@ final class AnalyticsDashboard {
                 tile("⚽","Спорт","Анализ матчей\nЭкспрессы",true,()->action.open("sport")));
         addPair(p,tile("₿","Криптосканер","Сканер Bybit\nТорговый терминал",false,()->action.open("crypto")),
                 tile("📈","Инвестиции","Акции, фонды\nВ разработке",true,()->planned("Инвестиции","Источники котировок акций, фондов и дивидендов ещё не подключены.")));
-        addPair(p,tile("▤","Новости","Рынки, спорт\nВ разработке",false,()->planned("Новости","Новостные источники и экономический календарь ещё не подключены к этой версии.")),
+        addPair(p,tile("▤","Новости","Футбол · GoS\nЭкономика · Investing",false,()->new NewsCenter(a,()->action.open("sport")).show()),
                 tile("▰","Финансы","Демо-статистика\nПрибыль и убытки",true,()->action.open("finance")));
         addPair(p,tile("⚗","Лаборатория","Калькулятор риска\nТесты стратегий",false,this::calculator),
                 tile("🎓","Обучение","Трейдинг, инвестиции\nСпортивный анализ",true,this::education));
