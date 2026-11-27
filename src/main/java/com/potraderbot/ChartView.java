@@ -63,6 +63,11 @@ public class ChartView extends View {
         invalidate();
     }
 
+    String levelDescription(){
+        if(!fresh||candles.isEmpty())return "Уровни: обновите котировку.";
+        return SupportResistance.describe(levels,candles.get(candles.size()-1)[3]);
+    }
+
     private double[] ema(int period) {
         double[] values = new double[candles.size()];
         if (candles.isEmpty()) return values;

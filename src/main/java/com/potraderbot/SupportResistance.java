@@ -31,6 +31,19 @@ final class SupportResistance {
         }
         return new Levels(support,resistance);
     }
+    static String describe(Levels levels,double reference){
+        if(levels==null||!Double.isFinite(reference)||reference<=0)return "Уровни: нет подтверждённых данных.";
+        String s=Double.isFinite(levels.support)&&levels.support>0&&levels.support<reference
+                ?formatLevel(levels.support,(reference-levels.support)/reference*100):"не найден";
+        String r=Double.isFinite(levels.resistance)&&levels.resistance>reference
+                ?formatLevel(levels.resistance,(levels.resistance-reference)/reference*100):"не найден";
+        return "Поддержка: "+s+"\nСопротивление: "+r;
+    }
+    private static String formatLevel(double price,double distance){
+        String value=java.math.BigDecimal.valueOf(price).round(new java.math.MathContext(8)).stripTrailingZeros().toPlainString();
+        String percent=distance<0.005?"<0,01%":String.format(java.util.Locale.forLanguageTag("ru-RU"),"%.2f%%",distance);
+        return value+" (расст. "+percent+")";
+    }
     static Levels fromBybit(JSONArray rows,double reference){
         ArrayList<double[]> bars=new ArrayList<>();
         try{for(int i=0;i<rows.length();i++){

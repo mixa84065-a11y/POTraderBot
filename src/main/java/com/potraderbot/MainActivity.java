@@ -557,6 +557,7 @@ public class MainActivity extends Activity {
         quoteFresh=false;quoteReceivedElapsed=-1;
         updateTradeButtons();
         quoteText.setText("Запрашиваем котировку для "+symbol+"…");
+        chart.setMarketData(latestCandles,false);strengthBar.setProgress(0);signalText.setText("Оценка модели: обновление…");analysisText.setText("Ожидание подтверждённых данных.");
         analysisButton.setEnabled(false);
         final String token=accessToken,requestedSymbol=symbol;
         final int generation=++analysisGeneration;
@@ -574,7 +575,7 @@ public class MainActivity extends Activity {
                 if(generation!=analysisGeneration||requestedButton!=analysisButton||!resumed||!SessionStore.sameSession(token,accessToken)||!requestedSymbol.equals(symbol)||!requestedButton.isShown())return;
                 if(fs==null){
                     quoteText.setText("Не удалось получить котировку"+(fe==null?"":": "+fe));
-                    quoteFresh=false;updateTradeButtons();
+                    quoteFresh=false;chart.setMarketData(latestCandles,false);strengthBar.setProgress(0);signalText.setText("Оценка модели недоступна");analysisText.setText("Нет подтверждённой свежей котировки.");updateTradeButtons();
                     return;
                 }
                 latestCandles=fs.optJSONArray("candles");
@@ -585,7 +586,7 @@ public class MainActivity extends Activity {
                 if(quoteFresh){final int currentGeneration=generation;handler.postDelayed(()->{
                     if(currentGeneration!=analysisGeneration||usableQuote())return;
                     quoteFresh=false;chart.setMarketData(latestCandles,false);strengthBar.setProgress(0);
-                    signalText.setText("Котировка устарела");quoteText.setText("Нажмите «Анализ» для обновления котировки.");updateTradeButtons();
+                    signalText.setText("Котировка устарела");analysisText.setText("Данные устарели. Повторите анализ.");quoteText.setText("Нажмите «Анализ» для обновления котировки.");updateTradeButtons();
                 },Math.max(1,QuoteFreshness.MAX_AGE_MS-(android.os.SystemClock.elapsedRealtime()-quoteReceivedElapsed)+1));}
                 demoEnabled=fs.optBoolean("demo_enabled",false);
                 chart.setMarketData(latestCandles,quoteFresh);
@@ -597,9 +598,12 @@ public class MainActivity extends Activity {
                 if(!demoEnabled)status+=" • демо-инструмент ещё не включён";
                 if(!price.isEmpty())status+=" • "+price;
                 quoteText.setText(status);
+                if(!quoteFresh){
+                    signalText.setText("Оценка модели недоступна");strengthBar.setProgress(0);analysisText.setText("Нет свежих котировок. Исторические уровни на графике не являются текущим сигналом.");updateTradeButtons();return;
+                }
                 MarketAnalyzer.Result a=MarketAnalyzer.analyze(latestCandles);
                 chart.setDecision(a.direction,a.strength);
-                analysisText.setText(a.explanation);
+                analysisText.setText(a.explanation+"\n"+chart.levelDescription()+"\nРасстояние от цены последней свечи.");
                 signalText.setText(a.strength>50
                     ?"ОЦЕНКА НАПРАВЛЕНИЯ: "+a.direction+" • СИЛА "+a.strength+"%"
                     :"ОЦЕНКА МОДЕЛИ: НЕТ ПРЕИМУЩЕСТВА");

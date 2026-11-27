@@ -16,4 +16,13 @@ public class SupportResistanceTest {
     assertTrue(Double.isNaN(x.support));assertTrue(Double.isNaN(x.resistance));
  }
  @Test public void refusesInsufficientData(){assertTrue(Double.isNaN(SupportResistance.calculate(new ArrayList<>(),100).support));}
+ @Test public void describesDistanceWithoutFakeLevels(){
+    String s=SupportResistance.describe(new SupportResistance.Levels(99,102),100);
+    assertTrue(s.contains("1,00%"));assertTrue(s.contains("2,00%"));
+    String unknown=SupportResistance.describe(new SupportResistance.Levels(Double.NaN,98),100);
+    assertTrue(unknown.contains("Поддержка: не найден"));assertTrue(unknown.contains("Сопротивление: не найден"));
+ }
+ @Test public void refusesUnknownReference(){
+    assertEquals("Уровни: нет подтверждённых данных.",SupportResistance.describe(new SupportResistance.Levels(99,102),0));
+ }
 }

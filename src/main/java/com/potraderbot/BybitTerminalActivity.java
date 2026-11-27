@@ -168,7 +168,7 @@ public class BybitTerminalActivity extends Activity {
                     Toast.makeText(BybitTerminalActivity.this,"Сначала закройте открытую демо-позицию.",Toast.LENGTH_SHORT).show();
                     symbolPicker.setSelection(java.util.Arrays.asList(symbols).indexOf(prefs.getString("trade_symbol","BTCUSDT")));return;
                 }
-                if(!next.equals(symbol)){symbol=next;lastPrice=0;candles=new JSONArray();priceChart.setCandles(candles,0);priceChart.setEmptyMessage("Загружаются котировки Bybit…");priceText.setText("Загрузка цены…");liveText.setText("● ОЖИДАНИЕ");liveText.setTextColor(MUTED);changeText.setText("24ч: —");signalText.setText("АНАЛИЗ: ожидание данных");signalText.setTextColor(WHITE);loadMarket();}
+                if(!next.equals(symbol)){symbol=next;lastPrice=0;candles=new JSONArray();priceChart.setCandles(candles,0);priceChart.setEmptyMessage("Загружаются котировки Bybit…");priceText.setText("Загрузка цены…");liveText.setText("● ОЖИДАНИЕ");liveText.setTextColor(MUTED);changeText.setText("24ч: —");signalText.setText("АНАЛИЗ: ожидание данных");signalText.setTextColor(WHITE);statusText.setText("Ожидание котировок нового актива.");priceChart.setAnalysis(0,"ОЖИДАНИЕ");loadMarket();}
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> p){}
         });
@@ -978,10 +978,15 @@ public class BybitTerminalActivity extends Activity {
             prefs.edit().putString("loss_day",today).putFloat("loss_today",0).apply();
         }
     }
+    private void clearPaperSignal(String reason){
+        signalText.setText("АНАЛИЗ: недоступен");signalText.setTextColor(MUTED);
+        if(priceChart!=null)priceChart.setAnalysis(0,"ОЖИДАНИЕ");
+        statusText.setText(reason);
+    }
     private void evaluateStrategy(){
         resetDailyLossIfNeeded();
         if(candles.length()<30){
-            statusText.setText("Недостаточно закрытых минутных свечей. Новые входы заблокированы.");
+            clearPaperSignal("Недостаточно закрытых минутных свечей. Новые входы заблокированы.");
             // Keep protective stop/target checks alive even if indicator history is incomplete.
             managePaperTrade(0,0L);renderLedger();return;
         }
@@ -989,20 +994,20 @@ public class BybitTerminalActivity extends Activity {
         try{
             candleTime=Long.parseLong(candles.getJSONArray(candles.length()-1).getString(0));
             if(!QuoteFreshness.closedCandle(candleTime,System.currentTimeMillis())){
-                statusText.setText("Последняя закрытая свеча устарела. Новые автосделки заблокированы.");
+                clearPaperSignal("Последняя закрытая свеча устарела. Новые автосделки заблокированы.");
                 // A stale signal must never open/reverse a position, but live-price
                 // stop-loss and take-profit checks must continue to run.
                 managePaperTrade(0,candleTime);renderLedger();return;
             }
         }catch(Exception e){
-            statusText.setText("Не удалось проверить время свечи. Новые автосделки заблокированы.");
+            clearPaperSignal("Не удалось проверить время свечи. Новые автосделки заблокированы.");
             managePaperTrade(0,0L);renderLedger();return;
         }
         int s=score();String dir=s>=3?"ПОКУПКА":s<=-3?"СЛАБЫЙ ТРЕНД / ВЫХОД":"НЕТ СИГНАЛА";
         if(priceChart!=null)priceChart.setAnalysis(s,dir);
         signalText.setText("АНАЛИЗ: "+dir+"  •  SCORE "+s);
         signalText.setTextColor(s>=3?GREEN:s<=-3?RED:WHITE);
-        statusText.setText("EMA 9/21 + RSI(14) + импульс. Балл — эвристика, не вероятность прибыли.");
+        statusText.setText("EMA 9/21 + RSI(14) + импульс. Балл — эвристика, не вероятность прибыли.\n"+SupportResistance.describe(SupportResistance.fromBybit(candles,lastPrice),lastPrice)+"\nРасстояние от текущей цены.");
         // Position exits are checked on every quote refresh, but a new entry is allowed
         // only once per completed candle. This prevents duplicate entries on 15s polling.
         managePaperTrade(s,candleTime);renderLedger();
