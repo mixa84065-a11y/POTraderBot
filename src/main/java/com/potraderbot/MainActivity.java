@@ -130,12 +130,13 @@ public class MainActivity extends Activity {
         s.addView(content);setContentView(s);return s;
     }
     private void pageWithNavigation(LinearLayout content,int selected){
+        dashboardVisible=false;
         LinearLayout shell=vertical();shell.setBackgroundColor(NAVY);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(NAVY);
         scroll.addView(content);shell.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout nav=horizontal();nav.setPadding(dp(7),dp(7),dp(7),dp(7));
         nav.setBackground(surface(PANEL,15,0xFF3B321E));
-        String[] labels={"ОБЗОР","BYBIT","АНАЛИЗ","СДЕЛКИ","ЕЩЁ"};
+        String[] labels={"ГЛАВНАЯ","BYBIT","АНАЛИЗ","СДЕЛКИ","ЕЩЁ"};
         for(int i=0;i<labels.length;i++){
             final int tab=i;Button item=button(labels[i],i==selected?GOLD:PANEL,i==selected?NAVY:TEXT);
             item.setTextSize(9);item.setMinHeight(dp(46));
@@ -153,6 +154,7 @@ public class MainActivity extends Activity {
         shell.addView(nav,np);setContentView(shell);
     }
     private void showLogin(String status){
+        dashboardVisible=false;
         LinearLayout root=vertical();root.setPadding(dp(24),dp(30),dp(24),dp(24));
         root.setGravity(Gravity.CENTER_HORIZONTAL);root.setBackgroundColor(NAVY);
         TextView brand=label("GOD OF TRADING",25,GOLD,true);brand.setGravity(Gravity.CENTER);
@@ -217,7 +219,33 @@ public class MainActivity extends Activity {
         });
     }
 
+    private boolean dashboardVisible=false;
+
     private void showMain(){
+        // Initialize the existing trading views before the account polling callback runs.
+        showTradingScreen();
+        dashboardVisible=true;
+        setContentView(new AnalyticsDashboard(this, action -> {
+            switch(action){
+                case "trade": showTradingScreen(); break;
+                case "sport": startActivity(new android.content.Intent(this,SportActivity.class)); break;
+                case "crypto": openBybitTerminal(); break;
+                case "finance": showSection("СТАТИСТИКА"); break;
+                case "profile": showSection("ПРОФИЛЬ"); break;
+                case "signals": showSection("АНАЛИТИКА"); break;
+                case "settings": showMenu(); break;
+                default: throw new IllegalArgumentException("Unknown dashboard action");
+            }
+        }).build());
+    }
+
+    @Override public void onBackPressed(){
+        if(!accessToken.isEmpty()&&!dashboardVisible){showMain();return;}
+        super.onBackPressed();
+    }
+
+    private void showTradingScreen(){
+        dashboardVisible=false;
         analysisMode=false;
         LinearLayout content=vertical();content.setPadding(dp(16),dp(16),dp(16),dp(24));
         LinearLayout header=horizontal();
