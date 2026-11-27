@@ -76,6 +76,7 @@ public final class SportActivity extends Activity {
             public void onTextChanged(CharSequence t,int start,int before,int count){if(shownFixtures!=null)render(shownFixtures);}
             public void afterTextChanged(android.text.Editable e){}
         });
+        Button csv=button("FOOTBALL-DATA • ИСТОРИЯ БЕЗ КЛЮЧА");csv.setOnClickListener(v->chooseCsvLeague());page.addView(csv,Math.max(0,page.indexOfChild(results)));
         Button source=button("SSTATS • ПРОВЕРКА ИСТОЧНИКА");source.setOnClickListener(v->probeSStats());page.addView(source,Math.max(0,page.indexOfChild(results)));
         Button local=button("ЛОКАЛЬНАЯ БАЗА GoS");local.setOnClickListener(v->localInfo());page.addView(local,Math.max(0,page.indexOfChild(results)));
         Button archiveAuto=button(prefs.getBoolean("gos_archive_auto",false)?"АВТОАРХИВ: ВКЛ":"АВТОАРХИВ: ВЫКЛ");
@@ -311,6 +312,48 @@ public final class SportActivity extends Activity {
     private String describeDetails(SportDetailHistory.Summary s){
         return "Угловые: "+(s.cornersN==0?"нет данных":String.format(Locale.US,"%.2f своих / %.2f соперника (%d матчей)",s.cornersFor/(double)s.cornersN,s.cornersAgainst/(double)s.cornersN,s.cornersN))+
         "\nЖК: "+(s.cardsN==0?"нет данных":String.format(Locale.US,"%.2f своих / %.2f соперника (%d матчей)",s.cardsFor/(double)s.cardsN,s.cardsAgainst/(double)s.cardsN,s.cardsN));
+    }
+    private void chooseCsvLeague(){
+        if(busy)return;
+        String[] leagues={"Англия • Премьер-лига","Испания • Ла Лига","Германия • Бундеслига","Италия • Серия А","Франция • Лига 1"};
+        String[] codes={"E0","SP1","D1","I1","F1"};
+        new AlertDialog.Builder(this).setTitle("Football-Data.co.uk • бесплатный архив").setItems(leagues,(d,i)->loadCsv(codes[i],leagues[i])).setNegativeButton("Закрыть",null).show();
+    }
+    private void loadCsv(String code,String league){
+        if(busy)return;busy=true;load.setEnabled(false);settings.setEnabled(false);status.setText("Загрузка Football-Data…");
+        worker.execute(()->{
+            SportCsvHistory archive=null;String error="";
+            try{
+                String season=SportCsvHistory.season();String k="csv_"+season+"_"+code;String raw=prefs.getString(k,"");
+                long age=System.currentTimeMillis()-prefs.getLong(k+"_time",0);
+                if(raw.isEmpty()||age<0||age>=21600000){
+                    String downloaded=SportCsvHistory.download(code,season);
+                    SportCsvHistory parsed=SportCsvHistory.parse(downloaded,code);
+                    if(parsed.size()==0)throw new IllegalStateException("Нет завершённых матчей в архиве.");
+                    prefs.edit().putString(k,downloaded).putLong(k+"_time",System.currentTimeMillis()).apply();archive=parsed;
+                }else archive=SportCsvHistory.parse(raw,code);
+            }catch(Exception e){error="Не удалось получить или разобрать архив Football-Data. Проверьте интернет; формат и доступность источника могут изменяться.";}
+            final SportCsvHistory result=archive;final String msg=error;
+            runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);
+                if(result==null){status.setText(msg);return;}status.setText("Football-Data: "+result.size()+" завершённых матчей. API-SPORTS не израсходован.");chooseCsvTeams(result,league);
+            });
+        });
+    }
+    private void chooseCsvTeams(SportCsvHistory archive,String league){
+        String[] names=archive.teams();if(names.length<2){status.setText("Недостаточно команд в архиве.");return;}
+        LinearLayout form=new LinearLayout(this);form.setOrientation(1);form.setPadding(dp(12),dp(8),dp(12),dp(8));
+        form.addView(label("Выберите две команды из одного чемпионата. Только история до сегодняшнего дня UTC; не привязано к конкретному матчу API-SPORTS.",13,Color.WHITE));
+        Spinner h=new Spinner(this),a=new Spinner(this);
+        ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,names);adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        h.setAdapter(adapter);a.setAdapter(adapter);a.setSelection(1);
+        form.addView(label("Хозяева",14,GOLD));form.addView(h);form.addView(label("Гости",14,GOLD));form.addView(a);
+        new AlertDialog.Builder(this).setTitle(league).setView(form).setNegativeButton("Закрыть",null).setPositiveButton("Анализ",(d,w)->{
+            String home=(String)h.getSelectedItem(),away=(String)a.getSelectedItem();
+            if(home.equals(away)){status.setText("Выберите разные команды.");return;}
+            SportCsvHistory.Team x=archive.team(home),y=archive.team(away);
+            String msg="Источник: Football-Data.co.uk. До 20 последних завершённых матчей каждой команды, только текущий сезон. Составы, травмы и live не учитываются.\n\n"+home+"\n"+describe(x.goals)+"\n"+x.details()+"\n\n"+away+"\n"+describe(y.goals)+"\n"+y.details()+"\n\n"+model(x.goals,y.goals)+"\n\nОтдельная модель: не сохраняется в журнал API-SPORTS.";
+            new AlertDialog.Builder(this).setTitle(home+" — "+away).setMessage(msg).setPositiveButton("ОК",null).show();
+        }).show();
     }
     private void probeSStats(){
         if(busy)return;
