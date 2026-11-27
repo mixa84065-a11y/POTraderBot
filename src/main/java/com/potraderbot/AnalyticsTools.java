@@ -70,6 +70,52 @@ final class AnalyticsTools {
             }catch(Exception ex){result.setText("Проверьте формат и баланс. Серия не должна опускать баланс ниже нуля. Максимум 1000 сделок.");}
         });show("Лаборатория стратегий",p);
     }
+    void replay(){
+        LinearLayout p=panel();
+        note(p,"Исторический тест Android-спот-стратегии, без реальных ордеров. Вставьте CSV минутных свечей UTC с заголовком timestamp_ms,open,close,turnover24h. Источник данных выбираете вы. Нужны достоверные исторические значения оборота за 24 часа.");
+        EditText data=input(p,"CSV минутных свечей (до 5000 строк)","",true);
+        EditText lookback=input(p,"История для сигнала, свечей","240",false);
+        EditText horizon=input(p,"Удержание, минут","5",false);
+        EditText spread=input(p,"Спред, базисные пункты","5",false);
+        EditText fee=input(p,"Комиссия за одну сторону, б.п.","10",false);
+        EditText slip=input(p,"Проскальзывание, б.п.","5",false);
+        note(p,"1 б.п. = 0,01%. Значения расходов — примеры, замените их условиями своего рынка. Просадка считается по закрытым сделкам. Стоп-лосс и тейк-профит не моделируются.");
+        TextView result=note(p,"Тест ещё не выполнен.");
+        Button run=new Button(a);run.setText("Запустить исторический тест");run.setAllCaps(false);
+        run.setTextColor(BG);run.setBackgroundTintList(android.content.res.ColorStateList.valueOf(GOLD));p.addView(run);
+        run.setOnClickListener(v->{
+            final String csv=data.getText().toString();
+            final int l,h;
+            final double s,f,x;
+            try{
+                l=Integer.parseInt(lookback.getText().toString().trim());h=Integer.parseInt(horizon.getText().toString().trim());
+                s=number(spread);f=number(fee);x=number(slip);
+                if(l<55||l>1000||h<1||h>120||csv.length()>1000000)throw new IllegalArgumentException();
+            }catch(Exception e){result.setText("Проверьте параметры: история 55–1000, удержание 1–120 минут.");return;}
+            run.setEnabled(false);result.setText("Выполняется локальный расчёт…");
+            new Thread(()->{
+                String output;
+                try{
+                    java.util.List<HistoricalSpotReplay.Bar> bars=ReplayCsv.parse(csv);
+                    if(bars.size()<l+h+1)throw new IllegalArgumentException("Недостаточно свечей для выбранного окна");
+                    HistoricalSpotReplay.Report r=HistoricalSpotReplay.replay(bars,l,h,s,f,x);
+                    output="ОБРАБОТАНО СВЕЧЕЙ: "+bars.size()+"\nДопустимых окон: "+r.eligibleWindows+" · Пропуски: "+r.skippedGaps;
+                    if(r.eligibleWindows==0)output+="\nНет пригодных непрерывных окон. Проверьте историю.";
+                    else{
+                        output+="\n\n"+replayMetrics("Спот-стратегия",r.strategy)+"\n\n"+replayMetrics("Базовая покупка",r.baseline);
+                        if(r.comparisonWindows>0)output+="\n\nСопоставимых окон: "+r.comparisonWindows+"\n"+replayMetrics("Исходная стратегия",r.matchedOriginal)+"\n"+replayMetrics("Фильтр 5/15 минут",r.filtered);
+                        else output+="\n\nНедостаточно сопоставимых окон для фильтра 5/15 минут.";
+                    }
+                    output+="\n\nИсторический эксперимент. Не прогноз доходности и не статистика серверного робота.";
+                }catch(Exception e){output="Ошибка теста: "+(e instanceof IllegalArgumentException?e.getMessage():"не удалось обработать CSV");}
+                final String message=output;
+                a.runOnUiThread(()->{if(!a.isFinishing()&&!a.isDestroyed()&&result.isAttachedToWindow()){result.setText(message);run.setEnabled(true);}});
+            },"offline-spot-replay").start();
+        });show("Исторический бэктест",p);
+    }
+    private String replayMetrics(String title,HistoricalSpotReplay.Metrics m){
+        return String.format(Locale.forLanguageTag("ru-RU"),"%s\nСделок: %d · Плюс: %d · Минус: %d · Ноль: %d\nДоходность: %+.2f%% · Просадка: %.2f%%",title,m.trades,m.wins,m.losses,m.breakeven,m.returnPct(),m.maxDrawdownPct);
+    }
     void openAssistant(){
         for(String pkg:new String[]{"ai.god.companion","ai.god.companion.preview"}){
             Intent i=a.getPackageManager().getLaunchIntentForPackage(pkg);
