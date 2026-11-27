@@ -76,6 +76,7 @@ public final class SportActivity extends Activity {
             public void onTextChanged(CharSequence t,int start,int before,int count){if(shownFixtures!=null)render(shownFixtures);}
             public void afterTextChanged(android.text.Editable e){}
         });
+        Button source=button("SSTATS • ПРОВЕРКА ИСТОЧНИКА");source.setOnClickListener(v->probeSStats());page.addView(source,Math.max(0,page.indexOfChild(results)));
         Button local=button("ЛОКАЛЬНАЯ БАЗА GoS");local.setOnClickListener(v->localInfo());page.addView(local,Math.max(0,page.indexOfChild(results)));
         String cached=prefs.getString("fixtures_cache","");
         if(!cached.isEmpty())try{JSONObject initial=new JSONObject(cached);render(initial);worker.execute(()->storeArchive(initial.optJSONArray("response")));status.setText("Сохранённые данные: "+prefs.getString("cache_date","")+"; не обновлены.");}catch(Exception ignored){}
@@ -294,6 +295,22 @@ public final class SportActivity extends Activity {
     private String describeDetails(SportDetailHistory.Summary s){
         return "Угловые: "+(s.cornersN==0?"нет данных":String.format(Locale.US,"%.2f своих / %.2f соперника (%d матчей)",s.cornersFor/(double)s.cornersN,s.cornersAgainst/(double)s.cornersN,s.cornersN))+
         "\nЖК: "+(s.cardsN==0?"нет данных":String.format(Locale.US,"%.2f своих / %.2f соперника (%d матчей)",s.cardsFor/(double)s.cardsN,s.cardsAgainst/(double)s.cardsN,s.cardsN));
+    }
+    private void probeSStats(){
+        if(busy)return;
+        new AlertDialog.Builder(this).setTitle("SStats.net — проверка доступа")
+          .setMessage("Два отдельных тестовых запроса без ключа: список лиг и архив сезона из официального примера (лига 41, 2023). Лимит API-SPORTS не расходуется. Данные разных источников пока не объединяются.")
+          .setNegativeButton("Отмена",null).setPositiveButton("Проверить",(d,w)->{
+            if(busy)return;
+            long now=System.currentTimeMillis();
+            if(now-prefs.getLong("sstats_last_probe",0)<60000){status.setText("Повторная проверка SStats доступна через минуту.");return;}
+            if(!prefs.edit().putLong("sstats_last_probe",now).commit()){status.setText("Не удалось сохранить ограничение запросов.");return;}
+            busy=true;load.setEnabled(false);settings.setEnabled(false);status.setText("Проверка SStats…");
+            worker.execute(()->{
+                String msg=SportSStatsProbe.check();
+                runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);status.setText("Проверка SStats завершена.");new AlertDialog.Builder(this).setTitle("SStats.net").setMessage(msg).setPositiveButton("ОК",null).show();});
+            });
+          }).show();
     }
     private int storeArchive(JSONArray rows){
         if(rows==null)return -1;
