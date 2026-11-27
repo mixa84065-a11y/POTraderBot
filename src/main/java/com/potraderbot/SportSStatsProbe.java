@@ -37,7 +37,12 @@ public final class SportSStatsProbe {
   }else if(parsed instanceof JSONArray)rows=(JSONArray)parsed;
   if(rows==null)return status+"\nСписок записей не распознан.";
   String out=status+"\nЗаписей в ответе: "+rows.length();
-  if(rows.length()>0&&rows.optJSONObject(0)!=null)out+="\nПоля первой записи: "+fields(rows.optJSONObject(0));
+  if(rows.length()>0&&rows.optJSONObject(0)!=null){
+   JSONObject first=rows.optJSONObject(0);
+   out+="\nПоля первой записи: "+fields(first);
+   Iterator<String> it=first.keys();int shown=0;
+   while(it.hasNext()&&shown<8){String k=it.next();if(!k.matches("[A-Za-z][A-Za-z0-9_]{0,50}"))continue;JSONObject child=first.optJSONObject(k);if(child!=null){out+="\n"+k+": "+fields(child);shown++;}}
+  }
   return out;
  }
  private static String fields(JSONObject o){

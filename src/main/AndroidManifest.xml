@@ -4,6 +4,7 @@
     <application android:allowBackup="false" android:label="GOD OF TRADING 2.0"
         android:theme="@android:style/Theme.Material.NoActionBar" android:usesCleartextTraffic="false">
         <service android:name=".SportSyncJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true" />
+        <service android:name=".SportArchiveJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true" />
         <activity android:name=".SportActivity" android:exported="false" />
         <activity android:name=".BybitTerminalActivity" android:screenOrientation="fullSensor" android:exported="false" />
         <activity android:name=".MainActivity" android:screenOrientation="fullSensor" android:exported="true">

@@ -45,7 +45,7 @@ public final class SportSyncJob extends JobService {
    try{int reported=Integer.parseInt(header);if(reported<0)return;int saved=remaining(p);p.edit().putInt("quota_remaining",saved<0?reported:Math.min(saved,reported)).commit();}catch(Exception ignored){}
   }
  }
- private static String readKey(SharedPreferences p)throws Exception{
+ static String readKey(SharedPreferences p)throws Exception{
   String enc=p.getString("cipher","");if(enc.isEmpty())return "";
   KeyStore ks=KeyStore.getInstance("AndroidKeyStore");ks.load(null);
   SecretKey key=(SecretKey)ks.getKey("gos_api_sports_v1",null);if(key==null)return "";

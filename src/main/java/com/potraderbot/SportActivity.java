@@ -68,7 +68,7 @@ public final class SportActivity extends Activity {
         });
         settings=button("НАСТРОЙКИ API-SPORTS");settings.setOnClickListener(v->settings());page.addView(settings);
         load=button("МАТЧИ НА СЕГОДНЯ");load.setOnClickListener(v->loadFixtures());page.addView(load);
-        status=label("Лимит тарифа: 100 запросов в сутки. Запросы только по нажатию.",13,GOLD);page.addView(status);
+        status=label("Лимит тарифа: 100 запросов в сутки. Фоновые запросы только при включении.",13,GOLD);page.addView(status);
         search=new EditText(this);search.setSingleLine(true);search.setHint("Поиск команды или чемпионата");search.setTextColor(Color.WHITE);search.setHintTextColor(GOLD);page.addView(search);
         results=new LinearLayout(this);results.setOrientation(1);page.addView(results);
         search.addTextChangedListener(new android.text.TextWatcher(){
@@ -78,6 +78,22 @@ public final class SportActivity extends Activity {
         });
         Button source=button("SSTATS • ПРОВЕРКА ИСТОЧНИКА");source.setOnClickListener(v->probeSStats());page.addView(source,Math.max(0,page.indexOfChild(results)));
         Button local=button("ЛОКАЛЬНАЯ БАЗА GoS");local.setOnClickListener(v->localInfo());page.addView(local,Math.max(0,page.indexOfChild(results)));
+        Button archiveAuto=button(prefs.getBoolean("gos_archive_auto",false)?"АВТОАРХИВ: ВКЛ":"АВТОАРХИВ: ВЫКЛ");
+        page.addView(archiveAuto,Math.max(0,page.indexOfChild(results)));
+        archiveAuto.setOnClickListener(v->{
+            if(prefs.getBoolean("gos_archive_auto",false)){
+                prefs.edit().putBoolean("gos_archive_auto",false).commit();SportArchiveJob.cancel(this);archiveAuto.setText("АВТОАРХИВ: ВЫКЛ");return;
+            }
+            new AlertDialog.Builder(this).setTitle("Автоматическое накопление")
+              .setMessage("До одного запроса API-SPORTS в сутки: календарь вчерашнего дня UTC. Данные остаются на телефоне. При ограничениях тарифа история не подставляется. Android может отложить запуск.")
+              .setNegativeButton("Отмена",null).setPositiveButton("Включить",(d,w)->{
+                  try{
+                      if(readKey().isEmpty()){status.setText("Сначала сохраните API-ключ.");return;}
+                      if(prefs.edit().putBoolean("gos_archive_auto",true).commit()&&SportArchiveJob.schedule(this)){archiveAuto.setText("АВТОАРХИВ: ВКЛ");}
+                      else{prefs.edit().putBoolean("gos_archive_auto",false).commit();status.setText("Не удалось запланировать автоархив.");}
+                  }catch(Exception e){prefs.edit().putBoolean("gos_archive_auto",false).commit();status.setText("Не удалось включить автоархив.");}
+              }).show();
+        });
         String cached=prefs.getString("fixtures_cache","");
         if(!cached.isEmpty())try{JSONObject initial=new JSONObject(cached);render(initial);worker.execute(()->storeArchive(initial.optJSONArray("response")));status.setText("Сохранённые данные: "+prefs.getString("cache_date","")+"; не обновлены.");}catch(Exception ignored){}
     }
@@ -321,7 +337,7 @@ public final class SportActivity extends Activity {
         busy=true;load.setEnabled(false);settings.setEnabled(false);
         worker.execute(()->{
             String msg;
-            try(SportLocalArchive db=new SportLocalArchive(getApplicationContext())){msg="Завершённых матчей: "+db.count()+"\nИсточник: API-SPORTS.IO.\nАрхив автоматически пополняется при успешной загрузке календаря и истории по датам. Сохраняются только завершённые матчи и счёт. Данные хранятся на телефоне, не отправляются на сервер.\nДругие поставщики ещё не подключены.";}catch(Exception e){msg="Не удалось открыть локальную базу.";}
+            try(SportLocalArchive db=new SportLocalArchive(getApplicationContext())){msg="Завершённых матчей: "+db.count()+"\nИсточник: API-SPORTS.IO.\nАрхив автоматически пополняется при успешной загрузке календаря и истории по датам. Сохраняются только завершённые матчи и счёт. Данные хранятся на телефоне, не отправляются на сервер.\nДругие поставщики ещё не подключены.\nАвтоархив: "+(prefs.getBoolean("gos_archive_auto",false)?"включён":"выключен")+"\nПоследний результат: "+prefs.getString("gos_archive_status","нет проверок");}catch(Exception e){msg="Не удалось открыть локальную базу.";}
             final String out=msg;runOnUiThread(()->{if(isFinishing()||isDestroyed())return;busy=false;load.setEnabled(true);settings.setEnabled(true);new AlertDialog.Builder(this).setTitle("Локальная база GoS").setMessage(out).setPositiveButton("ОК",null).show();});
         });
     }
