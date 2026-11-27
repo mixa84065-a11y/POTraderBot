@@ -1,0 +1,2 @@
+# GoS cloud phase 1
+Separate Supabase Edge Function `gos-analysis`, JWT gateway enabled, additionally verifies an authenticated non-anonymous user via Auth /user. GET returns model metadata; POST accepts exactly the six aggregate counts per team. No sports API credentials, trading credentials, DB access or trading calls. 4 KiB body cap and per-isolate 30/min limit (not a distributed quota). Android remains local until account/session integration and live authenticated tests. Server archive, scheduling and CSV replay are not yet deployed. Model is unvalidated.
