@@ -246,8 +246,8 @@ public final class SportActivity extends Activity {
                 content.addView(label("АЛЬТЕРНАТИВНЫЕ ИСТОЧНИКИ",16,GOLD));
                 content.addView(label("Football-Data: выберите чемпионат и подтвердите обе команды вручную. Названия и ID разных поставщиков не объединяются автоматически.",13,Color.WHITE));
                 addMatchAction(content,dialog,"Football-Data • без API-ключа",()->chooseCsvLeague());
-                content.addView(label("Soccer365 и Flashscore: только просмотр официальных сайтов; статистика не импортируется.",13,Color.WHITE));
-                addMatchAction(content,dialog,"Soccer365 / Flashscore • просмотр",()->chooseExternalSource());
+                content.addView(label("Soccer365, Flashscore, Sportbox, WhoScored и NeuroStats: просмотр сайтов для сверки статистики, новостей и аналитики. Автоматический импорт не выполняется.",13,Color.WHITE));
+                addMatchAction(content,dialog,"5 спортивных сайтов • просмотр",()->chooseExternalSource());
                 dialog.show();
             });
         });
@@ -338,8 +338,8 @@ public final class SportActivity extends Activity {
         "\nЖК: "+(s.cardsN==0?"нет данных":String.format(Locale.US,"%.2f своих / %.2f соперника (%d матчей)",s.cardsFor/(double)s.cardsN,s.cardsAgainst/(double)s.cardsN,s.cardsN));
     }
     private void chooseExternalSource(){
-        String[] names={"Soccer365 — футбол, результаты и статистика","Flashscore — live и разные виды спорта"};
-        final String[] urls={"https://soccer365.ru/","https://www.flashscore.com.ua/"};
+        String[] names={"Soccer365 — футбол, результаты и статистика","Flashscore — live и разные виды спорта","Sportbox — спортивные новости и результаты","WhoScored — статистика команд и игроков","NeuroStats — спортивная аналитика"};
+        final String[] urls={"https://soccer365.ru/","https://www.flashscore.com.ua/","https://news.sportbox.ru/","https://www.whoscored.com/","https://neurostats.ru/"};
         new AlertDialog.Builder(this).setTitle("Источники для сверки статистики").setItems(names,(d,i)->{
             new AlertDialog.Builder(this).setTitle(names[i]).setMessage("Откроется официальный сайт во внешнем браузере. GoS не копирует его данные автоматически и не передаёт ключ API-SPORTS. Просмотр не расходует лимит API-SPORTS.").setNegativeButton("Отмена",null).setPositiveButton("Открыть",(dd,w)->{
                 try{startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(urls[i])));}
