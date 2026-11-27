@@ -42,6 +42,9 @@ public class MainActivity extends Activity {
     private Spinner pairSelector;
     private TextView instrumentText;
     private int expirySeconds=180;
+    private long quoteReceivedElapsed=-1;
+    private int analysisGeneration=0;
+    private boolean resumed=false;
     private boolean quoteFresh=false, demoEnabled=false, analysisMode=false, refreshing=false, refreshingMarket=false, autoTradeSubmitted=false;
     private JSONArray latestCandles=new JSONArray();
     private ChartView chart;
@@ -85,7 +88,7 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onResume() {
-        super.onResume();
+        super.onResume();resumed=true;
         String[] savedSession=SessionStore.load(this);
         if(savedSession!=null&&savedSession.length==2&&!savedSession[0].isEmpty()){
             accessToken=savedSession[0];refreshToken=savedSession[1];
@@ -95,7 +98,7 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onPause() {
-        super.onPause();
+        super.onPause();resumed=false;invalidateMarketAnalysis();
         handler.removeCallbacks(poll);
     }
 
@@ -238,7 +241,7 @@ public class MainActivity extends Activity {
     }
 
     private void showTradingScreen(){
-        dashboardVisible=false;analysisMode=false;
+        dashboardVisible=false;analysisMode=false;invalidateMarketAnalysis();
         LinearLayout content=vertical();content.setPadding(dp(9),dp(6),dp(9),dp(9));
         LinearLayout header=horizontal();
         Button back=button("‹",PANEL,TEXT);back.setPadding(0,0,0,0);
@@ -329,7 +332,7 @@ public class MainActivity extends Activity {
         pairSelector.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
             @Override public void onItemSelected(android.widget.AdapterView<?> parent,View view,int position,long id){
                 String selected=pairs[position];if(!selected.equals(symbol)){
-                    symbol=selected;quoteFresh=false;demoEnabled=false;latestCandles=new JSONArray();
+                    symbol=selected;invalidateMarketAnalysis();latestCandles=new JSONArray();
                     chart.setSymbol(symbol);chart.setMarketData(latestCandles,false);strengthBar.setProgress(0);signalText.setText("Оценка модели: —");
                     analysisText.setText("Анализ: ожидание новой котировки.");quoteText.setText("Нажмите «Анализ» для "+symbol);updateTradeButtons();refreshData();
                 }
@@ -475,12 +478,18 @@ public class MainActivity extends Activity {
         if(!SessionStore.sameSession(accessToken,expected))throw new Exception("Сессия изменена. Войдите снова.");
         accessToken=next[0];refreshToken=next[1];return next[0];
     }
+    private void invalidateMarketAnalysis(){
+        analysisGeneration++;quoteFresh=false;demoEnabled=false;quoteReceivedElapsed=-1;
+        if(analysisButton!=null)analysisButton.setEnabled(!refreshingMarket);
+        updateTradeButtons();
+    }
+    private boolean usableQuote(){return quoteFresh&&QuoteFreshness.usable(quoteReceivedElapsed,android.os.SystemClock.elapsedRealtime());}
     private void updateTradeButtons(){
-        boolean canTrade=quoteFresh&&demoEnabled
+        boolean canTrade=usableQuote()&&demoEnabled
             && !activeTradeSymbols.contains(symbol)
             && !openingTradeSymbols.contains(symbol);
-        if(upButton!=null)upButton.setEnabled(canTrade);
-        if(downButton!=null)downButton.setEnabled(canTrade);
+        if(upButton!=null){upButton.setEnabled(canTrade);upButton.setAlpha(canTrade?1f:.45f);}
+        if(downButton!=null){downButton.setEnabled(canTrade);downButton.setAlpha(canTrade?1f:.45f);}
     }
 
     // This is the only client path that calls Twelve Data. It runs only after ANALYSIS is pressed.
@@ -488,11 +497,14 @@ public class MainActivity extends Activity {
         if(accessToken.isEmpty()||refreshingMarket)return;
         autoTradeSubmitted=false;
         refreshingMarket=true;
-        quoteFresh=false;
+        quoteFresh=false;quoteReceivedElapsed=-1;
         updateTradeButtons();
         quoteText.setText("Запрашиваем котировку для "+symbol+"…");
         analysisButton.setEnabled(false);
         final String token=accessToken,requestedSymbol=symbol;
+        final int generation=++analysisGeneration;
+        final Button requestedButton=analysisButton;
+        final long requestStarted=android.os.SystemClock.elapsedRealtime();
         io.execute(()->{
             JSONObject snapshot=null;String error=null;
             String active=token;
@@ -500,9 +512,9 @@ public class MainActivity extends Activity {
             catch(Exception e){if(SessionStore.isExpired(e.getMessage()))try{active=ensureSession(active,true);snapshot=SupabaseApi.getMarketSnapshot(active,requestedSymbol);}catch(Exception again){error=again.getMessage();}else error=e.getMessage();}
             final JSONObject fs=snapshot;final String fe=error;            runOnUiThread(()->{
                 refreshingMarket=false;
-                if(isFinishing()||accessToken.isEmpty())return;
-                analysisButton.setEnabled(true);
-                if(!requestedSymbol.equals(symbol))return;
+                if(isFinishing()||isDestroyed()||accessToken.isEmpty())return;
+                if(analysisButton!=null)analysisButton.setEnabled(true);
+                if(generation!=analysisGeneration||requestedButton!=analysisButton||!resumed||!SessionStore.sameSession(token,accessToken)||!requestedSymbol.equals(symbol)||!requestedButton.isShown())return;
                 if(fs==null){
                     quoteText.setText("Не удалось получить котировку"+(fe==null?"":": "+fe));
                     quoteFresh=false;updateTradeButtons();
@@ -511,6 +523,13 @@ public class MainActivity extends Activity {
                 latestCandles=fs.optJSONArray("candles");
                 if(latestCandles==null)latestCandles=new JSONArray();
                 quoteFresh=fs.optBoolean("quote_fresh",false);
+                quoteReceivedElapsed=requestStarted;
+                quoteFresh=usableQuote();
+                if(quoteFresh){final int currentGeneration=generation;handler.postDelayed(()->{
+                    if(currentGeneration!=analysisGeneration||usableQuote())return;
+                    quoteFresh=false;chart.setMarketData(latestCandles,false);strengthBar.setProgress(0);
+                    signalText.setText("Котировка устарела");quoteText.setText("Нажмите «Анализ» для обновления котировки.");updateTradeButtons();
+                },Math.max(1,QuoteFreshness.MAX_AGE_MS-(android.os.SystemClock.elapsedRealtime()-quoteReceivedElapsed)+1));}
                 demoEnabled=fs.optBoolean("demo_enabled",false);
                 chart.setMarketData(latestCandles,quoteFresh);
                 JSONObject q=fs.optJSONObject("quote");
@@ -533,7 +552,7 @@ public class MainActivity extends Activity {
 
                 // One automatic demo entry per explicit ANALYSIS request.
                 // "strength" is a heuristic model score, not a calibrated win probability.
-                if(quoteFresh && demoEnabled && !activeTradeSymbols.contains(symbol) && !openingTradeSymbols.contains(symbol)
+                if(usableQuote() && demoEnabled && !activeTradeSymbols.contains(symbol) && !openingTradeSymbols.contains(symbol)
                         && !autoTradeSubmitted && a.strength>70
                         && ("ВВЕРХ".equals(a.direction) || "ВНИЗ".equals(a.direction))) {
                     autoTradeSubmitted=true;
@@ -585,22 +604,23 @@ public class MainActivity extends Activity {
     }
 
     private void placeTrade(String direction){
-        if(!quoteFresh||!demoEnabled){Toast.makeText(this,"Сделка заблокирована: нет проверенной свежей котировки.",Toast.LENGTH_LONG).show();return;}
+        if(!usableQuote()||!demoEnabled){updateTradeButtons();Toast.makeText(this,"Сделка заблокирована: нет проверенной свежей котировки.",Toast.LENGTH_LONG).show();return;}
         if(activeTradeSymbols.contains(symbol)||openingTradeSymbols.contains(symbol)){
             Toast.makeText(this,"По этой валютной паре уже есть открытая сделка.",Toast.LENGTH_LONG).show();return;
         }
         double stake;
         try{stake=Double.parseDouble(stakeInput.getText().toString().replace(',','.'));}
         catch(Exception e){Toast.makeText(this,"Укажите сумму сделки.",Toast.LENGTH_SHORT).show();return;}
-        if(stake<=0||stake>20000){Toast.makeText(this,"Сумма должна быть от 1 до 20 000 ₽.",Toast.LENGTH_SHORT).show();return;}
+        if(!Double.isFinite(stake)||stake<1||stake>20000){Toast.makeText(this,"Сумма должна быть от 1 до 20 000 ₽.",Toast.LENGTH_SHORT).show();return;}
         final String tradeSymbol=symbol;
         openingTradeSymbols.add(tradeSymbol);updateTradeButtons();
         final double amount=stake;final String token=accessToken;
+        final int tradeExpiry=expirySeconds;final long received=quoteReceivedElapsed;
         io.execute(()->{
             try{
                 String current=ensureSession(token,false);
-                JSONObject result=SupabaseApi.openDemoTrade(current,tradeSymbol,direction,amount,expirySeconds);
-                final int tradeExpiry=expirySeconds;
+                if(!QuoteFreshness.usable(received,android.os.SystemClock.elapsedRealtime()))throw new Exception("Котировка устарела. Повторите анализ.");
+                JSONObject result=SupabaseApi.openDemoTrade(current,tradeSymbol,direction,amount,tradeExpiry);
                 runOnUiThread(()->{
                     JSONObject trade=result.optJSONObject("trade");
                     String id=trade==null?"":trade.optString("trade_id","");
@@ -623,20 +643,20 @@ public class MainActivity extends Activity {
     // Wallet/history polling never calls the market provider.
     private void scheduleExpiryQuote(String token,String tradeSymbol,int seconds){
         handler.postDelayed(()->{
-            if(!token.equals(accessToken))return;
+            if(!SessionStore.sameSession(token,accessToken))return;
             io.execute(()->{
                 try{
                     // Fetch the final quote; the server settles all trades now due.
-                    SupabaseApi.getMarketSnapshot(token,tradeSymbol);
+                    SupabaseApi.getMarketSnapshot(ensureSession(token,false),tradeSymbol);
                 }catch(Exception ignored){
                     // The next explicit ANALYSIS request can retry settlement.
                 }
                 runOnUiThread(()->{
-                    if(token.equals(accessToken)){
+                    if(SessionStore.sameSession(token,accessToken)){
                         refreshData();
                         if(tradeSymbol.equals(symbol)){
                             quoteFresh=false;
-                            quoteText.setText("Сделка завершена по времени. Нажмите АНАЛИЗ для новой котировки.");
+                            quoteText.setText("Время экспирации прошло. Результат проверяется по истории.");
                             updateTradeButtons();
                         }
                     }
@@ -731,7 +751,7 @@ public class MainActivity extends Activity {
     }
 
     private void logout(){
-        accessToken="";refreshToken="";quoteFresh=false;demoEnabled=false;handler.removeCallbacks(poll);
+        accessToken="";refreshToken="";invalidateMarketAnalysis();handler.removeCallbacks(poll);
         SessionStore.clear(this);showLogin("Вы вышли из аккаунта.");
     }
 

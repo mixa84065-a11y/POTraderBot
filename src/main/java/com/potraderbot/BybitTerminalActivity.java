@@ -168,7 +168,7 @@ public class BybitTerminalActivity extends Activity {
                     Toast.makeText(BybitTerminalActivity.this,"Сначала закройте открытую демо-позицию.",Toast.LENGTH_SHORT).show();
                     symbolPicker.setSelection(java.util.Arrays.asList(symbols).indexOf(prefs.getString("trade_symbol","BTCUSDT")));return;
                 }
-                if(!next.equals(symbol)){symbol=next;loadMarket();}
+                if(!next.equals(symbol)){symbol=next;lastPrice=0;candles=new JSONArray();priceChart.setCandles(candles,0);priceChart.setEmptyMessage("Загружаются котировки Bybit…");priceText.setText("Загрузка цены…");liveText.setText("● ОЖИДАНИЕ");liveText.setTextColor(MUTED);changeText.setText("24ч: —");signalText.setText("АНАЛИЗ: ожидание данных");signalText.setTextColor(WHITE);loadMarket();}
             }
             @Override public void onNothingSelected(android.widget.AdapterView<?> p){}
         });
@@ -911,15 +911,18 @@ public class BybitTerminalActivity extends Activity {
             }catch(Exception e){error=e.getMessage();}
             final JSONArray rr=rows;final JSONObject tt=ticker;final String ee=error;
             runOnUiThread(()->{
-                loading=false;if(isFinishing()||!requested.equals(symbol))return;
+                loading=false;if(isFinishing()||isDestroyed())return;
+                if(!requested.equals(symbol)){loadMarket();return;}
                 if(rr==null||tt==null){liveText.setText("● НЕТ СВЯЗИ");liveText.setTextColor(RED);priceText.setText("Цена недоступна");statusText.setText("Нет котировок Bybit: "+ee);priceChart.setEmptyMessage("Нет свежих данных Bybit");return;}
                 try{
                     JSONArray ordered=new JSONArray();for(int i=rr.length()-1;i>=0;i--)ordered.put(rr.getJSONArray(i));
                     // Discard the still-forming candle; only closed bars feed the strategy.
                     if(ordered.length()>1)ordered.remove(ordered.length()-1);
-                    candles=ordered;lastPrice=Double.parseDouble(tt.getString("lastPrice"));
+                    double nextPrice=Double.parseDouble(tt.getString("lastPrice"));
+                    if(!Double.isFinite(nextPrice)||nextPrice<=0||ordered.length()==0)throw new IllegalArgumentException("Некорректная цена или пустая история");
+                    candles=ordered;lastPrice=nextPrice;
                     long latestClosed=Long.parseLong(candles.getJSONArray(candles.length()-1).getString(0));
-                    boolean marketFresh=System.currentTimeMillis()-latestClosed<=180000L;
+                    boolean marketFresh=QuoteFreshness.closedCandle(latestClosed,System.currentTimeMillis());
                     liveText.setText(marketFresh?"● Актуально":"● Устарело");
                     liveText.setTextColor(marketFresh?GREEN:RED);
                     priceText.setText(String.format(Locale.US,"%,.4f USDT",lastPrice));
@@ -929,7 +932,7 @@ public class BybitTerminalActivity extends Activity {
                     chartEntryPrice=prefs.getBoolean("open",false) && requested.equals(prefs.getString("trade_symbol","")) ? prefs.getFloat("entry",0) : 0;
                     priceChart.setCandles(candles,chartEntryPrice);
                     evaluateStrategy();
-                }catch(Exception e){statusText.setText("Ошибка обработки данных: "+e.getMessage());}
+                }catch(Exception e){lastPrice=0;liveText.setText("● ОШИБКА");liveText.setTextColor(RED);statusText.setText("Ошибка обработки котировок: "+e.getMessage());}
             });
         });
     }
@@ -979,7 +982,7 @@ public class BybitTerminalActivity extends Activity {
         long candleTime;
         try{
             candleTime=Long.parseLong(candles.getJSONArray(candles.length()-1).getString(0));
-            if(System.currentTimeMillis()-candleTime>180000L){
+            if(!QuoteFreshness.closedCandle(candleTime,System.currentTimeMillis())){
                 statusText.setText("Последняя закрытая свеча устарела. Новые автосделки заблокированы.");
                 // A stale signal must never open/reverse a position, but live-price
                 // stop-loss and take-profit checks must continue to run.
