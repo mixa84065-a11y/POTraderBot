@@ -39,7 +39,7 @@ public final class SportActivity extends Activity {
     private Button load,settings;
     private boolean busy;
     private volatile int remaining=-1;
-    private static final Object QUOTA_LOCK=new Object();
+    static final Object QUOTA_LOCK=new Object();
     private JSONObject shownFixtures;
     private EditText search;
     private int dp(int x){return Math.round(x*getResources().getDisplayMetrics().density);}
@@ -56,6 +56,16 @@ public final class SportActivity extends Activity {
         page.addView(label("Футбол • календарь и результаты • API-SPORTS",14,Color.WHITE));
         Button stats=button("СТАТИСТИЧЕСКАЯ МОДЕЛЬ");stats.setOnClickListener(v->statistics());page.addView(stats);
         Button journal=button("ЖУРНАЛ ПРОГНОЗОВ");journal.setOnClickListener(v->showJournal());page.addView(journal);
+        Button sync=button(prefs.getBoolean("gos_auto_sync",false)?"ФОНОВАЯ СВЕРКА: ВКЛ":"ФОНОВАЯ СВЕРКА: ВЫКЛ");page.addView(sync);
+        sync.setOnClickListener(v->{
+            if(prefs.getBoolean("gos_auto_sync",false)){
+                prefs.edit().putBoolean("gos_auto_sync",false).commit();SportSyncJob.cancel(this);sync.setText("ФОНОВАЯ СВЕРКА: ВЫКЛ");return;
+            }
+            new AlertDialog.Builder(this).setTitle("Фоновая сверка").setMessage("До двух матчей за запуск, не более восьми запросов в сутки. Только при подключении к интернету. Android выбирает время запуска. Ключ остаётся на телефоне.").setNegativeButton("Отмена",null).setPositiveButton("Включить",(d,w)->{
+                if(prefs.edit().putBoolean("gos_auto_sync",true).commit()&&SportSyncJob.schedule(this)){sync.setText("ФОНОВАЯ СВЕРКА: ВКЛ");}
+                else{prefs.edit().putBoolean("gos_auto_sync",false).commit();status.setText("Не удалось запланировать сверку.");}
+            }).show();
+        });
         settings=button("НАСТРОЙКИ API-SPORTS");settings.setOnClickListener(v->settings());page.addView(settings);
         load=button("МАТЧИ НА СЕГОДНЯ");load.setOnClickListener(v->loadFixtures());page.addView(load);
         status=label("Лимит тарифа: 100 запросов в сутки. Запросы только по нажатию.",13,GOLD);page.addView(status);
@@ -126,26 +136,9 @@ public final class SportActivity extends Activity {
         .setNegativeButton("Отмена",null).show();
     }
     private String today(){SimpleDateFormat f=new SimpleDateFormat("yyyy-MM-dd",Locale.US);f.setTimeZone(TimeZone.getTimeZone("UTC"));return f.format(new Date());}
-    private int storedRemaining(){
-        return today().equals(prefs.getString("quota_day",""))?prefs.getInt("quota_remaining",-1):-1;
-    }
-    private void reserveRequest()throws Exception{
-        synchronized(QUOTA_LOCK){
-            String day=today();boolean same=day.equals(prefs.getString("quota_day",""));
-            int count=same?prefs.getInt("quota_count",0):0;
-            int left=same?prefs.getInt("quota_remaining",-1):-1;
-            if(!same&&day.equals(prefs.getString("history_budget_day","")))count=Math.max(count,prefs.getInt("history_budget_count",0));
-            if(count>=100||left==0)throw new IllegalStateException("Локальный лимит запросов исчерпан. Проверьте кабинет API.");
-            remaining=left<0?-1:left-1;
-            if(!prefs.edit().putString("quota_day",day).putInt("quota_count",count+1).putInt("quota_remaining",remaining).commit())throw new IllegalStateException("Не удалось сохранить счётчик.");
-        }
-    }
-    private void updateQuota(String header){
-        synchronized(QUOTA_LOCK){
-            if(!today().equals(prefs.getString("quota_day","")))return;
-            try{int reported=Integer.parseInt(header);if(reported<0)return;int saved=storedRemaining();remaining=saved<0?reported:Math.min(saved,reported);prefs.edit().putInt("quota_remaining",remaining).commit();}catch(Exception ignored){}
-        }
-    }
+    private int storedRemaining(){return SportSyncJob.remaining(prefs);}
+    private void reserveRequest()throws Exception{SportSyncJob.reserve(prefs,false);remaining=storedRemaining();}
+    private void updateQuota(String header){SportSyncJob.updateQuota(prefs,header);remaining=storedRemaining();}
     private void loadFixtures(){
         if(busy)return;
         final String date=today();
@@ -322,7 +315,7 @@ public final class SportActivity extends Activity {
             if((x==home&&y==away)||(x==away&&y==home))out.put(r);
         }return out;
     }
-    private static final Object JOURNAL_LOCK=new Object();
+    static final Object JOURNAL_LOCK=new Object();
     private JSONObject journal()throws JSONException{return new JSONObject(prefs.getString("forecast_journal_v1","{}"));}
     private String recordForecast(long id,String title,int home,int away,long cutoff,SportHistory.Summary h,SportHistory.Summary a)throws Exception{
         synchronized(JOURNAL_LOCK){
