@@ -16,6 +16,7 @@ public final class SupabaseApi {
     private static Object request(String method, String path, JSONObject body, String accessToken) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(BuildConfig.SUPABASE_URL + path).openConnection();
         c.setRequestMethod(method);
+        if(path.startsWith("/auth/v1/"))c.setInstanceFollowRedirects(false);
         c.setUseCaches(false);
         c.setRequestProperty("Cache-Control", "no-cache, no-store");
         c.setConnectTimeout(12000);
@@ -53,6 +54,26 @@ public final class SupabaseApi {
             throw new Exception(message);
         }
         return raw.isEmpty() ? new JSONObject() : new JSONTokener(raw).nextValue();
+    }
+
+    public static void requestPasswordReset(String email)throws Exception{
+        JSONObject b=new JSONObject();b.put("email",email.trim());
+        request("POST","/auth/v1/recover",b,null);
+    }
+    public static void recoverPassword(String email,String proof,String password)throws Exception{
+        JSONObject body=RecoveryProof.body(BuildConfig.SUPABASE_URL,email,proof);
+        JSONObject verified=(JSONObject)request("POST","/auth/v1/verify",body,null);
+        String token=verified.optString("access_token","");
+        if(token.isEmpty())throw new Exception("Нет сессии восстановления");
+        try{
+            JSONObject user=getUser(token);
+            if(!email.trim().equalsIgnoreCase(user.optString("email","")))throw new Exception("Неверный аккаунт");
+            JSONObject change=new JSONObject();change.put("password",password);
+            request("PUT","/auth/v1/user",change,token);
+        }finally{
+            // This temporary recovery session is never persisted in SessionStore.
+            try{request("POST","/auth/v1/logout?scope=local",null,token);}catch(Exception ignored){}
+        }
     }
 
     public static JSONObject signIn(String email, String password) throws Exception {

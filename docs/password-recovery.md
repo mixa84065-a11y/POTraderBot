@@ -1,0 +1,3 @@
+# Password recovery
+
+The Android login screen includes a recovery dialog. Uses Supabase Auth /recover, /verify (recovery), /user and local logout. No admin secret, no persisted recovery session. Existing default recovery link can be copied without clicking; alternative OTP requires a recovery email template with the Token variable. Do not send passwords or recovery proof to support. Production email delivery requires configured SMTP; default SMTP restricts recipients. Verify using a consenting test account and confirm login with new password and existing wallet. No mail provider settings or user accounts changed by this commit.

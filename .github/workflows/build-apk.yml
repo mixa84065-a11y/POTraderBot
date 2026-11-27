@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feature/god-of-trading-2.0
+      - feature/analytics-dashboard
 
 permissions:
   contents: read
